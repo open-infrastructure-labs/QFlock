@@ -39,12 +39,12 @@ DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
   DOCKER_IT="-i -t"
 fi
-#  --cpuset-cpus="9-12" \
+
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name sparklauncher-qflock --add-host=hdfs-server:172.18.0.2 --add-host=dsw4:10.124.48.63 \
-  --network dike-net \
+  --name sparklauncher-qflock --add-host=hdfs-server:172.18.0.3\
+  --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
@@ -70,7 +70,7 @@ else
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
   --name sparklauncher-qflock \
-  --network dike-net --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
+  --network qflock-net --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
   -w /qflock/benchmark/src \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
