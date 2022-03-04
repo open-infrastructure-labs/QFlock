@@ -67,8 +67,11 @@ class BenchmarkApp:
                             help="Generate database.")
         parser.add_argument("--gen_parquet", "-gp", action="store_true",
                             help="Generate parquet datbase files.")
-        parser.add_argument("--view_catalog", "-vc", action="store_true",
+        parser.add_argument("--view_catalog", "-vca", action="store_true",
                             help="View details of catalog")
+        parser.add_argument("--view_columns", "-vcc", default=None,
+                            help="View details of catalog column. example: table.column " +
+                                 " or column. Example web_site.web_city or web_city")
         parser.add_argument("--delete_catalog", "-dc", action="store_true",
                             help="Delete catalog entries.")
         parser.add_argument("--create_catalog", "-cc", action="store_true",
@@ -98,7 +101,7 @@ class BenchmarkApp:
     def _banner():
         print()
         f = Figlet(font='slant')
-        print(f.renderText('Benchmark App'))
+        print(f.renderText('QFlock Bench'))
 
     def _get_benchmark(self, sh):
         if self._config['benchmark']['db-name'] == "tpch":
@@ -119,10 +122,10 @@ class BenchmarkApp:
         if not self._parse_args():
             return
         self._load_config()
+        sh = SparkHelper(catalog=self._args.catalog)
         # This trace is important
         # the calling spark_bench.py will look for this before starting tracing.
         print("bench.py starting")
-        sh = SparkHelper(catalog=self._args.catalog)
         if self._args.log_level:
             print(f"Set log level to {self._args.log_level}")
             sh.set_log_level(self._args.log_level)
@@ -141,9 +144,10 @@ class BenchmarkApp:
             sh.set_db(self._config['benchmark']['db-name'])
             benchmark.compute_stats()
         if self._args.view_catalog:
-            print(f"metastore.catalog.default: {sh._spark.conf.get('metastore.catalog.default')}")
             td = sh.get_catalog_info(self._args.verbose)
-            print(f"metastore.catalog.default: {sh._spark.conf.get('metastore.catalog.default')}")
+        if self._args.view_columns:
+            td = sh.get_catalog_columns(self._args.view_columns,
+                                        self._args.verbose)
         if self._args.query_text or self._args.query_file or self._args.query_range:
             result = None
             if self._args.query_text:

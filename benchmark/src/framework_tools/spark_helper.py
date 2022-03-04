@@ -59,7 +59,6 @@ class SparkHelper:
         print(f"found {len(db_list)} databases")
         print("*" * 50)
 
-        print(f"metastore.catalog.default: {self._spark.conf.get('metastore.catalog.default')}")
         for db in db_list:
             if verbose:
                 self._spark.sql(f"DESCRIBE DATABASE EXTENDED {db.name}").show(5000, False)
@@ -78,12 +77,49 @@ class SparkHelper:
                 c = 0
                 tables[tbl.name] = {'columns': []}
                 for col in self._spark.catalog.listColumns(tbl.name, db.name):
-                    # print("   ", c, col.name, cols.dataType)
-                    if verbose:
-                        self._spark.sql(f"DESCRIBE EXTENDED {db.name}.{tbl.name} {col.name}").show(5000, False)
                     tables[tbl.name]['columns'].append({'name': col.name, 'type': col.dataType})
                     c += 1
             databases[db.name] = tables
+            print("*" * 50)
+        return databases
+
+    def get_catalog_columns(self, column_filter=None, verbose=False):
+        databases = {}
+        db_list = self._spark.catalog.listDatabases()
+        print("*" * 50)
+        print(f"found {len(db_list)} databases")
+        print("*" * 50)
+        print(f"tbl {column_filter}")
+        tbl_filter = None
+        col_filter = None
+        if column_filter != "*":
+            items = column_filter.split(".")
+            if len(items) == 1:
+                col_filter = items[0]
+            if len(items) == 2:
+                if items[0] != "*":
+                    tbl_filter = items[0]
+                if items[1] != "*":
+                    col_filter = items[1]
+        for db in db_list:
+            print(f"database: {db.name}")
+            i = 0
+            tables_list = self._spark.catalog.listTables(db.name)
+            print(f"found {len(tables_list)} tables")
+            for tbl in tables_list:
+                if tbl_filter is None or tbl_filter in tbl:
+                    print(f"  {i}) {tbl.database}.{tbl.name} {tbl.tableType}")
+                    i += 1
+                    c = 0
+                    for col in self._spark.catalog.listColumns(tbl.name, db.name):
+                        if col_filter is None or col_filter in col.name:
+                            if verbose:
+                                self._spark.sql(f"DESCRIBE EXTENDED " +
+                                                f"{db.name}.{tbl.name} {col.name}")\
+                                    .show(5000, False)
+                            else:
+                                print(f"    {c}) {col.name} {col.dataType}")
+                        c += 1
             print("*" * 50)
         return databases
 

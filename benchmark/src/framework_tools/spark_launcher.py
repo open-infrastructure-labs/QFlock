@@ -38,18 +38,33 @@ class SparkLauncher:
         spark_cmd += f" {cmd}"
         return spark_cmd
 
-    def spark_submit(self, command, workers=None, enable_stdout=False):
+    def spark_submit(self, command, workers=None, enable_stdout=False, wait_text=None):
         spark_cmd = self.get_spark_cmd(command, workers=workers)
-        # print(spark_cmd)
-        # (status, output) = run_command(spark_cmd, show_cmd=True, no_capture=True,
-        #                                enable_stdout=enable_stdout, log_file=log_file,
-        #                                wait_for_string=wait_for_string)
+        print("*" * 30)
         print(spark_cmd)
+        print("*" * 30)
         if enable_stdout:
             rc = subprocess.call(spark_cmd, shell=True)
             return rc, ""
         else:
-            result = subprocess.run(spark_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                shell=True)
-            return result.returncode, result.stdout
+            # result = subprocess.run(spark_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            #                         shell=True)
+            # return result.returncode, result.stdout
+            output_lines = []
+            enable_tracing = False
+            process = subprocess.Popen(
+                spark_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)  # shlex.split(command)
+            while True:
+                output = process.stdout.readline()
+                if (not output or output == '') and process.poll() is not None:
+                    break
+                if output and wait_text:
+                    output_text = str(output, 'utf-8')
+                    if enable_tracing:
+                        print(output_text.rstrip('\n'))
+                    elif wait_text in output_text:
+                        enable_tracing = True
+                output_lines.append(output_text)
+            rc = process.poll()
+            return rc, output_lines
 

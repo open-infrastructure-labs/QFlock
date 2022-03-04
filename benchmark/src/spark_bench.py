@@ -74,7 +74,7 @@ class SparkBench:
                         self._workers_list.append(t)
             else:
                 self._workers_list.append(int(i))
-        print("WorkerList {}".format(self._workers_list))
+        # print("WorkerList {}".format(self._workers_list))
 
     def _parse_args(self):
         parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -82,10 +82,10 @@ class SparkBench:
                                          epilog=bench._help_examples)
         parser.add_argument("--debug", "-D", action="store_true",
                             help="enable debug output")
-        parser.add_argument("--log_level", "-ll", default="ERROR",
+        parser.add_argument("--log_level", "-ll", default="OFF",
                             help="log level set to input arg.  "
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
-        parser.add_argument("--file", "-f", default="spark_bench.yaml",
+        parser.add_argument("--file", "-f", default="spark_bench_tpcds.yaml",
                             help="config file to use, defaults to spark_bench.yaml")
         parser.add_argument("--dry_run", action="store_true",
                             help="Do not run tests, just print tests to run.")
@@ -95,6 +95,9 @@ class SparkBench:
         parser.add_argument("--query_range", "-qr",
                             help="queries to run directly by bench.py\n"
                                  "ex. -q 1,2,3,5-9,16-19,21,*")
+        parser.add_argument("--view_columns",
+                            help="use <table>.<column>\n"
+                                 "ex. web_site.web_city or web_site.* or *.web_city")
         parser.add_argument("--workers", "-w", default="1",
                             help="worker threads\n"
                                  "ex. -w 1,2,3,5-9,16-19,21")
@@ -158,7 +161,8 @@ class SparkBench:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)}'
                 self._spark_launcher.spark_submit(cmd, workers=w,
-                                                  enable_stdout=self._args.log_level != "OFF")
+                                                  enable_stdout=self._args.log_level != "OFF",
+                                                  wait_text=self._wait_for_string)
         print("")
         self.show_results()
         self.display_elapsed()
@@ -166,18 +170,19 @@ class SparkBench:
             print("test failures: {}".format(self._test_failures))
 
     def run_cmd(self):
-        print(self._remaining_args)
-        print(self._args.query_text)
         cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} '
         if self._args.query_range:
             cmd += f'--query_range "{self._args.query_range}" '
         if self._args.query_text:
-            cmd += f' --query_text "{self._args.query_text}"'
+            cmd += f'--query_text "{self._args.query_text}" '
+        if self._args.view_columns:
+            cmd += f'--view_columns "{self._args.view_columns}" '
         cmd += " ".join(self._remaining_args)
         for w in self._workers_list:
             rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
-                                                           enable_stdout=self._args.log_level != "OFF")
-            print(output)
+                                                           enable_stdout=self._args.log_level != "OFF",
+                                                           wait_text=self._wait_for_string)
+            #print(output)
 
     def run(self):
         if not self._parse_args():
