@@ -3,6 +3,7 @@
 # One time setup
 
 git submodule  init
+
 git submodule update --recursive --progress
 
 # build
