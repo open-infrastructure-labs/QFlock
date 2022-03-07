@@ -1,0 +1,7 @@
+# This is the config file for starting the cluster.
+# Edit this file and save it as spark.config
+#
+DOCKER_CMDS=--add-host="sparkmaster:172.169.1.40" --add-host="myhost:172.169.1.40" --add-host="dikehdfs:172.169.1.60"
+WORKER_IP=172.169.1.42
+MASTER_IP=172.169.1.40
+LAUNCHER_IP=172.169.1.41
