@@ -27,5 +27,5 @@ pushd spark
 ./start.sh
 popd
 
-# benchmark/src/run-bench.py is the script for configuring and running benchmarks.
-# see benchmark/src/run-bench.py --help for examples
+# benchmark/src/docker-bench.py is the script for configuring and running benchmarks.
+# see benchmark/src/docker-bench.py --help for examples
