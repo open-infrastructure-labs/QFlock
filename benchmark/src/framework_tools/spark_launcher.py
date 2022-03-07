@@ -31,7 +31,8 @@ class SparkLauncher:
         spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in self._config["conf"]])
         if "packages" in self._config:
             spark_cmd += " --packages " + ",".join([arg for arg in self._config["packages"]])
-        spark_cmd += " --jars " + ",".join([arg for arg in self._config["jars"]])
+        if "jars" in self._config:
+            spark_cmd += " --jars " + ",".join([arg for arg in self._config["jars"]])
         # if "debug_options" in self._config:
         #     debug = self._config['debug_options']
         #     spark_cmd += f'extraJavaOptions="{debug["classpath"]} {debug["agentlib"]}{debug["address"]}"'

@@ -7,7 +7,7 @@
     tool-commandline: "./dbgen -f -s 1 -v"
     file-extension: "tbl"
     raw-data-path: "../data/tpch-data"
-    parquet-path: "hdfs://hdfs-server:9000/tpch-parquet"
+    parquet-path: "hdfs://qflock-storage:9000/tpch-parquet"
 #    parquet-path: "../data/tpch-parquet"
     query-path: "queries/tpch/queries"
     query-extension: "sql"
@@ -21,7 +21,7 @@
     - spark.sql.hive.metastore.version=3.1.2
     - spark.sql.hive.metastore.jars=path
     - spark.sql.hive.metastore.jars.path=jars/*.jar
-    - spark.sql.warehouse.dir=hdfs://hdfs-server:9000/user/hive/warehouse3
+    - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
 #    - metastore.catalog.default=hive
 #    - hive.metastore.uris=thrift://172.18.0.3:9083
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder

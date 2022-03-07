@@ -63,6 +63,8 @@ class BenchmarkApp:
         parser.add_argument("--tests", "-t",
                             help="tests to run\n"
                                  "ex. -t 1,2,3,5-9,16-19,21")
+        parser.add_argument("--init", action="store_true",
+                            help="Generate database, parquet, catalog, and stats.")
         parser.add_argument("--generate", "-g", action="store_true",
                             help="Generate database.")
         parser.add_argument("--gen_parquet", "-gp", action="store_true",
@@ -132,6 +134,12 @@ class BenchmarkApp:
             # sh.set_log_level("DEBUG")
         benchmark = self._get_benchmark(sh)
         BenchmarkApp._banner()
+        if self._args.init:
+            self._args.generate = True
+            self._args.gen_parquet = True
+            self._args.create_catalog = True
+            self._args.compute_stats = True
+            self._args.view_catalog = True
         if self._args.generate:
             benchmark.generate()
         if self._args.gen_parquet:
@@ -167,6 +175,8 @@ class BenchmarkApp:
             elif self._args.query_range:
                 qc = self._get_query_config()
                 result = benchmark.query(qc, self._args.verbose, self._args.explain)
+            if self._args.explain:
+                print("see logs/explain.txt for output of explain")
 
 
 
