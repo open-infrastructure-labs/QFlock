@@ -2,9 +2,10 @@
 
 # One time setup
 
+```shell
 git submodule  init
-
 git submodule update --recursive --progress
+```
 
 # build
 pushd storage/docker
