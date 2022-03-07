@@ -33,5 +33,9 @@ pushd spark
 popd
 ```
 
-# benchmark/src/docker-bench.py is the script for configuring and running benchmarks.
-# see benchmark/src/docker-bench.py --help for examples
+# Configuring and running benchmarks.
+```shell 
+# Examples
+benchmark/src/docker-bench.py --help
+```
+
