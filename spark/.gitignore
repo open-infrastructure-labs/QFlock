@@ -2,3 +2,4 @@ volume/
 .sbtopts
 /build
 /spark
+/docker/spark-*.tgz

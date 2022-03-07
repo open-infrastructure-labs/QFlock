@@ -1,5 +1,10 @@
 #!/bin/bash
 
+if [ ! -f docker/setup.sh ]; then
+  echo "please launch script from spark directory"
+  exit 1
+fi
+
 # Include the setup for our cached local directories. (.m2, .ivy2, etc)
 source docker/setup.sh
 source docker/spark_version
@@ -15,10 +20,11 @@ mkdir -p "${ROOT_DIR}/volume/user/hive"
 CMD="sleep 365d"
 RUNNING_MODE="daemon"
 START_LOCAL="NO"
-if [ ! -d spark.config ]; then
+CONFIG="scripts/conf/spark.config"
+if [ ! -f ${CONFIG} ]; then
   START_LOCAL="YES"
 else
-  DOCKER_HOSTS="$(cat spark.config | grep DOCKER_HOSTS)"
+  DOCKER_HOSTS="$(cat ${CONFIG} | grep DOCKER_HOSTS)"
   IFS='=' read -a IP_ARRAY <<< "$DOCKER_HOSTS"
   DOCKER_HOSTS=${IP_ARRAY[1]}
   HOSTS=""
@@ -30,11 +36,14 @@ else
   DOCKER_HOSTS=$HOSTS
   echo "Docker Hosts: $DOCKER_HOSTS"
 
-  LAUNCHER_IP="$(cat spark.config | grep LAUNCHER_IP)"
+  LAUNCHER_IP="$(cat ${CONFIG} | grep LAUNCHER_IP)"
   IFS='=' read -a IP_ARRAY <<< "$LAUNCHER_IP"
   LAUNCHER_IP=${IP_ARRAY[1]}
   echo "LAUNCHER_IP: $LAUNCHER_IP"
 fi
+START_LOCAL="YES"
+STORAGE_HOST="--add-host=qflock-storage:$(scripts/get-docker-ip.py qflock-storage)"
+echo "Storage ${STORAGE_HOST}"
 DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
   DOCKER_IT="-i -t"
@@ -43,7 +52,7 @@ fi
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name sparklauncher-qflock --add-host=hdfs-server:172.18.0.3\
+  --name sparklauncher-qflock $STORAGE_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \

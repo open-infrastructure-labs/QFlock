@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker/start-launcher-qflock.sh
+scripts/start-launcher-qflock.sh
