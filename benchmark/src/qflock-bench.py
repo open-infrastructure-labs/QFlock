@@ -15,17 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import argparse
-from argparse import RawTextHelpFormatter
+import sys
 import os
 import time
+import argparse
+from argparse import RawTextHelpFormatter
 import yaml
 from framework_tools.spark_launcher import SparkLauncher
 import bench
 from benchmark.benchmark import Benchmark
 
 
-class SparkBench:
+class QflockBench:
+    """
+    This represents a QFlock benchmark test, which launches the
+    bench.py script with spark-submit.
+    Most configuration data is found in the configuration .yaml
+    """
     def __init__(self):
         self._args = None
         self._remaining_args = None
@@ -63,7 +69,7 @@ class SparkBench:
             inc = int(increment[1])
         else:
             inc = 1
-        # print("worker inc : {}".format(inc))
+        # print("worker inc : {0}".format(inc))
         test_items = increment[0].split(",")
 
         for i in test_items:
@@ -74,21 +80,51 @@ class SparkBench:
                         self._workers_list.append(t)
             else:
                 self._workers_list.append(int(i))
-        # print("WorkerList {}".format(self._workers_list))
+        # print("WorkerList {0}".format(self._workers_list))
 
-    def _parse_args(self):
+    help_examples = """
+      Examples:
+        {0} --init_all 
+        {0} --generate --gen_parquet
+        {0} --create_catalog --view_catalog
+        {0} --compute_stats
+        {0} --view_catalog
+        {0} --view_catalog --verbose
+        {0} --view_columns "*"
+        {0} --view_columns "*" --verbose
+        {0} --view_columns "web_site.*""
+        {0} --view_columns "web_site.*"" --verbose
+        {0} --view_columns "*.quantity"
+        {0} --view_columns "*.name"
+        # Run a query from test 25
+        {0} --queries 25
+        # Run a query from all tests
+        {0} --queries *
+        # Run a query from selected tests
+        {0} --queries 1,5-8,22-30,42,55-70
+        # Run a query from text input
+        {0} --query_text "select count(1) from web_site"
+        {0} --query_text "select cc_street_name,cc_city,cc_state from call_center" --verbose
+        # Run a query from text in a file
+        {0} --query_file 2.sql
+        # Explain a query
+        {0} --explain --query_range 3 --log_level INFO
+        {0} --explain --query_range "*"
+                                             """
+
+    # python3 ./bench.py -f config_tpcds.yaml --query_text "DESC EXTENDED tpcds.web_site web_site_sk" -v
+    def get_parser(self, parents=[]):
         parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
-                                         description="Helper app for running tpch tests.\n",
-                                         epilog=bench._help_examples)
+                                         description="App for running Qflock Benchmarks on Spark.\n",
+                                         epilog=QflockBench.help_examples.format(sys.argv[0]),
+                                         parents=parents)
         parser.add_argument("--debug", "-D", action="store_true",
                             help="enable debug output")
         parser.add_argument("--log_level", "-ll", default="OFF",
-                            help="log level set to input arg.  "
+                            help="log level set to input arg.\n"
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
         parser.add_argument("--file", "-f", default="spark_bench_tpcds.yaml",
                             help="config file to use, defaults to spark_bench.yaml")
-        parser.add_argument("--dry_run", action="store_true",
-                            help="Do not run tests, just print tests to run.")
         parser.add_argument("--queries", "-q",
                             help="queries to run by spark_bench.py\n"
                                  "ex. -q 1,2,3,5-9,16-19,21,*")
@@ -110,6 +146,18 @@ class SparkBench:
                             help="number of iterations of queries")
         parser.add_argument("--name", "-n", default="",
                             help="name for test")
+        return parser
+    def _parse_args(self):
+        b = bench.BenchmarkApp()
+        parent_parser = b.get_parser(parent_parser=True)
+
+        # Combined parser allows us to serve up one combined help page.
+        combined_parser = self.get_parser([parent_parser])
+        combined_parser.parse_known_args()
+
+        # If we make it here, we know that help is not an option,
+        # proceed with parser for just this script.
+        parser = self.get_parser()
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
         self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
@@ -118,7 +166,7 @@ class SparkBench:
     def process_cmd_status(self, cmd, status, output):
         if status != 0:
             self._test_failures += 1
-            failure = "test failed with status {} cmd {}".format(status, cmd)
+            failure = "test failed with status {0} cmd {0}".format(status, cmd)
             self._test_results.append(failure)
             print(failure)
         line_num = 0
@@ -127,7 +175,7 @@ class SparkBench:
                 line_num += 1
             if status == 0 and (("Cmd Failed" in line) or ("FAILED" in line)):
                 self._test_failures += 1
-                failure = "test failed cmd: {}".format(cmd)
+                failure = "test failed cmd: {0}".format(cmd)
                 print(failure)
                 self._test_results.append(failure)
             if "Test Results" in line:
@@ -143,7 +191,7 @@ class SparkBench:
         else:
             mode = "w"
         with open(self._args.results, mode) as fd:
-            fd.write("Test: {}\n".format(self._remaining_args))
+            fd.write("Test: {0}\n".format(self._remaining_args))
             for r in self._test_results:
                 print(r.rstrip())
                 fd.write(r.rstrip() + "\n")
@@ -167,7 +215,7 @@ class SparkBench:
         self.show_results()
         self.display_elapsed()
         if self._test_failures > 0:
-            print("test failures: {}".format(self._test_failures))
+            print("test failures: {0}".format(self._test_failures))
 
     def run_cmd(self):
         cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} '
@@ -200,5 +248,5 @@ class SparkBench:
 
 
 if __name__ == "__main__":
-    app = SparkBench()
+    app = QflockBench()
     app.run()

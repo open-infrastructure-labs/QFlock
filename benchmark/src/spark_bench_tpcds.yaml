@@ -14,14 +14,14 @@
   spark:
     master: local
     conf:
-    - spark.driver.maxResultSize=20g
+    - spark.driver.maxResultSize=2g
     - spark.driver.memory=2g
     - spark.executor.memory=2g
     - spark.sql.catalogImplementation=hive
     - spark.sql.hive.metastore.version=3.1.2
     - spark.sql.hive.metastore.jars=path
     - spark.sql.hive.metastore.jars.path=jars/*.jar
-    - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
+#    - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
 #    - metastore.catalog.default=hive
 #    - hive.metastore.uris=thrift://172.18.0.3:9083
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder

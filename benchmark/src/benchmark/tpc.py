@@ -29,10 +29,11 @@ class TpcBenchmark(Benchmark):
     """A TPC benchmark, which is capable of generating the tables, and
        running queries against those tables."""
 
-    def __init__(self, name, config, framework, tables):
+    def __init__(self, name, config, framework, tables, verbose=False):
         super().__init__(name, config, framework)
         self._tables = tables
         self._file_ext = "." + self._config['file-extension']
+        self._verbose = verbose
 
     def generate(self):
         raw_base_path = ""
@@ -58,17 +59,16 @@ class TpcBenchmark(Benchmark):
         print(f"{file_count} files copied {self._config['tool-path']} -> "
               f"{self._config['raw-data-path']}")
 
-    def query(self, query_config, verbose=False, explain=False):
+    def query(self, query_config, explain=False):
         self._framework.set_db(self._config['db-name'])
         query_list = Benchmark.get_query_list(query_config['query_range'], self._config['query-path'],
                                               self._config['query-extension'])
         success_count, failure_count = 0, 0
-        if verbose:
+        if self._verbose:
             print(f"query_list {query_list}")
         print(f"query_range {query_config['query_range']}")
         for q in query_list:
-            result = self._framework.query_from_file(q, verbose=verbose,
-                                                     explain=explain)
+            result = self._framework.query_from_file(q, explain=explain)
             if result != None:
                 result.process_result()
             print(result.brief_result())
@@ -112,12 +112,12 @@ class TpchBenchmark(TpcBenchmark):
     """A TPC-H benchmark, which is capable of generating the TPC-H tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework):
-        super().__init__("TPC-H", config, framework, tpch_tables)
+    def __init__(self, config, framework, verbose=False):
+        super().__init__("TPC-H", config, framework, tpch_tables, verbose)
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework):
-        super().__init__("TPC-DS", config, framework, tpcds_tables)
+    def __init__(self, config, framework, verbose=False):
+        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose)
