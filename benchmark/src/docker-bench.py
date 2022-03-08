@@ -1,41 +1,43 @@
-#!/usr/bin/python3
+#! /usr/bin/python3
+#
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
 import sys
 import subprocess
 import time
 
-HELP = """ run spark_bench.py inside a docker.
-     docker-bench.py <args>
-    examples:
-    - initialize (includes, generate tpc database, generate parquet, create catalog, compute stats
-    - --log_level INFO recommended so you can view progress.
-    ./docker-bench.py --init --log_level INFO
-    ./docker-bench.py --generate --gen_parquet
-    ./docker-bench.py --create_catalog --view_catalog
-    ./docker-bench.py --compute_stats
-    ./docker-bench.py --view_catalog
-    ./docker-bench.py --view_catalog --verbose
-    ./docker-bench.py --view_columns "*"
-    ./docker-bench.py --view_columns "*" --verbose
-    ./docker-bench.py --view_columns "web_site.*""
-    ./docker-bench.py --view_columns "web_site.*"" --verbose
-    ./docker-bench.py --view_columns "*.quantity"
-    ./docker-bench.py --view_columns "*.name"
-    ./docker-bench.py --explain --query_range 3 --log_level INFO
-    ./docker-bench.py --explain --query_range "*"
-    ./docker-bench.py --queries "*"
-    ./docker-bench.py --queries "3" --log_level INFO
-    ./docker-bench.py --queries "3,5-20,28,55"
-    ./docker-bench.py --query_text "select cc_street_name,cc_city,cc_state from call_center" --verbose
-    """
-
+#
+# The purpose of this script is to launch our qflock-bench.py in a docker.
+# In some cases we also need to re-quote arguments whose quotes were stripped by python.
+#
 if __name__ == "__main__":
-    if len(sys.argv) == 1 or sys.argv[1].casefold() == "-h" or sys.argv[1].casefold() == "--help":
-        print(HELP)
-        exit(1)
-    arg_string = " ".join(sys.argv[1:])
-    cmd = "docker exec -it sparklauncher-qflock ./spark_bench.py " + arg_string
+    needs_quotes_args = ['--queries', '--query_text', '--query_range', '--view_columns']
+    arg_string = ""
+    argc = len(sys.argv)
+    i = 1
+    while i < argc:
+        arg_string += f"{sys.argv[i]} "
+        if sys.argv[i] in needs_quotes_args:
+            i += 1
+            if i < argc:
+                arg_string += f'"{sys.argv[i]}" '
+        i += 1
+    cmd = "docker exec -it sparklauncher-qflock ./qflock-bench.py " + arg_string
     print(cmd)
     start_time = time.time()
     subprocess.call(cmd, shell=True)
     delta_time = time.time() - start_time
-    print(f"total seconds: {delta_time}")
+    print(f"total seconds: {delta_time:3.2f}")

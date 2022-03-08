@@ -26,8 +26,9 @@ class SparkHelper:
                           "USING PARQUET OPTIONS(path \"{}\");"
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
-    def __init__(self, app_name="test", catalog="hive"):
+    def __init__(self, app_name="test", catalog="hive", verbose=False):
         print(f"SparkHelper catalog: {catalog}")
+        self._verbose = verbose
         self._spark = pyspark.sql.SparkSession\
             .builder\
             .appName(app_name)\
@@ -44,7 +45,8 @@ class SparkHelper:
             SparkHelper.create_cmd_template.format(table,
                                                    tables.get_schema(table),
                                                    tables.get_table_path(db_path, table))
-        print(create_cmd)
+        if self._verbose:
+            print(create_cmd)
         self._spark.sql(create_cmd)
 
     def create_tables(self, tables, db_path):
@@ -52,7 +54,7 @@ class SparkHelper:
             print("create table for", t)
             self.create_table(tables, t, db_path)
 
-    def get_catalog_info(self, verbose=False):
+    def get_catalog_info(self):
         databases = {}
         db_list = self._spark.catalog.listDatabases()
         print("*" * 50)
@@ -60,7 +62,7 @@ class SparkHelper:
         print("*" * 50)
 
         for db in db_list:
-            if verbose:
+            if self._verbose:
                 self._spark.sql(f"DESCRIBE DATABASE EXTENDED {db.name}").show(5000, False)
             else:
                 print(f"database: {db.name}")
@@ -69,7 +71,7 @@ class SparkHelper:
             tables_list = self._spark.catalog.listTables(db.name)
             print(f"found {len(tables_list)} tables")
             for tbl in tables_list:
-                if verbose:
+                if self._verbose:
                     self._spark.sql(f"DESCRIBE TABLE EXTENDED {db.name}.{tbl.name}").show(5000, False)
                 else:
                     print(f"  {i}) {tbl.database}.{tbl.name} {tbl.tableType}")
@@ -83,7 +85,7 @@ class SparkHelper:
             print("*" * 50)
         return databases
 
-    def get_catalog_columns(self, column_filter=None, verbose=False):
+    def get_catalog_columns(self, column_filter=None):
         databases = {}
         db_list = self._spark.catalog.listDatabases()
         print("*" * 50)
@@ -113,7 +115,7 @@ class SparkHelper:
                     c = 0
                     for col in self._spark.catalog.listColumns(tbl.name, db.name):
                         if col_filter is None or col_filter in col.name:
-                            if verbose:
+                            if self._verbose:
                                 self._spark.sql(f"DESCRIBE EXTENDED " +
                                                 f"{db.name}.{tbl.name} {col.name}")\
                                     .show(5000, False)
@@ -134,7 +136,7 @@ class SparkHelper:
             for t in db[d].keys():
                 self.drop_table(t)
 
-    def query(self, query, verbose=False, explain=False, query_name=""):
+    def query(self, query, explain=False, query_name=""):
         start_time = time.time()
         status = 0
         df = None
@@ -151,12 +153,12 @@ class SparkHelper:
             print(traceback.format_exc())
             status = 1
         duration = time.time() - start_time
-        if verbose:
+        if self._verbose:
             print(df)
         return BenchmarkResult(df, status=status, duration_sec=duration, explain_text=explain_plan,
-                               verbose=verbose, explain=explain, query_name=query_name)
+                               verbose=self._verbose, explain=explain, query_name=query_name)
 
-    def query_from_file(self, query_file, verbose=False, explain=False):
+    def query_from_file(self, query_file, explain=False):
         with open(query_file, "r") as fd:
             lines = []
             for line in fd.readlines():
@@ -164,9 +166,9 @@ class SparkHelper:
                 new_line = re.sub("\\s+", " ", new_line)
                 lines.append(new_line)
             query = " ".join(lines)
-            if verbose:
+            if self._verbose:
                 print(f"Executing spark query {query_file}: {query}")
-            result = self.query(query, verbose, explain, query_name=query_file)
+            result = self.query(query, explain, query_name=query_file)
         return result
 
     @staticmethod
