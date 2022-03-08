@@ -21,7 +21,7 @@
     - spark.sql.hive.metastore.version=3.1.2
     - spark.sql.hive.metastore.jars=path
     - spark.sql.hive.metastore.jars.path=jars/*.jar
-#    - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
+    - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
 #    - metastore.catalog.default=hive
 #    - hive.metastore.uris=thrift://172.18.0.3:9083
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder
@@ -34,7 +34,6 @@
     - spark.sql.statistics.histogram.enabled=true
 #    - spark.sql.statistics.histogram.numBins=4096
 #    - spark.sql.cbo.joinReorder.enabled=true
-#    - metastore.catalog.default=dca1
 #    - spark.sql.sources.useV1SourceList=""
 # Uncomment the below to enable Spark debug.
 #    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.18.0.3:5006'

@@ -160,7 +160,9 @@ class BenchmarkApp:
             benchmark.compute_stats()
             self.trace("Compute {} stats Complete".format(self._config['benchmark']['name']))
         if self._args.view_catalog:
+            self.trace("View {} catalog Starting".format(self._config['benchmark']['name']))
             td = sh.get_catalog_info()
+            self.trace("View {} catalog Complete".format(self._config['benchmark']['name']))
         if self._args.view_columns:
             td = sh.get_catalog_columns(self._args.view_columns)
         if self._args.query_text or self._args.query_file or self._args.query_range:
