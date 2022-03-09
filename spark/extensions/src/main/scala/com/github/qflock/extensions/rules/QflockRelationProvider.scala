@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.github.qflock.datasource.v1
+package com.github.qflock.extensions.v1
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.{SQLContext}

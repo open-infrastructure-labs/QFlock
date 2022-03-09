@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.v1
+package com.github.qflock.extensions.v1
 
 import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable}
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -53,7 +53,7 @@ class QflockLogicalRelation(override val relation: BaseRelation,
         new CatalogStatistics(x.sizeInBytes,
                               rowCount,
                               x.colStats)
-        .toPlanStats(output, conf.cboEnabled || conf.planStatsEnabled)))
+        .toPlanStats(output, true)))
       .getOrElse(Statistics(sizeInBytes = relation.sizeInBytes))
   }
   override def simpleString(maxFields: Int): String =

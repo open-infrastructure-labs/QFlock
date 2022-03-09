@@ -27,7 +27,7 @@ import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
 import com.github.qflock.datasource.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
 import com.github.qflock.datasource.generic.GenericPushdownScan
-import com.github.qflock.datasource.v1.{QflockLogicalRelation, QflockRelation}
+import com.github.qflock.datasource.v1.{QflockFilter, QflockLogicalRelation, QflockLogicalRelationWithStats, QflockRelation}
 import org.json._
 import org.slf4j.LoggerFactory
 
@@ -37,7 +37,7 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter, LogicalPlan, Project, Statistics}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -230,19 +230,20 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     //    }
     val attrReferencesEither = getAttributeReferences(project)
     if (attrReferencesEither.isLeft) {
-      logger.warn("Plan not modified due to project" +
-        relationArgs.options.get("currenttest"))
+      logger.warn("Plan not modified due to project")
       alwaysInject
     } else {
       val filterReferencesEither = getFilterAttributes(filters)
       if (filterReferencesEither.isLeft) {
-        logger.warn("Plan not modified due to filter" +
-          relationArgs.options.get("currenttest"))
+        logger.warn("Plan not modified due to filter")
         alwaysInject
       } else if (!filters.exists(x => !x.isInstanceOf[IsNotNull])) {
         // We only pushdown if there are some filters that are not (IsNotNull).
-        logger.warn("Plan has no filters for " + relationArgs.options.get("currenttest"))
-        alwaysInject
+        logger.warn("Plan has no filters ")
+        relationArgs.scan match {
+            case QflockRelation(schema, parts, opts) => false
+            case _ => alwaysInject
+        }
       } else {
         true
       }
@@ -319,9 +320,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     val opt = new HashMap[String, String](relationArgs.options)
     val path = opt.get("path") // .replaceFirst("hdfs://.*:9000/", "hdfs://dikehdfs:9860/")
-    val compression = opt.getOrDefault("ndpcompression", "None")
-    val compLevel = opt.getOrDefault("ndpcomplevel", "2")
-    val test = opt.getOrDefault("currenttest", "Unknown Test")
     opt.put("path", path)
     opt.put("format", "parquet")
     opt.put("outputFormat", "binary")
@@ -382,38 +380,75 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // with the actual file (for all the files we need to process).
     // val projectJson = PushdownJson.getProjectJson(cols.split(","), test)
     logger.info(s"Stats ${plan.stats}")
-    // val ndpRel = getNdpRelation(path, processorId)
     val scalaOpts = scala.collection.immutable.HashMap(opt.toSeq: _*)
     val needsPushdown = canHandlePlan(project, filters, child, alwaysInject = false)
     val qflockRelation = new QflockRelation(references.toStructType,
                                             Array.empty[Partition], scalaOpts)(spark)
-    val planStats = BasicStatsPlanVisitor.visit(plan)
+    val filterCondition = filters.reduceLeftOption(And)
+    val (planStats, filterPlan) = {
+      val qLogRel = new QflockLogicalRelationWithStats(
+        relationArgs.relation.asInstanceOf[BaseRelation],
+        relationArgs.output,
+        relationArgs.catalogTable, false)()
+      val filterPlan = filterCondition.map(QflockFilter(_, qLogRel)).getOrElse(qLogRel)
+      val fStats = BasicStatsPlanVisitor.visit(filterPlan)
+      val projPlan = Project(project, filterPlan)
+      (BasicStatsPlanVisitor.visit(projPlan), qLogRel)
+    }
     val relationSizeInBytes = {
       // Just add the size required by the filter to the size required by the project.
-      val filterRelationBytes = if (filterReferences.length > 0) {
+      val (filterRelationBytesNew, filterRelation1) = if (filterReferences.length > 0) {
+        val filterRelation = new QflockLogicalRelationWithStats(
+          qflockRelation.asInstanceOf[BaseRelation],
+          filterReferences,
+          relationArgs.catalogTable, false)()
+        (BasicStatsPlanVisitor.visit(filterRelation).sizeInBytes, filterRelation)
+      } else {
+        // No filter needed, let's just not consider the size of the filter.
+        (BigInt(0L), 0)
+      }
+      val (filterRelationBytes, filterRelation) = if (filterReferences.length > 0) {
+        // To determine the size needed to be scanned by the filter,
+        // just create a relation that has simply the columns needed by the filter.
         val filterRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
           filterReferences,
           relationArgs.catalogTable,
           false)(child.stats.rowCount, 0)
-        filterRelation.stats.sizeInBytes
+        (filterRelation.stats.sizeInBytes, filterRelation)
       } else {
         // No filter needed, let's just not consider the size of the filter.
-        BigInt(0L)
+        (BigInt(0L), 0)
       }
       // This is the size required by the project,
       // but less any columns that are also needed by the filter since
       // those columns are already included in the filter.
-      val projectRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
-        attrReferences.filter(x => !filterReferences.contains(x)),
-        relationArgs.catalogTable,
-        false)(planStats.rowCount, 0)
-      projectRelation.stats.sizeInBytes + filterRelationBytes
+      val projectRelationBytesNew = {
+        val qLogRel = new QflockLogicalRelationWithStats(
+          qflockRelation.asInstanceOf[BaseRelation],
+          attrReferences.filter(x => !filterReferences.contains(x)),
+          relationArgs.catalogTable, false)(planStats.rowCount)
+        BasicStatsPlanVisitor.visit(qLogRel).sizeInBytes
+      }
+      val projectRelationBytes = {
+        val projectRelation =
+          new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
+          attrReferences.filter(x => !filterReferences.contains(x)),
+          relationArgs.catalogTable,
+  false)(planStats.rowCount, 0)
+        projectRelation.stats.sizeInBytes
+      }
+//      if ((projectRelationBytes != projectRelationBytesNew) ||
+//          (filterRelationBytes != filterRelationBytesNew)) {
+//        logger.error(s"RPF project ${projectRelationBytes} != ${projectRelationBytesNew} " +
+//                     s"filter ${filterRelationBytes} != ${filterRelationBytesNew} " +
+//        plan.toString)
+//      }
+      projectRelationBytesNew + filterRelationBytesNew
     }
     val scanRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
       references, relationArgs.catalogTable,
       false)(planStats.rowCount,
       relationSizeInBytes, Some(!needsPushdown))
-    val filterCondition = filters.reduceLeftOption(And)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
         /* Clip the filter from the DAG, since we are going to
@@ -511,11 +546,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         (schema, opts)
     }
     val opt = new HashMap[String, String](scanArgs._2)
-
-    val test = opt.getOrDefault("currenttest", "Unknown Test")
     val aggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates.asInstanceOf[Seq[AggregateExpression]],
-      test)
+      "")
     opt.put("ndpjsonaggregate", aggregateJson)
     val nodes = Array(opt.getOrDefault("ndpjsonfilters", ""),
       aggregateJson).filter(x => x != "")
@@ -680,7 +713,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     // We need to redirect to NDP vs the standard HDFS port.
     val path = opt.get("path").replaceFirst("hdfs://.*:9000/", "ndphdfs://dikehdfs/")
-    val test = opt.getOrDefault("currenttest", "Unknown Test")
 
     // @todo can we stash ndp relation in the options??
     //       this would allow us to only generate the relation once.
@@ -702,13 +734,13 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       }
     }
     val projectTopCols = references.toStructType.fields.map(x => s"" + s"${x.name}")
-    val projectTopJson = PushdownJson.getProjectJson(projectTopCols, test)
+    val projectTopJson = PushdownJson.getProjectJson(projectTopCols, "")
     opt.put("ndpprojectjson", projectTopJson)
 
     val filtersTopJson = {
       if (filtersStatus != PushdownJsonStatus.Invalid) {
-        val json = PushdownJson.getFiltersJson(filtersTop, test)
-        logger.warn("Pushdown " + opt.getOrDefault("currenttest", "") +
+        val json = PushdownJson.getFiltersJson(filtersTop, "")
+        logger.warn("Pushdown " +
           " Filter Json " + json)
         opt.put("ndpjsonfilterstop", json)
         json
@@ -721,14 +753,14 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // with the actual file (for all the files we need to process).
     val aggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates.asInstanceOf[Seq[AggregateExpression]],
-      test)
+      "")
     // Generate a top aggregate, which does an aggregation over the aggregation
     // This step is required by NDP in order to create a barrier between the
     // trees that get individual partitions and the aggregate across all
     // partitions.
     val topAggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates.asInstanceOf[Seq[AggregateExpression]],
-      test,
+      "",
       topAggregate = true)
 
     // We need to handle aliases in the filters
