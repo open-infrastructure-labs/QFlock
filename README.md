@@ -9,33 +9,36 @@ git submodule update --recursive --progress
 
 # build
 ```shell
-pushd storage/docker
 ./build.sh
-popd
-
-pushd spark
-./build.sh
-popd
-
-pushd benchmark
-./build.sh
-popd
 ```
-
 # start
 ```shell
-pushd storage
-./start_qflock_storage.sh
-popd
-
-pushd spark
 ./start.sh
-popd
+```
+# stop
+```shell
+./stop.sh
+```
+# clean
+```shell
+./clean.sh
+```
+# reinitialize
+Use these commands to stop services, remove all artifacts and rebuild the repo.
+```shell
+./stop.sh && ./clean.sh && ./build.sh
 ```
 
 # Configuring and running benchmarks.
-```shell 
+```shell
 # Examples
+- Initialize benchmark completely
+benchmark/src/docker-bench.py --init
+
+- Run all benchmark queries
+benchmark/src/docker-bench.py --queries "*"
+
+- Get help on available switches
 benchmark/src/docker-bench.py --help
 ```
 

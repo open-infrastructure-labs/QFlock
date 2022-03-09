@@ -24,6 +24,7 @@ import yaml
 
 from benchmark.tpc import TpchBenchmark
 from benchmark.tpc import TpcdsBenchmark
+from benchmark.metastore import MetastoreClient
 from framework_tools.spark_helper import SparkHelper
 
 
@@ -85,8 +86,6 @@ class BenchmarkApp:
                             help="Compute statistics, including histograms (if enabled).")
         parser.add_argument("--explain", "-e", action="store_true",
                             help="For query commands, do explain instead of query.")
-        parser.add_argument("--catalog", "-cat", default="hive",
-                            help="catalog to use")
         parser.add_argument("--query_file", "-qf", default=None,
                             help="read query from file.")
         return parser
@@ -117,18 +116,35 @@ class BenchmarkApp:
         return qc
 
     def trace(self, message):
-        print("*" * 80)
-        print(message)
-        print("*" * 80)
+        if self._args.verbose or self._args.log_level != "OFF":
+            print("*" * 50)
+            print(message)
+            print("*" * 50)
+        else:
+            print()
+            print(message)
+
+    def _create_default_catalog(self):
+        """If the default catalog(s) are not present, then create them."""
+        mclient = MetastoreClient(self._config['benchmark']['hive-metastore'],
+                                  self._config['benchmark']['hive-metastore-port'])
+        catalogs = mclient.client.get_catalogs()
+        for catalog_name in ["spark_dc"]:
+            print(f"found catalogs {catalogs}")
+            if catalog_name not in catalogs.names:
+                mclient.create_catalog(name=catalog_name, description='Spark Catalog for a Data Center',
+                                       locationUri='/opt/volume/metastore/metastore_db_DBA')
 
     def run(self):
         if not self._parse_args():
             return
         self._load_config()
-        sh = SparkHelper(catalog=self._args.catalog, verbose=self._args.verbose)
+        sh = SparkHelper(verbose=self._args.verbose)
         # This trace is important
-        # the calling {} will look for this before starting tracing.
+        # the calling script will look for this before starting tracing.
+        # Any traces before this point will *not* be seen at the default log level of OFF
         print("bench.py starting")
+        self._create_default_catalog()
         if self._args.log_level:
             print(f"Set log level to {self._args.log_level}")
             sh.set_log_level(self._args.log_level)
@@ -160,27 +176,29 @@ class BenchmarkApp:
             benchmark.compute_stats()
             self.trace("Compute {} stats Complete".format(self._config['benchmark']['name']))
         if self._args.view_catalog:
-            td = sh.get_catalog_info()
+            self.trace("View {} catalog Starting".format(self._config['benchmark']['name']))
+            sh.get_catalog_info()
+            self.trace("View {} catalog Complete".format(self._config['benchmark']['name']))
         if self._args.view_columns:
-            td = sh.get_catalog_columns(self._args.view_columns)
+            sh.get_catalog_columns(self._args.view_columns)
         if self._args.query_text or self._args.query_file or self._args.query_range:
-            result = None
+
             if self._args.query_text:
                 sh.set_db(self._config['benchmark']['db-name'])
                 print("Spark query", self._args.query_text)
                 result = sh.query(self._args.query_text, self._args.explain)
-                if result != None:
+                if result is not None:
                     result.process_result()
                     print(result.brief_result())
             elif self._args.query_file:
                 sh.set_db(self._config['benchmark']['db-name'])
                 result = sh.query_from_file(self._args.query_file, self._args.explain)
-                if result != None:
+                if result is not None:
                     result.process_result()
                     print(result.brief_result())
             elif self._args.query_range:
                 qc = self._get_query_config()
-                result = benchmark.query(qc, self._args.explain)
+                benchmark.query(qc, self._args.explain)
             if self._args.explain:
                 print("see logs/explain.txt for output of explain")
 
@@ -188,4 +206,3 @@ class BenchmarkApp:
 if __name__ == "__main__":
     bench = BenchmarkApp()
     bench.run()
-

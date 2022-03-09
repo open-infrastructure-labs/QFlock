@@ -465,7 +465,7 @@
   </property>
   <property>
     <name>metastore.catalog.default</name>
-<!--    <value>dca2</value>-->
+    <value>spark_dc</value>
     <value/>
     <description>Catalog in hive to use.</description>
   </property>

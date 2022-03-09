@@ -26,16 +26,13 @@ class SparkHelper:
                           "USING PARQUET OPTIONS(path \"{}\");"
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
-    def __init__(self, app_name="test", catalog="hive", verbose=False):
-        print(f"SparkHelper catalog: {catalog}")
+    def __init__(self, app_name="test", verbose=False):
         self._verbose = verbose
         self._spark = pyspark.sql.SparkSession\
             .builder\
             .appName(app_name)\
-            .config("metastore.catalog.default", catalog)\
             .enableHiveSupport()\
             .getOrCreate()
-        print(f"metastore.catalog.default: {self._spark.conf.get('metastore.catalog.default')}")
 
     def set_log_level(self, level="INFO"):
         self._spark.sparkContext.setLogLevel(level)
@@ -181,9 +178,10 @@ class SparkHelper:
             password='my-secret-pw').mode('append').save()
 
     def write_file_as_parquet(self, schema, input_file, output_file):
-        print("write_file_as_parquet")
-        print(f"schema {schema}")
-        print(f"input_file {input_file}")
+        if self._verbose:
+            print("write_file_as_parquet")
+            print(f"schema {schema}")
+            print(f"input_file {input_file}")
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
         print(f"database {input_file} has {df.count()} rows")
 
