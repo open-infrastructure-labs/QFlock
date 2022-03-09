@@ -21,6 +21,7 @@ from argparse import RawTextHelpFormatter
 
 from pyfiglet import Figlet
 import yaml
+import socket
 
 from benchmark.tpc import TpchBenchmark
 from benchmark.tpc import TpcdsBenchmark
@@ -126,7 +127,10 @@ class BenchmarkApp:
 
     def _create_default_catalog(self):
         """If the default catalog(s) are not present, then create them."""
-        mclient = MetastoreClient(self._config['benchmark']['hive-metastore'],
+        hive_metastore = self._config['benchmark']['hive-metastore']
+        if any(char.isalpha() for char in hive_metastore):
+            hive_metastore = socket.gethostbyname(hive_metastore)
+        mclient = MetastoreClient(hive_metastore,
                                   self._config['benchmark']['hive-metastore-port'])
         catalogs = mclient.client.get_catalogs()
         for catalog_name in ["spark_dc"]:

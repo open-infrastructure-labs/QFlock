@@ -11,7 +11,7 @@
     # parquet-path: "../data/tpcds-parquet"
     query-path: "queries/tpcds"
     query-extension: "sql"
-    hive-metastore: "172.18.0.2"
+    hive-metastore: "qflock-storage"
     hive-metastore-port: "9083"
   spark:
     master: local
