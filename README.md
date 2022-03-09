@@ -34,6 +34,13 @@ popd
 # Configuring and running benchmarks.
 ```shell
 # Examples
+- Initialize benchmark completely
+benchmark/src/docker-bench.py --init
+
+- Run all benchmark queries
+benchmark/src/docker-bench.py --queries "*"
+
+- Get help on available switches
 benchmark/src/docker-bench.py --help
 ```
 
