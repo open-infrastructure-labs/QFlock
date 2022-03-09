@@ -39,7 +39,7 @@ RUN apt-get update \
    python3 python3-setuptools python3.8-venv\
  && ln -s /usr/bin/python3 /usr/bin/python \
  && apt install -y python3-pip \
- && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml \
+ && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml hive-metastore-client\
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 

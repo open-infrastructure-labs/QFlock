@@ -26,15 +26,13 @@ class SparkHelper:
                           "USING PARQUET OPTIONS(path \"{}\");"
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
-    def __init__(self, app_name="test", catalog="hive", verbose=False):
-        print(f"SparkHelper catalog: {catalog}")
+    def __init__(self, app_name="test", verbose=False):
         self._verbose = verbose
         self._spark = pyspark.sql.SparkSession\
             .builder\
             .appName(app_name)\
             .enableHiveSupport()\
             .getOrCreate()
-            # .config("metastore.catalog.default", catalog)\
 
     def set_log_level(self, level="INFO"):
         self._spark.sparkContext.setLogLevel(level)

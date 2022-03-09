@@ -43,6 +43,7 @@ class QflockBench:
         self._config = None
         self._spark_launcher = None
         self._wait_for_string = None
+        self._exit_code = 0
 
     def _load_config(self):
         config_file = self._args.file
@@ -147,6 +148,7 @@ class QflockBench:
         parser.add_argument("--name", "-n", default="",
                             help="name for test")
         return parser
+
     def _parse_args(self):
         b = bench.BenchmarkApp()
         parent_parser = b.get_parser(parent_parser=True)
@@ -208,11 +210,13 @@ class QflockBench:
             for q in self._query_list:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)}'
-                self._spark_launcher.spark_submit(cmd, workers=w,
-                                                  enable_stdout=self._args.log_level != "OFF",
-                                                  wait_text=self._wait_for_string)
+                rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
+                                                               enable_stdout=self._args.log_level != "OFF",
+                                                               wait_text=self._wait_for_string)
+                if rc != 0:
+                    self._exit_code = rc
         print("")
-        self.show_results()
+        # self.show_results()
         self.display_elapsed()
         if self._test_failures > 0:
             print("test failures: {0}".format(self._test_failures))
@@ -230,6 +234,8 @@ class QflockBench:
             rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
                                                            enable_stdout=self._args.log_level != "OFF",
                                                            wait_text=self._wait_for_string)
+            if rc != 0:
+                self._exit_code = rc
             #print(output)
 
     def run(self):
@@ -245,6 +251,7 @@ class QflockBench:
                 self.run_query()
             else:
                 self.run_cmd()
+        exit(self._exit_code)
 
 
 if __name__ == "__main__":

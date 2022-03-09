@@ -38,6 +38,9 @@ if __name__ == "__main__":
     cmd = "docker exec -it sparklauncher-qflock ./qflock-bench.py " + arg_string
     print(cmd)
     start_time = time.time()
-    subprocess.call(cmd, shell=True)
+    status = subprocess.call(cmd, shell=True)
     delta_time = time.time() - start_time
     print(f"total seconds: {delta_time:3.2f}")
+    if status != 0:
+        print(f"\n*** Exit code was {status}")
+        exit(status)
