@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.hdfs
+package com.github.qflock.extensions.hdfs
 
 import java.util
 import javax.xml.bind.DatatypeConverter
 
-import com.github.qflock.datasource.generic.GenericVectReader
-import com.github.qflock.datasource.generic.ProcessorRequestConfig
+import com.github.qflock.extensions.generic.GenericVectReader
+import com.github.qflock.extensions.generic.ProcessorRequestConfig
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.api.python.generic.GenericPythonRunner

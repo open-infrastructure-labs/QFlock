@@ -14,14 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.generic
+package com.github.qflock.extensions.generic
 
 import java.util
 import java.util.OptionalLong
 
 import scala.collection.mutable.ArrayBuffer
 
-import com.github.qflock.datasource.hdfs.{HdfsBinColPartitionReaderFactory, HdfsPartition}
+import com.github.qflock.extensions.hdfs.{HdfsBinColPartitionReaderFactory, HdfsPartition}
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession

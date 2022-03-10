@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.common
+package com.github.qflock.extensions.common
 
 object PushdownJsonStatus extends Enumeration {
   type PushdownJsonStatus = Value

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 // scalastyle:on
-package com.github.qflock.datasource.common
+package com.github.qflock.extensions.common
 
 import java.math.BigDecimal
 import java.sql.{Date, Timestamp}
