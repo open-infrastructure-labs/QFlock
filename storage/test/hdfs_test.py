@@ -11,6 +11,8 @@ if __name__ == '__main__':
     result = subprocess.run('docker network inspect qflock-net'.split(' '), stdout=subprocess.PIPE)
     d = json.loads(result.stdout)
 
+    print(d[0]['IPAM']['Config'][0]['Gateway'])
+
     for c in d[0]['Containers'].values():
         print(c['Name'], c['IPv4Address'].split('/')[0])
         if c['Name'] == 'qflock-storage':

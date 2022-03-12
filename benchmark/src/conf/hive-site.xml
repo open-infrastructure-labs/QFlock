@@ -471,8 +471,12 @@
   </property>
   <property>
     <name>hive.metastore.uris</name>
-     <value>thrift://qflock-storage:9083</value>
-<!--    <value>thrift://dsw4:9090</value>-->
+    <value>thrift://qflock-storage:9083</value>
+    <!-- This can be used to debug metastore_proxy on local machine
+    <value>thrift://local-docker-host:9084</value>
+    -->
+    <!--<value>thrift://qflock-storage:9083</value>-->
+    <!--<value>thrift://dsw4:9090</value>-->
     <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
   </property>
   <property>
