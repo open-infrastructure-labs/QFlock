@@ -3,6 +3,7 @@ import threading
 import urllib.parse
 import subprocess
 import json
+import re
 
 import fastparquet
 from fastparquet import core
@@ -105,6 +106,26 @@ def get_file_reader():
     return get_reader(f'file://dikehdfs:9870/{fname}?user.name=peter')
 
 
+def get_network_stats(docker_name):
+    # docker stats --no-stream --format "{{.NetIO}}" qflock-storage
+    cmd = 'docker stats --no-stream --format "{{.NetIO}}" ' + docker_name
+    result = subprocess.run(cmd.split(' '), stdout=subprocess.PIPE)
+    stats = result.stdout.decode("utf-8")
+    stats = stats.lower().replace('\n', '').replace('"', '').replace(' ', '').replace('b', '').split('/')
+    print(stats)
+    sizes = {'k': 1 << 10, 'm': 1 << 20, 'g': 1 << 30}
+
+    for i in range(0, len(stats)):
+        factor = 1
+        if stats[i][-1] in sizes.keys():
+            factor = sizes[stats[i][-1]]
+            stats[i] = stats[i][:-1]
+
+        stats[i] = float(stats[i]) * factor
+
+    return stats
+
+
 if __name__ == '__main__':
     # reader = get_file_reader()
     reader = get_webhdfs_reader();
@@ -127,6 +148,14 @@ if __name__ == '__main__':
 
     delta = (reader.infile.size - total_compressed) * 100 / reader.infile.size
     print(f'Total compressed {total_compressed} File size {reader.infile.size} Delta {delta:.3f}%')
+
+    # Read one column with Docker network stats
+    stats_before = get_network_stats('qflock-storage')
+    for i in range(0, reader.num_row_groups):
+        reader.read_rg(i, ['ss_sold_date_sk'])
+    stats_after = get_network_stats('qflock-storage')
+    transfer_size = int(stats_after[1] - stats_before[1])
+    print(f'Transfer size {transfer_size}')
 
 
 
