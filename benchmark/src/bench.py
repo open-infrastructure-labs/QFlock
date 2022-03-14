@@ -89,6 +89,8 @@ class BenchmarkApp:
                             help="For query commands, do explain instead of query.")
         parser.add_argument("--query_file", "-qf", default=None,
                             help="read query from file.")
+        parser.add_argument("--loops", type=int, default=1,
+                            help="number of times to loop the range of tests.")
         return parser
 
     def _parse_args(self):
@@ -110,7 +112,7 @@ class BenchmarkApp:
 
     def _get_query_config(self):
         qc = {}
-        args = ["query_range"]
+        args = ["query_range", "query_file"]
         for arg in args:
             if arg in self._args.__dict__:
                 qc[arg] = self._args.__dict__[arg]
@@ -127,17 +129,18 @@ class BenchmarkApp:
 
     def _create_default_catalog(self):
         """If the default catalog(s) are not present, then create them."""
-        hive_metastore = self._config['benchmark']['hive-metastore']
-        if any(char.isalpha() for char in hive_metastore):
-            hive_metastore = socket.gethostbyname(hive_metastore)
-        mclient = MetastoreClient(hive_metastore,
-                                  self._config['benchmark']['hive-metastore-port'])
-        catalogs = mclient.client.get_catalogs()
-        for catalog_name in ["spark_dc"]:
-            print(f"found catalogs {catalogs}")
-            if catalog_name not in catalogs.names:
-                mclient.create_catalog(name=catalog_name, description='Spark Catalog for a Data Center',
-                                       locationUri='/opt/volume/metastore/metastore_db_DBA')
+        if 'hive-metastore' in self._config['benchmark']:
+            hive_metastore = self._config['benchmark']['hive-metastore']
+            if any(char.isalpha() for char in hive_metastore):
+                hive_metastore = socket.gethostbyname(hive_metastore)
+            mclient = MetastoreClient(hive_metastore,
+                                      self._config['benchmark']['hive-metastore-port'])
+            catalogs = mclient.client.get_catalogs()
+            for catalog_name in ["spark_dc"]:
+                print(f"found catalogs {catalogs}")
+                if catalog_name not in catalogs.names:
+                    mclient.create_catalog(name=catalog_name, description='Spark Catalog for a Data Center',
+                                           locationUri='/opt/volume/metastore/metastore_db_DBA')
 
     def run(self):
         if not self._parse_args():
@@ -186,25 +189,22 @@ class BenchmarkApp:
         if self._args.view_columns:
             sh.get_catalog_columns(self._args.view_columns)
         if self._args.query_text or self._args.query_file or self._args.query_range:
-
-            if self._args.query_text:
-                sh.set_db(self._config['benchmark']['db-name'])
-                print("Spark query", self._args.query_text)
-                result = sh.query(self._args.query_text, self._args.explain)
-                if result is not None:
-                    result.process_result()
-                    print(result.brief_result())
-            elif self._args.query_file:
-                sh.set_db(self._config['benchmark']['db-name'])
-                result = sh.query_from_file(self._args.query_file, self._args.explain)
-                if result is not None:
-                    result.process_result()
-                    print(result.brief_result())
-            elif self._args.query_range:
-                qc = self._get_query_config()
-                benchmark.query(qc, self._args.explain)
-            if self._args.explain:
-                print("see logs/explain.txt for output of explain")
+            for i in range(0, self._args.loops):
+                if self._args.query_text:
+                    sh.set_db(self._config['benchmark']['db-name'])
+                    print("Spark query", self._args.query_text)
+                    result = sh.query(self._args.query_text, self._args.explain)
+                    if result is not None:
+                        result.process_result()
+                        print(result.brief_result())
+                elif self._args.query_file:
+                    qc = self._get_query_config()
+                    benchmark.query_file(self._args.query_file, self._args.explain)
+                elif self._args.query_range:
+                    qc = self._get_query_config()
+                    benchmark.query_range(qc, self._args.explain)
+                if self._args.explain:
+                    print("see logs/explain.txt for output of explain")
 
 
 if __name__ == "__main__":

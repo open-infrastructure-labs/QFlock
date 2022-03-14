@@ -23,6 +23,7 @@ from benchmark.command import shell_cmd
 from benchmark.benchmark import Benchmark
 from benchmark.tpc_tables import tpch_tables
 from benchmark.tpc_tables import tpcds_tables
+from benchmark.docker_stat import DockerStat
 
 
 class TpcBenchmark(Benchmark):
@@ -59,7 +60,22 @@ class TpcBenchmark(Benchmark):
         print(f"{file_count} files copied {self._config['tool-path']} -> "
               f"{self._config['raw-data-path']}")
 
-    def query(self, query_config, explain=False):
+    def query_file(self, query_file, explain=False):
+        self._framework.set_db(self._config['db-name'])
+        stat_list = [DockerStat()]
+        for s in stat_list:
+            s.start()
+        result = self._framework.query_from_file(query_file, explain=explain)
+        stat_result = ""
+        for s in stat_list:
+            s.end()
+            stat_result += str(s)
+        if result is not None:
+            result.process_result()
+        print(result.brief_result() + " " + stat_result)
+        return result
+
+    def query_range(self, query_config, explain=False):
         self._framework.set_db(self._config['db-name'])
         query_list = Benchmark.get_query_list(query_config['query_range'], self._config['query-path'],
                                               self._config['query-extension'])
@@ -67,11 +83,9 @@ class TpcBenchmark(Benchmark):
         if self._verbose:
             print(f"query_list {query_list}")
         print(f"query_range {query_config['query_range']}")
+
         for q in query_list:
-            result = self._framework.query_from_file(q, explain=explain)
-            if result != None:
-                result.process_result()
-            print(result.brief_result())
+            result = self.query_file(q, explain)
             if result.status == 0:
                 success_count += 1
             else:
