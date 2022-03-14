@@ -455,7 +455,7 @@
   </property>
   <property>
     <name>hive.metastore.warehouse.dir</name>
-    <value>hdfs://hdfs-server:9000/user/hive/warehouse</value>
+    <value>hdfs://qflock-storage:9000/user/hive/warehouse</value>
     <description>location of default database for the warehouse</description>
   </property>
   <property>
@@ -464,19 +464,25 @@
     <description>Default location for external tables created in the warehouse. If not set or null, then the normal warehouse location will be used as the default location.</description>
   </property>
   <property>
+    <name>metastore.catalog.default</name>
+    <value>spark_dc</value>
+    <value/>
+    <description>Catalog in hive to use.</description>
+  </property>
+  <property>
     <name>hive.metastore.uris</name>
-    <value>thrift://hdfs-server:9083</value>
+    <value>thrift://qflock-storage:9083</value>
+    <!-- This can be used to debug metastore_proxy on local machine
+    <value>thrift://local-docker-host:9084</value>
+    -->
+    <!--<value>thrift://qflock-storage:9083</value>-->
+    <!--<value>thrift://dsw4:9090</value>-->
     <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
   </property>
   <property>
     <name>hive.metastore.local</name>
     <value>false</value>
     <description>Use local metastore.</description>
-  </property>
-  <property>
-    <name>metastore.catalog.default</name>
-    <value>hive</value>
-    <description>Catalog in hive to use.</description>
   </property>
   <property>
     <name>hive.metastore.uri.selection</name>
@@ -4155,7 +4161,9 @@
   </property>
   <property>
     <name>hive.server2.transport.mode</name>
-    <value>binary</value>
+    <!-- QFlock <value>binary</value> -->
+    <!-- QFlock <value>http</value> -->
+    <value>http</value>
     <description>
       Expects one of [binary, http].
       Transport mode of HiveServer2.
@@ -4418,7 +4426,8 @@
   </property>
   <property>
     <name>hive.server2.logging.operation.log.location</name>
-    <value>${system:java.io.tmpdir}/${system:user.name}/operation_logs</value>
+    <!-- QFlock <value>${system:java.io.tmpdir}/${system:user.name}/operation_logs</value> -->
+    <value>/opt/volume/logs/hive/operation_logs</value>
     <description>Top level directory where operation logs are stored if logging functionality is enabled</description>
   </property>
   <property>
@@ -5106,7 +5115,8 @@
   </property>
   <property>
     <name>hive.execution.engine</name>
-    <value>mr</value>
+    <!-- QFlock <value>mr</value> -->
+    <value>spark</value>
     <description>
       Expects one of [mr, tez, spark].
       Chooses execution engine. Options are: mr (Map reduce, default), tez, spark. While MR
