@@ -43,7 +43,11 @@ else
 fi
 START_LOCAL="YES"
 STORAGE_HOST="--add-host=qflock-storage:$(scripts/get-docker-ip.py qflock-storage)"
+LOCAL_DOCKER_HOST="--add-host=local-docker-host:$(scripts/get-docker-ip.py qflock-net)"
+
+echo "Local docker host ${LOCAL_DOCKER_HOST}"
 echo "Storage ${STORAGE_HOST}"
+
 DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
   DOCKER_IT="-i -t"
@@ -52,7 +56,7 @@ fi
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name sparklauncher-qflock $STORAGE_HOST\
+  --name sparklauncher-qflock $STORAGE_HOST $LOCAL_DOCKER_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
