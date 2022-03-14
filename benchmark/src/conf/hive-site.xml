@@ -4161,7 +4161,8 @@
   </property>
   <property>
     <name>hive.server2.transport.mode</name>
-    <value>binary</value>
+    <!-- QFlock <value>binary</value> -->
+    <value>http</value>
     <description>
       Expects one of [binary, http].
       Transport mode of HiveServer2.
@@ -5112,7 +5113,8 @@
   </property>
   <property>
     <name>hive.execution.engine</name>
-    <value>mr</value>
+    <!-- QFlock <value>mr</value> -->
+    <value>spark</value>
     <description>
       Expects one of [mr, tez, spark].
       Chooses execution engine. Options are: mr (Map reduce, default), tez, spark. While MR

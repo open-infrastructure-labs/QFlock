@@ -61,6 +61,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
+  -e SPARK_LOG_DIR=/opt/volume/logs \
   --mount type=bind,source=$(pwd)/../,target=/qflock \
   -w /qflock/benchmark/src \
   --mount type=bind,source=$(pwd)/spark,target=/spark \
