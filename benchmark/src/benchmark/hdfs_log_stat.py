@@ -15,31 +15,44 @@
 # limitations under the License.
 #
 
-import docker
+import os
+import sys
+
 from benchmark.benchmark_stat import BenchmarkStat
 
 
-class DockerStat(BenchmarkStat):
+class HdfsLogStat(BenchmarkStat):
 
-    def __init__(self):
-        self._docker_client = docker.DockerClient(base_url='http://10.124.48.63:2375')
-        self._start_bytes = 0
-        self._end_bytes = 0
+    def __init__(self, log_file="logs/log.txt"):
+        self._total_bytes = 0
+        self._file = log_file
 
     def start(self):
-        self._start_bytes = self._docker_client.containers.get("qflock-storage") \
-                                .stats(stream=False)['networks']['eth0']['tx_bytes']
+        # This stat relies on a log file already being generated ()
+        pass
 
     def end(self):
-        self._end_bytes = self._docker_client.containers.get("qflock-storage")\
-                              .stats(stream=False)['networks']['eth0']['tx_bytes']
+        if os.path.isfile(self._file):
+            self.parse()
+
+    def parse(self):
+        with open(self._file, 'r') as fd:
+            total = 0
+            for line in fd.readlines():
+                if "DFSClient readNextPacket" in line:
+                    items = line.rstrip("\n").split(" ")
+                    cur_bytes = int(items[10].split("=")[1])
+                    total += cur_bytes
+            self._total_bytes = total
 
     def __str__(self):
-        return f"storage tx_bytes {self._end_bytes - self._start_bytes} "
+        if self._total_bytes > 0:
+            return f"DFSClient bytes {self._total_bytes} "
+        return ""
+
 
 if __name__ == "__main__":
-
-    ds = DockerStat()
-    ds.start()
-    ds.end()
-    print(ds)
+    file = sys.argv[1]
+    stat = HdfsLogStat(file)
+    stat.end()
+    print(stat)

@@ -14,39 +14,41 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-from benchmark.util import run_command
 import subprocess
+
 
 class SparkLauncher:
     def __init__(self, config):
         self._config = config
 
-    # "venv/bin/spark-submit --master local[1] --conf "spark.driver.memory=2g" ./bench.py -f"
-    # bin/pyspark --conf spark.sql.catalogImplementation=hive --packages org.apache.spark:spark-hive_2.12:3.2.0,mysql:mysql-connector-java:8.0.28 --conf spark.sql.extensions=com.github.datasource.generic.FederationExtensions --jars pushdown-datasource_2.12-0.1.0.jar
-
     def get_spark_cmd(self, cmd, workers):
         spark_cmd = f'spark-submit --master {self._config["master"]} '
-        if workers != None and workers > 0:
+        if workers is not None and workers > 0:
             spark_cmd += f"--total-executor-cores {workers} "
         spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in self._config["conf"]])
         if "packages" in self._config:
             spark_cmd += " --packages " + ",".join([arg for arg in self._config["packages"]])
         if "jars" in self._config:
             spark_cmd += " --jars " + ",".join([arg for arg in self._config["jars"]])
-        # if "debug_options" in self._config:
-        #     debug = self._config['debug_options']
-        #     spark_cmd += f'extraJavaOptions="{debug["classpath"]} {debug["agentlib"]}{debug["address"]}"'
         spark_cmd += f" {cmd}"
         return spark_cmd
 
-    def spark_submit(self, command, workers=None, enable_stdout=False, wait_text=None):
+    def spark_submit(self, command, workers=None, enable_stdout=False, wait_text=None,
+                     logfile="logs/log.txt"):
+        print(f"qflock:: enable_stdout {enable_stdout} wait_text {wait_text}")
         spark_cmd = self.get_spark_cmd(command, workers=workers)
         print("*" * 30)
         print(spark_cmd)
         print("*" * 30)
-        if enable_stdout:
-            rc = subprocess.call(spark_cmd, shell=True)
-            return rc, ""
+        fd = None
+        if logfile:
+            fd = open(logfile, 'w')
+        if enable_stdout and not logfile:
+            # rc = subprocess.call(spark_cmd, shell=True)
+            # return rc, ""
+            result = subprocess.run(spark_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                    shell=True)
+            return result.returncode, result.stdout
         else:
             # result = subprocess.run(spark_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             #                         shell=True)
@@ -59,13 +61,19 @@ class SparkLauncher:
                 output = process.stdout.readline()
                 if (not output or output == '') and process.poll() is not None:
                     break
-                if output and wait_text:
+                if output:
                     output_text = str(output, 'utf-8')
-                    if enable_tracing:
+                    if logfile:
+                        print(output_text.rstrip('\n'), file=fd)
+                    if 'qflock::' in output_text:
                         print(output_text.rstrip('\n'))
-                    elif wait_text in output_text:
-                        enable_tracing = True
-                output_lines.append(output_text)
+                    elif enable_stdout and wait_text is not None:
+                        if enable_tracing:
+                            print(output_text.rstrip('\n'))
+                        elif wait_text in output_text:
+                            enable_tracing = True
+                    elif enable_stdout:
+                        print(output_text.rstrip('\n'))
+                    output_lines.append(output_text)
             rc = process.poll()
             return rc, output_lines
-

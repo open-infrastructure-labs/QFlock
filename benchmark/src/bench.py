@@ -81,6 +81,8 @@ class BenchmarkApp:
                             help="View details of catalog")
         parser.add_argument("--delete_catalog", "-dc", action="store_true",
                             help="Delete catalog entries.")
+        parser.add_argument("--no_catalog", action="store_true",
+                            help="Disable use of catalog")
         parser.add_argument("--create_catalog", "-cc", action="store_true",
                             help="Create the catalog database and tables for the parquet files.")
         parser.add_argument("--compute_stats", "-cs", action="store_true",
@@ -91,6 +93,8 @@ class BenchmarkApp:
                             help="read query from file.")
         parser.add_argument("--loops", type=int, default=1,
                             help="number of times to loop the range of tests.")
+        parser.add_argument("--capture_log_level", default=None,
+                            help="log level to capture to file.")
         return parser
 
     def _parse_args(self):
@@ -105,9 +109,11 @@ class BenchmarkApp:
 
     def _get_benchmark(self, sh):
         if self._config['benchmark']['db-name'] == "tpch":
-            return TpchBenchmark(self._config['benchmark'], sh, self._args.verbose)
+            return TpchBenchmark(self._config['benchmark'], sh, self._args.verbose,
+                                 not self._args.no_catalog)
         if self._config['benchmark']['db-name'] == "tpcds":
-            return TpcdsBenchmark(self._config['benchmark'], sh, self._args.verbose)
+            return TpcdsBenchmark(self._config['benchmark'], sh, self._args.verbose,
+                                  not self._args.no_catalog)
         return None
 
     def _get_query_config(self):
@@ -151,11 +157,14 @@ class BenchmarkApp:
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
         print("bench.py starting")
-        self._create_default_catalog()
+        if not self._args.no_catalog:
+            self._create_default_catalog()
         if self._args.log_level:
             print(f"Set log level to {self._args.log_level}")
             sh.set_log_level(self._args.log_level)
-            # sh.set_log_level("DEBUG")
+        if self._args.capture_log_level:
+            print(f"Set capture log level to {self._args.capture_log_level}")
+            sh.set_log_level(self._args.capture_log_level)
         benchmark = self._get_benchmark(sh)
         BenchmarkApp._banner()
         if self._args.init_all:
@@ -188,6 +197,8 @@ class BenchmarkApp:
             self.trace("View {} catalog Complete".format(self._config['benchmark']['name']))
         if self._args.view_columns:
             sh.get_catalog_columns(self._args.view_columns)
+        if self._args.no_catalog:
+            benchmark.create_tables_view()
         if self._args.query_text or self._args.query_file or self._args.query_range:
             for i in range(0, self._args.loops):
                 if self._args.query_text:
