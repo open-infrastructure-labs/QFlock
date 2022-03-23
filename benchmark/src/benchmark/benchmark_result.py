@@ -32,8 +32,10 @@ class BenchmarkResult:
         self.query_name = query_name
         self.size_bytes_csv = 0
         self.size_bytes_pq = 0
-        # self._output = "parquet"
-        self._output = "off"
+        if self._verbose:
+            self._output = ["parquet", "csv"]
+        else:
+            self._output = []
 
     def filtered_explain(self):
         new_explain_text = ""
@@ -57,7 +59,7 @@ class BenchmarkResult:
                 if self.query_name:
                     print(f"query: {self.query_name}", file=fd)
                 print(self.filtered_explain(), file=fd)
-        if self._output == "csv":
+        if "csv" in self._output:
             output_path = os.path.join("logs", "output.csv")
             self.df.repartition(1) \
                 .write.mode("overwrite") \
@@ -70,7 +72,7 @@ class BenchmarkResult:
                 self.size_bytes_csv = os.path.getsize(output_files[0])
             else:
                 self.size_bytes_csv = os.path.getsize(output_path)
-        if self._output == "parquet":
+        if "parquet" in self._output:
             output_path = os.path.join("logs", "output.parquet")
             self.df.repartition(1) \
                 .write.mode("overwrite") \
@@ -85,8 +87,8 @@ class BenchmarkResult:
                 self.size_bytes_pq = os.path.getsize(output_path)
 
     def brief_result(self):
-        if False:
-            result = f"query {self.query_name} rows {self.df.count()} "\
+        if self._verbose:
+            result = f"qflock:: {self.query_name} rows {self.df.count()} "\
                      f"bytes {self.size_bytes_pq} seconds {self.duration_sec:.3f}"
         else:
             result = f"qflock:: {self.query_name} "\

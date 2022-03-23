@@ -119,8 +119,12 @@ class QflockBench:
                                          description="App for running Qflock Benchmarks on Spark.\n",
                                          epilog=QflockBench.help_examples.format(sys.argv[0]),
                                          parents=parents)
-        parser.add_argument("--debug", "-D", action="store_true",
-                            help="enable debug output")
+        parser.add_argument("--debug", "-dbg", action="store_true",
+                            help="enable debugger")
+        parser.add_argument("--terse", "-t", action="store_true",
+                            help="Limited output.")
+        parser.add_argument("--extensions", "-ext", action="store_true",
+                            help="enable extensions")
         parser.add_argument("--log_level", "-ll", default="OFF",
                             help="log level set to input arg.\n"
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
@@ -163,6 +167,8 @@ class QflockBench:
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
         self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
+        if "--capture_log_level" in self._remaining_args:
+            self._wait_for_string = None
         return True
 
     def process_cmd_status(self, cmd, status, output):
@@ -230,6 +236,7 @@ class QflockBench:
         if self._args.view_columns:
             cmd += f'--view_columns "{self._args.view_columns}" '
         cmd += " ".join(self._remaining_args)
+
         for w in self._workers_list:
             rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
                                                            enable_stdout=self._args.log_level != "OFF",
@@ -243,7 +250,7 @@ class QflockBench:
             return
         self._load_config()
         self._parse_test_list()
-        self._spark_launcher = SparkLauncher(self._config['spark'])
+        self._spark_launcher = SparkLauncher(self._config['spark'], self._args)
 
         loops = int(self._args.iterations)
         for loop in range(0, loops):

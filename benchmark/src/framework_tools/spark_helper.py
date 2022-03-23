@@ -27,8 +27,12 @@ class SparkHelper:
                           "USING PARQUET OPTIONS(path \"{}\");"
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
-    def __init__(self, app_name="test", use_catalog=False, verbose=False):
+    def __init__(self, app_name="test", use_catalog=False, verbose=False,
+                 jdbc=False):
         self._verbose = verbose
+        self._jdbc = jdbc
+        if self._jdbc:
+            use_catalog = False
         if use_catalog:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
@@ -59,9 +63,16 @@ class SparkHelper:
             self.create_table(tables, t, db_path)
 
     def create_table_view(self, table, db_path):
-        table_path = os.path.join(db_path, f"{table}.parquet")
-        df = self._spark.read.parquet(table_path)
-        df.createOrReplaceTempView(table)
+        if self._jdbc:
+            df = self._spark.read.option("url", db_path)\
+                 .format("jdbc")\
+                 .option("header", "true")\
+                 .option("dbtable", table).load()
+            df.createOrReplaceTempView(table)
+        else:
+            table_path = os.path.join(db_path, f"{table}.parquet")
+            df = self._spark.read.parquet(table_path)
+            df.createOrReplaceTempView(table)
 
     def create_tables_view(self, tables, db_path):
         for t in tables.get_tables():

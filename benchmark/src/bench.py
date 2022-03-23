@@ -89,6 +89,8 @@ class BenchmarkApp:
                             help="Compute statistics, including histograms (if enabled).")
         parser.add_argument("--explain", "-e", action="store_true",
                             help="For query commands, do explain instead of query.")
+        parser.add_argument("--jdbc", action="store_true",
+                            help="Issue query to jdbc api of Spark.")
         parser.add_argument("--query_file", "-qf", default=None,
                             help="read query from file.")
         parser.add_argument("--loops", type=int, default=1,
@@ -110,10 +112,10 @@ class BenchmarkApp:
     def _get_benchmark(self, sh):
         if self._config['benchmark']['db-name'] == "tpch":
             return TpchBenchmark(self._config['benchmark'], sh, self._args.verbose,
-                                 not self._args.no_catalog)
+                                 not self._args.no_catalog, self._args.jdbc)
         if self._config['benchmark']['db-name'] == "tpcds":
             return TpcdsBenchmark(self._config['benchmark'], sh, self._args.verbose,
-                                  not self._args.no_catalog)
+                                  not self._args.no_catalog, self._args.jdbc)
         return None
 
     def _get_query_config(self):
@@ -143,8 +145,10 @@ class BenchmarkApp:
                                       self._config['benchmark']['hive-metastore-port'])
             catalogs = mclient.client.get_catalogs()
             for catalog_name in ["spark_dc"]:
-                print(f"found catalogs {catalogs}")
+                if self._args.verbose:
+                    print(f"qflock::found catalogs {catalogs}")
                 if catalog_name not in catalogs.names:
+                    print(f"qflock::creating catalog {catalog_name}")
                     mclient.create_catalog(name=catalog_name, description='Spark Catalog for a Data Center',
                                            locationUri='/opt/volume/metastore/metastore_db_DBA')
 
@@ -152,7 +156,7 @@ class BenchmarkApp:
         if not self._parse_args():
             return
         self._load_config()
-        sh = SparkHelper(verbose=self._args.verbose)
+        sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc)
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
@@ -197,7 +201,7 @@ class BenchmarkApp:
             self.trace("View {} catalog Complete".format(self._config['benchmark']['name']))
         if self._args.view_columns:
             sh.get_catalog_columns(self._args.view_columns)
-        if self._args.no_catalog:
+        if self._args.no_catalog or self._args.jdbc:
             benchmark.create_tables_view()
         if self._args.query_text or self._args.query_file or self._args.query_range:
             for i in range(0, self._args.loops):

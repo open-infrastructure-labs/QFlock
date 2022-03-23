@@ -8,10 +8,12 @@
     file-extension: "dat"
     raw-data-path: "../data/tpcds-data"
     parquet-path: "hdfs://qflock-storage:9000/tpcds-parquet"
+    # parquet-path: "webhdfs://qflock-storage:9870/tpcds-parquet"
     query-path: "queries/tpcds"
     query-extension: "sql"
     hive-metastore: "qflock-storage"
     hive-metastore-port: "9083"
+    jdbc-path: "jdbc:hive2://localhost:10001/tpcds;transportMode=http;httpPath=cliservice"
   spark:
     master: local
     conf:
@@ -24,7 +26,7 @@
     - spark.sql.hive.metastore.jars.path=jars/*.jar
     - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
 #    - spark.sql.extensions=com.github.qflock.FederationExtensions,
-#    - spark.sql.extensions=com.github.qflock.rules.QflockExtensions
+    - spark.sql.extensions=com.github.qflock.rules.QflockExtensions
     - spark.sql.cbo.enabled=true
     - spark.sql.statistics.histogram.enabled=true
 #    - spark.sql.statistics.histogram.numBins=4096
@@ -32,9 +34,9 @@
 #    - spark.sql.cbo.joinReorder.enabled=true
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder
 # Uncomment the below to enable Spark debug.
-#    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.18.0.3:5006'
-    packages:
-    - org.apache.spark:spark-hive_2.12:3.2.1
-#    jars:
-#    - /extensions/target/scala-2.12/qflock-datasource_2.12-0.1.0.jar
+    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.18.0.3:5006'
+#    packages:
+#    - org.apache.spark:spark-hive_2.12:3.2.1
+    jars:
+    - /extensions/target/scala-2.12/qflock-datasource_2.12-0.1.0.jar
 

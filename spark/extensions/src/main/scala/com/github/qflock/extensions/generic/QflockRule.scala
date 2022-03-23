@@ -29,6 +29,8 @@ import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 import com.github.qflock.extensions.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
 import com.github.qflock.extensions.generic.GenericPushdownScan
 import com.github.qflock.extensions.rules.{QflockFilter, QflockLogicalRelation, QflockLogicalRelationWithStats, QflockRelation}
+import org.apache.hadoop.hive.ql.metadata.Hive
+import org.apache.hadoop.hive.ql.session.SessionState
 import org.json._
 import org.slf4j.LoggerFactory
 
@@ -44,14 +46,16 @@ import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
+import org.apache.spark.sql.hive.client.HiveClientImpl
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util._
 
 
+
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId = spark.sparkContext.applicationId
-  var ruleCount = 0
   private def mapAttribute(origExpression: Any,
                            newProject: Seq[NamedExpression]) : Any = {
     origExpression match {
@@ -327,6 +331,22 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       }
     }
     var cols = references.toStructType.fields.map(x => s"" + s"${x.name}").mkString(",")
+
+   /* The below allows us to log the available filters
+    * for pushdown, even if we currently do not push these down.
+    * These get logged to filters.txt, along with the
+    * projects and the Spark view of the filters too.
+    */
+    if (false) {
+      val filtersJson = PushdownJson.getFiltersJsonMaxDesired(filters, "")
+      val fw = new FileWriter("/build/filters.txt", true)
+      try {
+        fw.write("Pushdown Filters " + filters.mkString(", ") + "\n")
+        fw.write("Pushdown Projects " + cols + "\n")
+        fw.write("Pushdown Filter Json " + filtersJson + "\n")
+      }
+      finally fw.close()
+    }
     val allRefs = (attrReferences ++ filterReferences)
     val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
     val sqlQuery: String = {
@@ -396,15 +416,20 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     val relationSizeInBytes = {
       // Just add the size required by the filter to the size required by the project.
-      val (filterRelationBytesNew, filterRelation1) = if (filterReferences.length > 0) {
-        val filterRelation = new QflockLogicalRelationWithStats(
+      val filterRelationBytesNew = if (filterReferences.length > 0) {
+        val filterRelation1 = new QflockLogicalRelationWithStats(
           qflockRelation.asInstanceOf[BaseRelation],
           filterReferences,
           relationArgs.catalogTable, false)()
-        (BasicStatsPlanVisitor.visit(filterRelation).sizeInBytes, filterRelation)
+        val relationRowCount = BasicStatsPlanVisitor.visit(filterRelation1).rowCount
+        val filterRelation = new QflockLogicalRelation(
+          qflockRelation.asInstanceOf[BaseRelation],
+          filterReferences,
+          relationArgs.catalogTable, false)(relationRowCount, 0)
+        BigInt(filterRelation.sizeInBytes)
       } else {
         // No filter needed, let's just not consider the size of the filter.
-        (BigInt(0L), 0)
+        BigInt(0L)
       }
       val (filterRelationBytes, filterRelation) = if (filterReferences.length > 0) {
         // To determine the size needed to be scanned by the filter,
@@ -422,11 +447,12 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       // but less any columns that are also needed by the filter since
       // those columns are already included in the filter.
       val projectRelationBytesNew = {
-        val qLogRel = new QflockLogicalRelationWithStats(
+        val qLogRel = new QflockLogicalRelation(
           qflockRelation.asInstanceOf[BaseRelation],
           attrReferences.filter(x => !filterReferences.contains(x)),
-          relationArgs.catalogTable, false)(planStats.rowCount)
-        BasicStatsPlanVisitor.visit(qLogRel).sizeInBytes
+          relationArgs.catalogTable, false)(planStats.rowCount, 0)
+        // BasicStatsPlanVisitor.visit(qLogRel).sizeInBytes
+        qLogRel.sizeInBytes
       }
       val projectRelationBytes = {
         val projectRelation =
@@ -444,20 +470,25 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       //      }
       projectRelationBytesNew + filterRelationBytesNew
     }
+//    val tbl = fetchTable("tpcds", "store_sales")
+//    logger.info(tbl.toString)
     val scanRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
       references, relationArgs.catalogTable,
       false)(planStats.rowCount,
       relationSizeInBytes, Some(!needsPushdown))
     (filterCondition, scanRelation)
   }
+  private def fetchTable(dbName: String, tableName: String) = {
 
+    // logger.info(ExtHiveUtils.test)
+    ExtHiveUtils.getTable(dbName, tableName)
+  }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
     val newPlan = plan.transform {
       case s@ScanOperation(project,
       filters,
       child: DataSourceV2ScanRelation) if (needsRule(project, filters, child) &&
         canHandlePlan(project, filters, child)) =>
-        ruleCount += 1
         val modified = transformProject(s, project, filters, child)
         logger.info("before pushFilterProject: \n" + project + "\n" + s)
         logger.info("after pushFilterProject: \n" + modified)
@@ -465,7 +496,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case s@ScanOperation(project,
         filters, child: LogicalRelation) if (needsRule(project, filters, child) &&
         canHandlePlan(project, filters, child)) =>
-      ruleCount += 1
       val modified = transformProject(s, project, filters, child)
       logger.info("before pushFilterProject: \n" + project + "\n" + s)
       logger.info("after pushFilterProject: \n" + modified)

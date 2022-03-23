@@ -31,12 +31,16 @@ class TpcBenchmark(Benchmark):
     """A TPC benchmark, which is capable of generating the tables, and
        running queries against those tables."""
 
-    def __init__(self, name, config, framework, tables, verbose=False, catalog=True):
+    def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
+                 jdbc=False):
         super().__init__(name, config, framework)
         self._tables = tables
         self._file_ext = "." + self._config['file-extension']
         self._verbose = verbose
         self._catalog = catalog
+        self._jdbc = jdbc
+        if self._jdbc:
+            self._catalog = False
 
     def generate(self):
         raw_base_path = ""
@@ -126,11 +130,15 @@ class TpcBenchmark(Benchmark):
         self._framework.create_tables(self._tables, files_path)
 
     def create_tables_view(self):
-        files_path = self._config['parquet-path']
-        if 'hdfs' not in files_path:
-            files_path = os.path.abspath(self._config['parquet-path'])
-        print(f"creating table view for {files_path}")
-        self._framework.create_tables_view(self._tables, files_path)
+        if self._jdbc:
+            db_path = self._config['jdbc-path']
+        else:
+            db_path = self._config['parquet-path']
+            if 'hdfs' not in db_path:
+                db_path = os.path.abspath(self._config['parquet-path'])
+        if self._verbose:
+            print(f"qflock::creating table view for {db_path}")
+        self._framework.create_tables_view(self._tables, db_path)
 
     def compute_stats(self):
         for table in self._tables.get_tables():
@@ -142,12 +150,12 @@ class TpchBenchmark(TpcBenchmark):
     """A TPC-H benchmark, which is capable of generating the TPC-H tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True):
-        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
+        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc)
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True):
-        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
+        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc)

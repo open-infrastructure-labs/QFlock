@@ -18,14 +18,25 @@ import subprocess
 
 
 class SparkLauncher:
-    def __init__(self, config):
+    def __init__(self, config, args):
         self._config = config
+        self._args = args
+
+    def filter_config(self, conf):
+        if "spark.sql.extensions" in conf and\
+                ("extensions" not in self._args or not self._args.extensions):
+            return False
+        elif "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
+            return False
+        else:
+            return True
 
     def get_spark_cmd(self, cmd, workers):
         spark_cmd = f'spark-submit --master {self._config["master"]} '
         if workers is not None and workers > 0:
             spark_cmd += f"--total-executor-cores {workers} "
-        spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in self._config["conf"]])
+        conf = list(filter(self.filter_config, self._config["conf"]))
+        spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in conf])
         if "packages" in self._config:
             spark_cmd += " --packages " + ",".join([arg for arg in self._config["packages"]])
         if "jars" in self._config:
@@ -35,11 +46,11 @@ class SparkLauncher:
 
     def spark_submit(self, command, workers=None, enable_stdout=False, wait_text=None,
                      logfile="logs/log.txt"):
-        print(f"qflock:: enable_stdout {enable_stdout} wait_text {wait_text}")
         spark_cmd = self.get_spark_cmd(command, workers=workers)
-        print("*" * 30)
-        print(spark_cmd)
-        print("*" * 30)
+        if not self._args.terse:
+            print("*" * 30)
+            print(spark_cmd)
+            print("*" * 30)
         fd = None
         if logfile:
             fd = open(logfile, 'w')
@@ -65,9 +76,11 @@ class SparkLauncher:
                     output_text = str(output, 'utf-8')
                     if logfile:
                         print(output_text.rstrip('\n'), file=fd)
-                    if 'qflock::' in output_text:
+                    if self._args.terse and 'qflock:: ' in output_text:
                         print(output_text.rstrip('\n'))
-                    elif enable_stdout and wait_text is not None:
+                    elif not self._args.terse and 'qflock::' in output_text:
+                        print(output_text.rstrip('\n'))
+                    elif wait_text is not None:
                         if enable_tracing:
                             print(output_text.rstrip('\n'))
                         elif wait_text in output_text:
