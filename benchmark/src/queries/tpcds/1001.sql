@@ -1,1 +1,1 @@
-select * from asdf where m_foo > 55
+select ss_ticket_number from store_sales

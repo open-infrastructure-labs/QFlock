@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.github.qflock.datasource.common
+package com.github.qflock.extensions.common
 
 import java.io.StringWriter
 import java.util.Iterator

@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.hdfs
+package com.github.qflock.extensions.hdfs
 
-import com.github.qflock.datasource.common.PushdownPartition
+import com.github.qflock.extensions.common.PushdownPartition
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.generic
+package com.github.qflock.extensions.generic
 
 import java.io.StringReader
 import java.io.StringWriter
@@ -30,7 +30,7 @@ import javax.xml.stream._
 
 import scala.xml._
 
-import com.github.qflock.datasource.hdfs.HdfsPartition
+import com.github.qflock.extensions.hdfs.HdfsPartition
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.Partition

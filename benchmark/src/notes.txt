@@ -1,0 +1,18 @@
+for INDEX in {1000..1023}; do ./docker-bench.py --query_range $INDEX --no_catalog --log_level TRACE > log$INDEX.txt ; echo "$INDEX $(./parse_log.py log$INDEX.txt)"; done
+
+for INDEX in {1000..1023}; do echo "$INDEX $(grep queries/tpcds/tmp log$INDEX.txt| cut -d' ' -f9)"; done
+
+tcpdump -r ./log_tcpdump3.td > log_tcpdump3.txt
+
+sudo tcpdump -n -s 128  src host 172.18.0.2 -w ./log_tcpdump3.td
+
+sudo tc qdisc del dev eth0 root
+sudo tc qdisc add dev eth0 root tbf rate 128kbit limit 64kb burst 64kb
+
+./docker-bench.py --query_range 1000-1022 --ext --explain
+./docker-bench.py --queries 1000-1022 --capture_log_level TRACE --no_catalog --terse
+
+pyspark --master local --conf "spark.driver.memory=2g" --conf "spark.driver.maxResultSize=2g" --conf "spark.executor.memory=2g"
+df = spark.read.option("url", "jdbc:hive2://localhost:10001/tpcds;transportMode=http;httpPath=cliservice").format("jdbc").option("dbtable", "store_sales").load()
+
+!connect jdbc:hive2://localhost:10001/;transportMode=http;httpPath=cliservice -n rob

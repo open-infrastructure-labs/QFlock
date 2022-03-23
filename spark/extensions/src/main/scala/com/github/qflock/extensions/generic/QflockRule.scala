@@ -17,6 +17,7 @@
 package com.github.qflock.rules
 
 import java.io.FileWriter
+import java.util
 import java.util.HashMap
 
 import scala.collection.JavaConverters._
@@ -25,9 +26,11 @@ import scala.collection.mutable
 import scala.sys.process._
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
-import com.github.qflock.datasource.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
-import com.github.qflock.datasource.generic.GenericPushdownScan
-import com.github.qflock.datasource.v1.{QflockLogicalRelation, QflockRelation}
+import com.github.qflock.extensions.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
+import com.github.qflock.extensions.generic.GenericPushdownScan
+import com.github.qflock.extensions.rules.{QflockFilter, QflockLogicalRelation, QflockLogicalRelationWithStats, QflockRelation}
+import org.apache.hadoop.hive.ql.metadata.Hive
+import org.apache.hadoop.hive.ql.session.SessionState
 import org.json._
 import org.slf4j.LoggerFactory
 
@@ -37,20 +40,22 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter, LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter, LogicalPlan, Project, Statistics}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
+import org.apache.spark.sql.hive.client.HiveClientImpl
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util._
 
 
+
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId = spark.sparkContext.applicationId
-  var ruleCount = 0
   private def mapAttribute(origExpression: Any,
                            newProject: Seq[NamedExpression]) : Any = {
     origExpression match {
@@ -230,19 +235,20 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     //    }
     val attrReferencesEither = getAttributeReferences(project)
     if (attrReferencesEither.isLeft) {
-      logger.warn("Plan not modified due to project" +
-        relationArgs.options.get("currenttest"))
+      logger.warn("Plan not modified due to project")
       alwaysInject
     } else {
       val filterReferencesEither = getFilterAttributes(filters)
       if (filterReferencesEither.isLeft) {
-        logger.warn("Plan not modified due to filter" +
-          relationArgs.options.get("currenttest"))
+        logger.warn("Plan not modified due to filter")
         alwaysInject
       } else if (!filters.exists(x => !x.isInstanceOf[IsNotNull])) {
         // We only pushdown if there are some filters that are not (IsNotNull).
-        logger.warn("Plan has no filters for " + relationArgs.options.get("currenttest"))
-        alwaysInject
+        logger.warn("Plan has no filters ")
+        relationArgs.scan match {
+            case QflockRelation(schema, parts, opts) => false
+            case _ => alwaysInject
+        }
       } else {
         true
       }
@@ -292,36 +298,19 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                child: LogicalPlan)
   : LogicalPlan = {
     val relationArgs = RelationArgs(child).get
-//    val relationArgs = child match {
-//      case DataSourceV2ScanRelation(relation, scan, output) =>
-//        (relation, scan, output)
-//      case LogicalRelation(relation, output, table, streaming) =>
-//        (relation, relation, output)
-//    }
     val attrReferencesEither = getAttributeReferences(project)
 
     val attrReferences = attrReferencesEither match {
       case EitherRight(r) => r
       case EitherLeft(l) => Seq[AttributeReference]()
     }
-//    val (scanSchema, scanOpts) = relationArgs._2 match {
-//      case ParquetScan(_, _, _, dataSchema, _, _, _, opts, _, _) =>
-//        (dataSchema, opts)
-//      case GenericPushdownScan(schema, opts) =>
-//        (schema, opts)
-//      case HadoopFsRelation(location, partitionSchema, dataSchema, _, fileFormat, opts) =>
-//        (dataSchema, new CaseInsensitiveStringMap(opts.asJava))
-//    }
     val filterReferencesEither = getFilterAttributes(filters)
     val filterReferences = filterReferencesEither match {
       case EitherRight(r) => r
       case EitherLeft(l) => Seq[AttributeReference]()
     }
-    val opt = new HashMap[String, String](relationArgs.options)
+    val opt = new util.HashMap[String, String](relationArgs.options)
     val path = opt.get("path") // .replaceFirst("hdfs://.*:9000/", "hdfs://dikehdfs:9860/")
-    val compression = opt.getOrDefault("ndpcompression", "None")
-    val compLevel = opt.getOrDefault("ndpcomplevel", "2")
-    val test = opt.getOrDefault("currenttest", "Unknown Test")
     opt.put("path", path)
     opt.put("format", "parquet")
     opt.put("outputFormat", "binary")
@@ -341,40 +330,37 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
           attrReferences.distinct
       }
     }
-//    var cols = references.toStructType.fields.map(x => s"" + s"${x.name}").mkString(",")
-    /* The below allows us to log the available filters
-     * for pushdown, even if we currently do not push these down.
-     * These get logged to filters.txt, along with the
-     * projects and the Spark view of the filters too.
-     */
-//    if (false) {
-//      val filtersJson = PushdownJson.getFiltersJsonMaxDesired(filters, test)
-//      val fw = new FileWriter("/build/filters.txt", true)
-//      try {
-//        fw.write("Pushdown " + opt.getOrDefault("currenttest", "") +
-//          " Filters " + filters.mkString(", ") + "\n")
-//        fw.write("Pushdown " + opt.getOrDefault("currenttest", "") +
-//          " Projects " + cols + "\n")
-//        fw.write("Pushdown " + opt.getOrDefault("currenttest", "") +
-//          " Filter Json " + filtersJson + "\n")
-//      }
-//      finally fw.close()
-//    }
-//    val allRefs = (attrReferences ++ filterReferences)
-//    val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
-//    val sqlQuery: String = {
-//      if (filtersStatus != PushdownSqlStatus.Invalid) {
-//        val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
-//        val query = pushdownSql.query
-//        logger.warn("Pushdown " + opt.getOrDefault("currenttest", "") +
-//          " query " + query)
-//        query
-//      } else {
-//        logger.warn("No Pushdown " + filters.toString)
-//        ""
-//      }
-//    }
-//    logger.info(s"sqlQuery: ${sqlQuery}")
+    var cols = references.toStructType.fields.map(x => s"" + s"${x.name}").mkString(",")
+
+   /* The below allows us to log the available filters
+    * for pushdown, even if we currently do not push these down.
+    * These get logged to filters.txt, along with the
+    * projects and the Spark view of the filters too.
+    */
+    if (false) {
+      val filtersJson = PushdownJson.getFiltersJsonMaxDesired(filters, "")
+      val fw = new FileWriter("/build/filters.txt", true)
+      try {
+        fw.write("Pushdown Filters " + filters.mkString(", ") + "\n")
+        fw.write("Pushdown Projects " + cols + "\n")
+        fw.write("Pushdown Filter Json " + filtersJson + "\n")
+      }
+      finally fw.close()
+    }
+    val allRefs = (attrReferences ++ filterReferences)
+    val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
+    val sqlQuery: String = {
+      if (filtersStatus != PushdownSqlStatus.Invalid) {
+        val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
+        val query = pushdownSql.query
+        logger.warn("Pushdown query " + query)
+        query
+      } else {
+        logger.warn("No Pushdown " + filters.toString)
+        ""
+      }
+    }
+    logger.info(s"sqlQuery: ${sqlQuery}")
 //    val configString = ProcessorRequestConfig(sqlQuery).configString
 //    opt.put("ndpConfig", configString)
 //    opt.put("ndpprojectcolumns", cols)
@@ -382,38 +368,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // with the actual file (for all the files we need to process).
     // val projectJson = PushdownJson.getProjectJson(cols.split(","), test)
     logger.info(s"Stats ${plan.stats}")
-    // val ndpRel = getNdpRelation(path, processorId)
-    val scalaOpts = scala.collection.immutable.HashMap(opt.toSeq: _*)
-    val needsPushdown = canHandlePlan(project, filters, child, alwaysInject = false)
-    val qflockRelation = new QflockRelation(references.toStructType,
-                                            Array.empty[Partition], scalaOpts)(spark)
-    val planStats = BasicStatsPlanVisitor.visit(plan)
-    val relationSizeInBytes = {
-      // Just add the size required by the filter to the size required by the project.
-      val filterRelationBytes = if (filterReferences.length > 0) {
-        val filterRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
-          filterReferences,
-          relationArgs.catalogTable,
-          false)(child.stats.rowCount, 0)
-        filterRelation.stats.sizeInBytes
-      } else {
-        // No filter needed, let's just not consider the size of the filter.
-        BigInt(0L)
-      }
-      // This is the size required by the project,
-      // but less any columns that are also needed by the filter since
-      // those columns are already included in the filter.
-      val projectRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
-        attrReferences.filter(x => !filterReferences.contains(x)),
-        relationArgs.catalogTable,
-        false)(planStats.rowCount, 0)
-      projectRelation.stats.sizeInBytes + filterRelationBytes
-    }
-    val scanRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
-      references, relationArgs.catalogTable,
-      false)(planStats.rowCount,
-      relationSizeInBytes, Some(!needsPushdown))
-    val filterCondition = filters.reduceLeftOption(And)
+    val (filterCondition: Option[Expression], scanRelation: QflockLogicalRelation) =
+      getScanRelation(project, filters, child, relationArgs,
+                      attrReferences, filterReferences, opt, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
         /* Clip the filter from the DAG, since we are going to
@@ -435,13 +392,103 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       withFilter
     }
   }
+
+  private def getScanRelation(project: Seq[NamedExpression], filters: Seq[Expression],
+                              child: LogicalPlan, relationArgs: RelationArgs,
+                              attrReferences: Seq[AttributeReference],
+                              filterReferences: Seq[AttributeReference],
+                              opt: util.HashMap[String, String],
+                              references: Seq[AttributeReference]) = {
+    val scalaOpts = scala.collection.immutable.HashMap(opt.toSeq: _*)
+    val needsPushdown = canHandlePlan(project, filters, child, alwaysInject = false)
+    val qflockRelation = new QflockRelation(references.toStructType,
+      Array.empty[Partition], scalaOpts)(spark)
+    val filterCondition = filters.reduceLeftOption(And)
+    val (planStats, filterPlan) = {
+      val qLogRel = new QflockLogicalRelationWithStats(
+        relationArgs.relation.asInstanceOf[BaseRelation],
+        relationArgs.output,
+        relationArgs.catalogTable, false)()
+      val filterPlan = filterCondition.map(QflockFilter(_, qLogRel)).getOrElse(qLogRel)
+      val fStats = BasicStatsPlanVisitor.visit(filterPlan)
+      val projPlan = Project(project, filterPlan)
+      (BasicStatsPlanVisitor.visit(projPlan), qLogRel)
+    }
+    val relationSizeInBytes = {
+      // Just add the size required by the filter to the size required by the project.
+      val filterRelationBytesNew = if (filterReferences.length > 0) {
+        val filterRelation1 = new QflockLogicalRelationWithStats(
+          qflockRelation.asInstanceOf[BaseRelation],
+          filterReferences,
+          relationArgs.catalogTable, false)()
+        val relationRowCount = BasicStatsPlanVisitor.visit(filterRelation1).rowCount
+        val filterRelation = new QflockLogicalRelation(
+          qflockRelation.asInstanceOf[BaseRelation],
+          filterReferences,
+          relationArgs.catalogTable, false)(relationRowCount, 0)
+        BigInt(filterRelation.sizeInBytes)
+      } else {
+        // No filter needed, let's just not consider the size of the filter.
+        BigInt(0L)
+      }
+      val (filterRelationBytes, filterRelation) = if (filterReferences.length > 0) {
+        // To determine the size needed to be scanned by the filter,
+        // just create a relation that has simply the columns needed by the filter.
+        val filterRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
+          filterReferences,
+          relationArgs.catalogTable,
+          false)(child.stats.rowCount, 0)
+        (filterRelation.stats.sizeInBytes, filterRelation)
+      } else {
+        // No filter needed, let's just not consider the size of the filter.
+        (BigInt(0L), 0)
+      }
+      // This is the size required by the project,
+      // but less any columns that are also needed by the filter since
+      // those columns are already included in the filter.
+      val projectRelationBytesNew = {
+        val qLogRel = new QflockLogicalRelation(
+          qflockRelation.asInstanceOf[BaseRelation],
+          attrReferences.filter(x => !filterReferences.contains(x)),
+          relationArgs.catalogTable, false)(planStats.rowCount, 0)
+        // BasicStatsPlanVisitor.visit(qLogRel).sizeInBytes
+        qLogRel.sizeInBytes
+      }
+      val projectRelationBytes = {
+        val projectRelation =
+          new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
+            attrReferences.filter(x => !filterReferences.contains(x)),
+            relationArgs.catalogTable,
+            false)(planStats.rowCount, 0)
+        projectRelation.stats.sizeInBytes
+      }
+      //      if ((projectRelationBytes != projectRelationBytesNew) ||
+      //          (filterRelationBytes != filterRelationBytesNew)) {
+      //        logger.error(s"project ${projectRelationBytes} != ${projectRelationBytesNew} " +
+      //                     s"filter ${filterRelationBytes} != ${filterRelationBytesNew} " +
+      //        plan.toString)
+      //      }
+      projectRelationBytesNew + filterRelationBytesNew
+    }
+//    val tbl = fetchTable("tpcds", "store_sales")
+//    logger.info(tbl.toString)
+    val scanRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
+      references, relationArgs.catalogTable,
+      false)(planStats.rowCount,
+      relationSizeInBytes, Some(!needsPushdown))
+    (filterCondition, scanRelation)
+  }
+  private def fetchTable(dbName: String, tableName: String) = {
+
+    // logger.info(ExtHiveUtils.test)
+    ExtHiveUtils.getTable(dbName, tableName)
+  }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
     val newPlan = plan.transform {
       case s@ScanOperation(project,
       filters,
       child: DataSourceV2ScanRelation) if (needsRule(project, filters, child) &&
         canHandlePlan(project, filters, child)) =>
-        ruleCount += 1
         val modified = transformProject(s, project, filters, child)
         logger.info("before pushFilterProject: \n" + project + "\n" + s)
         logger.info("after pushFilterProject: \n" + modified)
@@ -449,7 +496,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case s@ScanOperation(project,
         filters, child: LogicalRelation) if (needsRule(project, filters, child) &&
         canHandlePlan(project, filters, child)) =>
-      ruleCount += 1
       val modified = transformProject(s, project, filters, child)
       logger.info("before pushFilterProject: \n" + project + "\n" + s)
       logger.info("after pushFilterProject: \n" + modified)
@@ -467,6 +513,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                  aggregateExpressions: Seq[NamedExpression],
                                  child: LogicalPlan)
   : LogicalPlan = {
+    val relationArgs = RelationArgs(child).get
     val aggExprToOutputOrdinal = mutable.HashMap.empty[Expression, Int]
     var ordinal = 0
     val aggregates = aggregateExpressions.flatMap { expr =>
@@ -500,29 +547,16 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
           | ${pushedAggregates.get.groupByColumns.mkString(", ")}
           |Output: ${output.mkString(", ")}
           """.stripMargin) */
-    val relationArgs = child match {
-      case DataSourceV2ScanRelation(relation, scan, output) =>
-        (relation, scan, output)
-    }
-    val scanArgs = relationArgs._2 match {
-      case ParquetScan(_, _, _, dataSchema, _, _, _, opts, _, _) =>
-        (dataSchema, opts)
-      case GenericPushdownScan(schema, opts, stats) =>
-        (schema, opts)
-    }
-    val opt = new HashMap[String, String](scanArgs._2)
-
-    val test = opt.getOrDefault("currenttest", "Unknown Test")
+    val opt = new HashMap[String, String](relationArgs.options)
     val aggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates.asInstanceOf[Seq[AggregateExpression]],
-      test)
+      "")
     opt.put("ndpjsonaggregate", aggregateJson)
     val nodes = Array(opt.getOrDefault("ndpjsonfilters", ""),
       aggregateJson).filter(x => x != "")
-    // val dag = ProcessorRequestDag(nodes = nodes).dagString
-    // opt.put("ndpdag", dag)
     val hdfsScanObject = new GenericPushdownScan(output.toStructType, opt)
-    val scanRelation = DataSourceV2ScanRelation(relationArgs._1,
+    val scanRelation = DataSourceV2ScanRelation(
+      relationArgs.scan.asInstanceOf[DataSourceV2Relation],
       hdfsScanObject, output)
     val plan = Aggregate(
       output.take(groupingExpressions.length),
@@ -680,7 +714,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     // We need to redirect to NDP vs the standard HDFS port.
     val path = opt.get("path").replaceFirst("hdfs://.*:9000/", "ndphdfs://dikehdfs/")
-    val test = opt.getOrDefault("currenttest", "Unknown Test")
 
     // @todo can we stash ndp relation in the options??
     //       this would allow us to only generate the relation once.
@@ -702,13 +735,13 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       }
     }
     val projectTopCols = references.toStructType.fields.map(x => s"" + s"${x.name}")
-    val projectTopJson = PushdownJson.getProjectJson(projectTopCols, test)
+    val projectTopJson = PushdownJson.getProjectJson(projectTopCols, "")
     opt.put("ndpprojectjson", projectTopJson)
 
     val filtersTopJson = {
       if (filtersStatus != PushdownJsonStatus.Invalid) {
-        val json = PushdownJson.getFiltersJson(filtersTop, test)
-        logger.warn("Pushdown " + opt.getOrDefault("currenttest", "") +
+        val json = PushdownJson.getFiltersJson(filtersTop, "")
+        logger.warn("Pushdown " +
           " Filter Json " + json)
         opt.put("ndpjsonfilterstop", json)
         json
@@ -721,14 +754,14 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // with the actual file (for all the files we need to process).
     val aggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates.asInstanceOf[Seq[AggregateExpression]],
-      test)
+      "")
     // Generate a top aggregate, which does an aggregation over the aggregation
     // This step is required by NDP in order to create a barrier between the
     // trees that get individual partitions and the aggregate across all
     // partitions.
     val topAggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates.asInstanceOf[Seq[AggregateExpression]],
-      test,
+      "",
       topAggregate = true)
 
     // We need to handle aliases in the filters

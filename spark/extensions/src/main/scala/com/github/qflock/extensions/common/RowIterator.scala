@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package com.github.qflock.datasource.parse
+package com.github.qflock.extensions.parse
 
 import java.io.BufferedReader
 import java.io.BufferedWriter
@@ -27,7 +27,7 @@ import java.util.Locale
 
 import scala.collection.JavaConverters._
 
-import com.github.qflock.datasource.common.TypeCast
+import com.github.qflock.extensions.common.TypeCast
 import com.univocity.parsers.csv._
 import org.slf4j.LoggerFactory
 

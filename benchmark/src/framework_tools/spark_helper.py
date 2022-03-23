@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import os
 import time
 import re
 import traceback
@@ -26,13 +27,23 @@ class SparkHelper:
                           "USING PARQUET OPTIONS(path \"{}\");"
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
-    def __init__(self, app_name="test", verbose=False):
+    def __init__(self, app_name="test", use_catalog=False, verbose=False,
+                 jdbc=False):
         self._verbose = verbose
-        self._spark = pyspark.sql.SparkSession\
-            .builder\
-            .appName(app_name)\
-            .enableHiveSupport()\
-            .getOrCreate()
+        self._jdbc = jdbc
+        if self._jdbc:
+            use_catalog = False
+        if use_catalog:
+            self._spark = pyspark.sql.SparkSession\
+                .builder\
+                .appName(app_name)\
+                .enableHiveSupport()\
+                .getOrCreate()
+        else:
+            self._spark = pyspark.sql.SparkSession\
+                .builder\
+                .appName(app_name)\
+                .getOrCreate()
 
     def set_log_level(self, level="INFO"):
         self._spark.sparkContext.setLogLevel(level)
@@ -50,6 +61,24 @@ class SparkHelper:
         for t in tables.get_tables():
             print("create table for", t)
             self.create_table(tables, t, db_path)
+
+    def create_table_view(self, table, db_path):
+        if self._jdbc:
+            df = self._spark.read.option("url", db_path)\
+                 .format("jdbc")\
+                 .option("header", "true")\
+                 .option("dbtable", table).load()
+            df.createOrReplaceTempView(table)
+        else:
+            table_path = os.path.join(db_path, f"{table}.parquet")
+            df = self._spark.read.parquet(table_path)
+            df.createOrReplaceTempView(table)
+
+    def create_tables_view(self, tables, db_path):
+        for t in tables.get_tables():
+            if 'store_sales' in t:
+                print("create temp view table for", t)
+                self.create_table_view(t, db_path)
 
     def get_catalog_info(self):
         databases = {}

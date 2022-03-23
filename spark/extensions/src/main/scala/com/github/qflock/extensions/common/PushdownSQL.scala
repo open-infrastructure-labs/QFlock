@@ -22,7 +22,7 @@
  *   https://github.com/apache/spark/pull/29695
  */
 // scalastyle:on
-package com.github.qflock.datasource.common
+package com.github.qflock.extensions.common
 
 import java.io.StringWriter
 import java.sql.{Date, Timestamp}
@@ -36,7 +36,7 @@ import javax.json.JsonWriter
 
 import scala.collection.mutable.ArrayBuilder
 
-import com.github.qflock.datasource.common.PushdownSqlStatus.PushdownSqlStatus
+import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.expressions._

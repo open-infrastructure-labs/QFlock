@@ -23,17 +23,24 @@ from benchmark.command import shell_cmd
 from benchmark.benchmark import Benchmark
 from benchmark.tpc_tables import tpch_tables
 from benchmark.tpc_tables import tpcds_tables
+from benchmark.docker_stat import DockerStat
+from benchmark.hdfs_log_stat import HdfsLogStat
 
 
 class TpcBenchmark(Benchmark):
     """A TPC benchmark, which is capable of generating the tables, and
        running queries against those tables."""
 
-    def __init__(self, name, config, framework, tables, verbose=False):
+    def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
+                 jdbc=False):
         super().__init__(name, config, framework)
         self._tables = tables
         self._file_ext = "." + self._config['file-extension']
         self._verbose = verbose
+        self._catalog = catalog
+        self._jdbc = jdbc
+        if self._jdbc:
+            self._catalog = False
 
     def generate(self):
         raw_base_path = ""
@@ -59,19 +66,39 @@ class TpcBenchmark(Benchmark):
         print(f"{file_count} files copied {self._config['tool-path']} -> "
               f"{self._config['raw-data-path']}")
 
-    def query(self, query_config, explain=False):
-        self._framework.set_db(self._config['db-name'])
+    def query_file(self, query_file, explain=False):
+        if self._catalog:
+            self._framework.set_db(self._config['db-name'])
+        stat_list = [DockerStat(), HdfsLogStat()]
+        for s in stat_list:
+            s.start()
+        print("qflock::starting query::")
+        result = self._framework.query_from_file(query_file, explain=explain)
+        print("qflock::query finished::")
+        stat_result = ""
+        for s in stat_list:
+            s.end()
+            stat_result += str(s)
+
+        print("qflock::process result::")
+        if result is not None:
+            result.process_result()
+            print("qflock::process result done::")
+        print(result.brief_result() + " " + stat_result)
+        return result
+
+    def query_range(self, query_config, explain=False):
+        if self._catalog:
+            self._framework.set_db(self._config['db-name'])
         query_list = Benchmark.get_query_list(query_config['query_range'], self._config['query-path'],
                                               self._config['query-extension'])
         success_count, failure_count = 0, 0
         if self._verbose:
             print(f"query_list {query_list}")
         print(f"query_range {query_config['query_range']}")
+
         for q in query_list:
-            result = self._framework.query_from_file(q, explain=explain)
-            if result != None:
-                result.process_result()
-            print(result.brief_result())
+            result = self.query_file(q, explain)
             if result.status == 0:
                 success_count += 1
             else:
@@ -102,6 +129,17 @@ class TpcBenchmark(Benchmark):
         self._framework.set_db(self._config['db-name'])
         self._framework.create_tables(self._tables, files_path)
 
+    def create_tables_view(self):
+        if self._jdbc:
+            db_path = self._config['jdbc-path']
+        else:
+            db_path = self._config['parquet-path']
+            if 'hdfs' not in db_path:
+                db_path = os.path.abspath(self._config['parquet-path'])
+        if self._verbose:
+            print(f"qflock::creating table view for {db_path}")
+        self._framework.create_tables_view(self._tables, db_path)
+
     def compute_stats(self):
         for table in self._tables.get_tables():
             print(f"computing stats for table {table}")
@@ -112,12 +150,12 @@ class TpchBenchmark(TpcBenchmark):
     """A TPC-H benchmark, which is capable of generating the TPC-H tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False):
-        super().__init__("TPC-H", config, framework, tpch_tables, verbose)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
+        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc)
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False):
-        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
+        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc)
