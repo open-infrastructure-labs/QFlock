@@ -9,15 +9,16 @@ fi
 source docker/setup.sh
 source docker/spark_version
 mkdir -p "${ROOT_DIR}/volume/logs"
-rm -f "${ROOT_DIR}/volume/logs/master*.log"
+rm -f "${ROOT_DIR}/volume/logs/hiveserver2*.log"
 
 mkdir -p "${ROOT_DIR}/volume/status"
-rm -f "${ROOT_DIR}/volume/status/MASTER*"
+rm -f "${ROOT_DIR}/volume/status/HIVESERVER2*"
 
 mkdir -p "${ROOT_DIR}/volume/metastore"
 mkdir -p "${ROOT_DIR}/volume/user/hive"
 
-CMD="sleep 365d"
+CMD="${DOCKER_HOME_DIR}/bin/start-thrift.sh"
+
 RUNNING_MODE="daemon"
 START_LOCAL="NO"
 CONFIG="scripts/conf/spark.config"
@@ -52,11 +53,12 @@ DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
   DOCKER_IT="-i -t"
 fi
-
+echo "Command is: ${CMD}"
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
-  -p 5006:5006 \
-  --name sparklauncher-qflock $STORAGE_HOST $LOCAL_DOCKER_HOST\
+  -p 5007:5007 \
+  --expose 10001 --cpuset-cpus=5,6\
+  --name qflock-dc2-spark $STORAGE_HOST $LOCAL_DOCKER_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
@@ -66,7 +68,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   -w /qflock/benchmark/src \
   --mount type=bind,source=$(pwd)/spark,target=/spark \
   --mount type=bind,source=$(pwd)/extensions/,target=/extensions \
-  -v $(pwd)/conf/master:/opt/spark-$SPARK_VERSION/conf  \
+  -v $(pwd)/conf/hiveserver2:/opt/spark-$SPARK_VERSION/conf  \
   -v ${ROOT_DIR}/volume/metastore:/opt/volume/metastore \
   -v ${ROOT_DIR}/volume/user/hive:/user/hive \
   -v ${ROOT_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \
@@ -83,7 +85,7 @@ if [ ${START_LOCAL} == "YES" ]; then
 else
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name sparklauncher-qflock \
+  --name qflock-dc2-spark \
   --network qflock-net --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
   -w /qflock/benchmark/src \
   -e MASTER=spark://sparkmaster:7077 \
@@ -112,4 +114,9 @@ if [ $RUNNING_MODE = "interactive" ]; then
   eval "${DOCKER_RUN}"
 else
   eval "${DOCKER_RUN}" &
+  while [ ! -f "${ROOT_DIR}/volume/status/HIVESERVER2_STATE" ]; do
+    sleep 1
+  done
+
+  cat "${ROOT_DIR}/volume/status/HIVESERVER2_STATE"
 fi

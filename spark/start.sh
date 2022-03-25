@@ -1,3 +1,5 @@
 #!/bin/bash
 
-scripts/start-launcher-qflock.sh
+scripts/start-dc2-spark.sh
+sleep 5
+scripts/start-spark-app.sh

@@ -3,6 +3,7 @@
   benchmark:
     name: TPC-DS
     db-name: tpcds
+    docker-name: qflock-spark-app
     tool-path: "../tpcds-kit/tools"
     tool-commandline: "./dsdgen -scale 1 -RNGSEED 42"
     file-extension: "dat"
@@ -13,7 +14,7 @@
     query-extension: "sql"
     hive-metastore: "qflock-storage"
     hive-metastore-port: "9083"
-    jdbc-path: "jdbc:hive2://localhost:10001/tpcds;transportMode=http;httpPath=cliservice"
+    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
   spark:
     master: local
     conf:
