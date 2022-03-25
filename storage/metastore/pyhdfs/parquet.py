@@ -95,8 +95,11 @@ def get_storage_ip():
 def get_webhdfs_reader():
     fname = '/tpcds-parquet/store_sales.parquet/part-00000-40849ae6-37a1-4e22-848d-d4cfea002b2b-c000.snappy.parquet'
 
-    storage_ip = get_storage_ip()
-    return get_reader(f'webhdfs://{storage_ip}:9870/{fname}?user.name=peter', storage_ip)
+    # storage_ip = get_storage_ip()
+    # return get_reader(f'webhdfs://{storage_ip}:9870/{fname}?user.name=peter', storage_ip)
+    storage_ip = '127.0.0.1'
+    return get_reader(f'webhdfs://{storage_ip}:9860/{fname}?user.name=peter', storage_ip)
+
 
 
 def get_file_reader():
