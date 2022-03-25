@@ -22,11 +22,16 @@ echo "Starting Data Node ..."
 "${HADOOP_HOME}/bin/hdfs" --daemon start datanode
 
 export CLASSPATH=$(bin/hadoop classpath)
+sleep 1
 
 # Hive setup
 export PATH=$PATH:$HIVE_HOME/bin
 
 $HIVE_HOME/bin/hive --service metastore &
+sleep 10
+
+python3 ${HADOOP_HOME}/bin/metastore/hive_metastore_proxy.py &
+sleep 1
 
 echo "HADOOP_READY"
 echo "HADOOP_READY" > /opt/volume/status/HADOOP_STATE
