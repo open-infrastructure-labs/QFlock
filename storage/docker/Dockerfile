@@ -45,6 +45,13 @@ RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
         keychain  ssh  openssh-server sudo
 
+# Install python and packages dependencies
+RUN apt-get -q update \
+    && apt-get -q install -y --no-install-recommends \
+        python3-pip python3-venv python3-wheel
+
+RUN pip3 install pandas sqlparse duckdb fastparquet pyarrow thrift
+
 COPY entry.sh /usr/local/bin/entry.sh
 RUN chmod a+x /usr/local/bin/entry.sh
 
