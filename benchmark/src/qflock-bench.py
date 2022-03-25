@@ -32,6 +32,7 @@ class QflockBench:
     bench.py script with spark-submit.
     Most configuration data is found in the configuration .yaml
     """
+    log_dir = "logs"
     def __init__(self):
         self._args = None
         self._remaining_args = None
@@ -44,6 +45,9 @@ class QflockBench:
         self._spark_launcher = None
         self._wait_for_string = None
         self._exit_code = 0
+        if not os.path.exists(QflockBench.log_dir):
+            print(f"Creating directory: {QflockBench.log_dir}")
+            os.mkdir(QflockBench.log_dir)
 
     def _load_config(self):
         config_file = self._args.file
@@ -85,7 +89,7 @@ class QflockBench:
 
     help_examples = """
       Examples:
-        {0} --init_all 
+        {0} --init_all
         {0} --generate --gen_parquet
         {0} --create_catalog --view_catalog
         {0} --compute_stats
