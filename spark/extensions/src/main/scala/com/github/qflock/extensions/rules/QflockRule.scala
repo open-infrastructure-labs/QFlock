@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.rules
+package com.github.qflock.extensions.rules
 
 import java.io.FileWriter
 import java.util
@@ -28,7 +28,6 @@ import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
 import com.github.qflock.extensions.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
 import com.github.qflock.extensions.generic.GenericPushdownScan
-import com.github.qflock.extensions.rules.{QflockFilter, QflockLogicalRelation, QflockLogicalRelationWithStats, QflockRelation}
 import org.apache.hadoop.hive.ql.metadata.Hive
 import org.apache.hadoop.hive.ql.session.SessionState
 import org.json._
@@ -47,7 +46,6 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.hive.client.HiveClientImpl
-import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util._
@@ -392,7 +390,13 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       withFilter
     }
   }
-
+  def getCatalogProperties(catalog: CatalogTable): Map[String, String] = {
+    logger.info(catalog.toString())
+    catalog match {
+      case CatalogTable(_, _, _, _, _, _, _, _, _, _, _, prop, _, _, _, _, _, _, _, _) =>
+      prop
+    }
+  }
   private def getScanRelation(project: Seq[NamedExpression], filters: Seq[Expression],
                               child: LogicalPlan, relationArgs: RelationArgs,
                               attrReferences: Seq[AttributeReference],
@@ -470,18 +474,11 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       //      }
       projectRelationBytesNew + filterRelationBytesNew
     }
-//    val tbl = fetchTable("tpcds", "store_sales")
-//    logger.info(tbl.toString)
     val scanRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
       references, relationArgs.catalogTable,
       false)(planStats.rowCount,
       relationSizeInBytes, Some(!needsPushdown))
     (filterCondition, scanRelation)
-  }
-  private def fetchTable(dbName: String, tableName: String) = {
-
-    // logger.info(ExtHiveUtils.test)
-    ExtHiveUtils.getTable(dbName, tableName)
   }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
     val newPlan = plan.transform {

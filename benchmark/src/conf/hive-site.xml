@@ -465,13 +465,11 @@
   </property>
   <property>
     <name>metastore.catalog.default</name>
-    <value>spark_dc</value>
     <value/>
     <description>Catalog in hive to use.</description>
   </property>
   <property>
-    <name>hive.metastore.uris</name>
-    <value>thrift://qflock-storage:9084</value>
+<!--    <name>hive.metastore.uris</name>-->
     <!-- <value>thrift://qflock-storage:9083</value> -->
     <!-- This can be used to debug metastore_proxy on local machine
     <value>thrift://local-docker-host:9084</value>

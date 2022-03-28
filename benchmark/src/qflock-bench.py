@@ -24,6 +24,7 @@ import yaml
 from framework_tools.spark_launcher import SparkLauncher
 import bench
 from benchmark.benchmark import Benchmark
+from benchmark.config import Config
 
 
 class QflockBench:
@@ -48,19 +49,6 @@ class QflockBench:
         if not os.path.exists(QflockBench.log_dir):
             print(f"Creating directory: {QflockBench.log_dir}")
             os.mkdir(QflockBench.log_dir)
-
-    def _load_config(self):
-        config_file = self._args.file
-        if not os.path.exists(config_file):
-            print(f"{config_file} is missing.  Please add it.")
-            exit(1)
-        with open(config_file, "r") as fd:
-            try:
-                self._config = yaml.safe_load(fd)
-            except yaml.YAMLError as err:
-                print(err)
-                print(f"{config_file} is missing.  Please add it.")
-                exit(1)
 
     def _parse_test_list(self):
         if self._args.queries:
@@ -155,6 +143,8 @@ class QflockBench:
                             help="number of iterations of queries")
         parser.add_argument("--name", "-n", default="",
                             help="name for test")
+        parser.add_argument("--catalog_name",  default="default",
+                            help="catalog to use (maps to port)")
         return parser
 
     def _parse_args(self):
@@ -252,7 +242,7 @@ class QflockBench:
     def run(self):
         if not self._parse_args():
             return
-        self._load_config()
+        self._config = Config(self._args.file)
         self._parse_test_list()
         self._spark_launcher = SparkLauncher(self._config['spark'], self._args)
 

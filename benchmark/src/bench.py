@@ -27,6 +27,7 @@ from benchmark.tpc import TpchBenchmark
 from benchmark.tpc import TpcdsBenchmark
 from benchmark.metastore import MetastoreClient
 from framework_tools.spark_helper import SparkHelper
+from benchmark.config import Config
 
 
 class BenchmarkApp:
@@ -137,12 +138,13 @@ class BenchmarkApp:
 
     def _create_default_catalog(self):
         """If the default catalog(s) are not present, then create them."""
+        metastore_port = Config.get_metadata_ports(self._config['spark'])
         if 'hive-metastore' in self._config['benchmark']:
-            hive_metastore = self._config['benchmark']['hive-metastore']
+            hive_metastore = self._config['spark']['hive-metastore']
             if any(char.isalpha() for char in hive_metastore):
                 hive_metastore = socket.gethostbyname(hive_metastore)
             mclient = MetastoreClient(hive_metastore,
-                                      self._config['benchmark']['hive-metastore-port'])
+                                      metastore_port['default'])
             catalogs = mclient.client.get_catalogs()
             for catalog_name in ["spark_dc"]:
                 if self._args.verbose:
@@ -157,12 +159,13 @@ class BenchmarkApp:
             return
         self._load_config()
         sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc)
+        sh.load_extension()
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
         print("bench.py starting")
-        if not self._args.no_catalog:
-            self._create_default_catalog()
+        # if not self._args.no_catalog:
+        #     self._create_default_catalog()
         if self._args.log_level:
             print(f"Set log level to {self._args.log_level}")
             sh.set_log_level(self._args.log_level)
