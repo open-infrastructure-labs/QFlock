@@ -16,3 +16,10 @@ pyspark --master local --conf "spark.driver.memory=2g" --conf "spark.driver.maxR
 df = spark.read.option("url", "jdbc:hive2://localhost:10001/tpcds;transportMode=http;httpPath=cliservice").format("jdbc").option("dbtable", "store_sales").load()
 
 !connect jdbc:hive2://localhost:10001/;transportMode=http;httpPath=cliservice -n rob
+
+from py4j.java_gateway import java_import
+gw = spark.sparkContext._gateway
+java_import(gw.jvm, "com.github.qflock.extensions.QflockJdbcDialect")
+gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
+
+beeline -u 'jdbc:hive2://localhost:10001/;transportMode=http;httpPath=cliservice' -n rob --outputformat=csv2 -e "select * from tpcds.call_center;" > /tmp/output.csv

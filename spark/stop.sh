@@ -2,5 +2,5 @@
 
 docker kill sparkworker
 docker kill sparkmaster
-docker kill sparklauncher
-docker kill sparklauncher-qflock
+docker kill qflock-dc1-spark-app
+docker kill qflock-dc2-spark

@@ -15,12 +15,13 @@
 # limitations under the License.
 #
 import subprocess
-
+from benchmark.config import Config
 
 class SparkLauncher:
     def __init__(self, config, args):
         self._config = config
         self._args = args
+        self._metastore_ports = Config.get_metadata_ports(self._config)
 
     def filter_config(self, conf):
         if "spark.sql.extensions" in conf and\
@@ -41,11 +42,16 @@ class SparkLauncher:
             spark_cmd += " --packages " + ",".join([arg for arg in self._config["packages"]])
         if "jars" in self._config:
             spark_cmd += " --jars " + ",".join([arg for arg in self._config["jars"]])
+        if self._args.catalog_name:
+            spark_cmd += f" --conf spark.hadoop.hive.metastore.uris=thrift://{self._config['hive-metastore']}" +\
+                         f":{self._metastore_ports[self._args.catalog_name]}"
         spark_cmd += f" {cmd}"
         return spark_cmd
 
     def spark_submit(self, command, workers=None, enable_stdout=False, wait_text=None,
                      logfile="logs/log.txt"):
+        # print(f"spark_submit:: workers {workers} enable_stdout {enable_stdout} wait_text {wait_text}" +
+        #       f" logfile {logfile} terse {self._args.terse}")
         spark_cmd = self.get_spark_cmd(command, workers=workers)
         if not self._args.terse:
             print("*" * 30)

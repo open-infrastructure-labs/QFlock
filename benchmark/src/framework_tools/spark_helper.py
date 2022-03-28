@@ -62,6 +62,13 @@ class SparkHelper:
             print("create table for", t)
             self.create_table(tables, t, db_path)
 
+    def load_extension(self):
+        from py4j.java_gateway import java_import
+        gw = self._spark.sparkContext._gateway
+        java_import(gw.jvm, "com.github.qflock.extensions.QflockJdbcDialect")
+        gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
+            gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
+
     def create_table_view(self, table, db_path):
         if self._jdbc:
             df = self._spark.read.option("url", db_path)\
