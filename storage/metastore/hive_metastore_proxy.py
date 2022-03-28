@@ -4,6 +4,7 @@ import json
 import subprocess
 import functools
 import os
+import time
 
 from thrift import Thrift
 from thrift.transport import TSocket
@@ -35,20 +36,31 @@ class ThriftHiveMetastoreHandler:
         # print('Closing client transport ...')
         self.client_transport.close()
 
+    def add_qflock_statistics(self, table: ttypes.Table):
+        print(f'Adding statistics for {table.sd.location}')
+        for c in table.sd.cols:
+            table.parameters[f'spark.qflock.statistics.colStats.{c.name}.bytes_per_row'] = '0.5'
+
     def _decorator(self, f, attr):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
-            print(attr, args, kwargs)
+            if attr == 'alter_table_with_environment_context':
+                print(attr, args[:2])
+                self.add_qflock_statistics(args[2])
+            else:
+                print(attr, args, kwargs)
+
             try:
                 res = f(*args, **kwargs)
             except BaseException as error:
                 print('An exception occurred: {}'.format(error))
                 raise error
 
-            if isinstance(res, ttypes.GetTableResult):
-                for c in res.table.sd.cols:
-                    res.table.parameters[f'spark.sql.statistics.colStats.{c.name}.bytes_per_row'] = '0.5'
-                # print(res.table.parameters)
+            # if isinstance(res, ttypes.GetTableResult):
+            #     for c in res.table.sd.cols:
+            #         res.table.parameters[f'spark.sql.statistics.colStats.{c.name}.bytes_per_row'] = '0.5'
+            #     # print(res.table.parameters)
+
             return res
 
         return wrapper
@@ -93,7 +105,9 @@ class ThriftHiveMetastoreServer(TServer.TThreadedServer):
 
 
 def get_storage_ip():
-    return 'localhost'
+    if os.getenv('RUNNING_MODE') is not None:
+        return 'localhost'
+
     result = subprocess.run('docker network inspect qflock-net'.split(' '), stdout=subprocess.PIPE)
     d = json.loads(result.stdout)
 
@@ -108,12 +122,17 @@ def get_storage_ip():
 if __name__ == '__main__':
     # Inspired by https://thrift.apache.org/tutorial/py.html
     storage_ip = get_storage_ip()
-    # storage_ip = 'localhost'
     client_transport = TSocket.TSocket(storage_ip, 9083)
     client_transport = TTransport.TBufferedTransport(client_transport)
     client_protocol = TBinaryProtocol.TBinaryProtocol(client_transport)
     client = ThriftHiveMetastore.Client(client_protocol)
-    client_transport.open()
+
+    while not client_transport.isOpen():
+        try:
+            client_transport.open()
+        except BaseException as ex:
+            print('Metastore is not ready. Retry in 1 sec.')
+            time.sleep(1)
 
     catalogs = client.get_catalogs()
     print(catalogs)
