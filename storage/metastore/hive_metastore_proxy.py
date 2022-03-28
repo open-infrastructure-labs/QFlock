@@ -4,6 +4,7 @@ import json
 import subprocess
 import functools
 import os
+import time
 
 from thrift import Thrift
 from thrift.transport import TSocket
@@ -113,7 +114,13 @@ if __name__ == '__main__':
     client_transport = TTransport.TBufferedTransport(client_transport)
     client_protocol = TBinaryProtocol.TBinaryProtocol(client_transport)
     client = ThriftHiveMetastore.Client(client_protocol)
-    client_transport.open()
+
+    while not client_transport.isOpen():
+        try:
+            client_transport.open()
+        except BaseException as ex:
+            print('Metastore is not ready. Retry in 1 sec.')
+            time.sleep(1)
 
     catalogs = client.get_catalogs()
     print(catalogs)

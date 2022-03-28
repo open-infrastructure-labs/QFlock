@@ -28,10 +28,9 @@ sleep 1
 export PATH=$PATH:$HIVE_HOME/bin
 
 $HIVE_HOME/bin/hive --service metastore &
-sleep 10
+sleep 1
 
 python3 ${HADOOP_HOME}/bin/metastore/hive_metastore_proxy.py &
-sleep 1
 
 echo "HADOOP_READY"
 echo "HADOOP_READY" > /opt/volume/status/HADOOP_STATE
