@@ -20,3 +20,5 @@ https://github.com/Thriftpy/thriftpy2
 show databases;
 create database testdb;
 show databases;
+
+benchmark/src/docker-bench.py --query_text "select ss_list_price from store_sales where ss_list_price < 100" --explain
