@@ -1,0 +1,24 @@
+
+https://github.com/Thriftpy/thriftpy2
+
+./sbin/start-thriftserver.sh --master local \
+--conf "spark.sql.catalogImplementation=hive"  \
+--conf "spark.sql.hive.metastore.version=3.1.2"  \
+--conf "spark.sql.hive.metastore.jars=path"  \
+--conf "spark.sql.hive.metastore.jars.path=jars/*.jar"  \
+--conf "spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3"  \
+--conf "spark.sql.cbo.enabled=true"  \
+--conf "spark.sql.cbo.planStats.enabled=true"  \
+--conf "spark.sql.statistics.histogram.enabled=true"  \
+--packages org.apache.spark:spark-hive_2.12:3.2.1
+
+
+./bin/beeline
+
+!connect jdbc:hive2://localhost:10001/;transportMode=http;httpPath=cliservice -n peter
+
+show databases;
+create database testdb;
+show databases;
+
+benchmark/src/docker-bench.py --query_text "select ss_list_price from store_sales where ss_list_price < 100" --explain
