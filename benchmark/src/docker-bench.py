@@ -35,7 +35,7 @@ if __name__ == "__main__":
             if i < argc:
                 arg_string += f'"{sys.argv[i]}" '
         i += 1
-    cmd = "docker exec -it sparklauncher-qflock ./qflock-bench.py " + arg_string
+    cmd = "docker exec -it qflock-dc1-spark-app ./qflock-bench.py " + arg_string
     print(cmd)
     start_time = time.time()
     status = subprocess.call(cmd, shell=True)

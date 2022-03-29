@@ -50,8 +50,8 @@ class BenchmarkResult:
         if self._verbose:
             if self._explain:
                 print(self.explain_text)
-            else:
-                self.df.show(100, False)
+            # else:
+            #     self.df.show(100, False)
         if self._explain:
             if not os.path.exists(BenchmarkResult.log_dir):
                 os.mkdir(BenchmarkResult.log_dir)

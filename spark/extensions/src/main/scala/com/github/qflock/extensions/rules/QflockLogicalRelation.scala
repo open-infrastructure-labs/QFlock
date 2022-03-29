@@ -21,6 +21,7 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.sources.BaseRelation
 
 class QflockLogicalRelation(override val relation: BaseRelation,
@@ -33,26 +34,19 @@ class QflockLogicalRelation(override val relation: BaseRelation,
   extends LogicalRelation(relation, output, catalogTable, isStreaming) {
   def getArgs: Option[(BaseRelation, Seq[AttributeReference], Option[CatalogTable], Boolean)] =
   Some(relation, output, catalogTable, isStreaming)
-
+  var tableName = catalogTable.get.identifier.table
+  var dbName = catalogTable.get.identifier.database.getOrElse("")
   def isEstimate: Boolean = estimate.getOrElse(false)
   override protected final def otherCopyArgs: Seq[AnyRef] = {
     rowCount :: previousSizeInBytes :: estimate :: Nil
   }
   private val sparkSizeInBytes = stats.sizeInBytes.longValue()
-  private val colsSizeMap = QflockLogicalRelation.colsSizeMap
   val sizeInBytes = {
     val rows = rowCount.getOrElse(BigInt(1)).longValue()
     output.foldLeft(0)((x, y) => (x +
-      (colsSizeMap(y.name) * rows).asInstanceOf[Int]))
+      (QflockLogicalRelation.getColSize(dbName, tableName, y.name) * rows).asInstanceOf[Int]))
   }
   private val previousBytes = previousSizeInBytes.longValue()
-  private def savingsInBytes = {
-    if (sizeInBytes < previousBytes) {
-      previousBytes - sizeInBytes
-    } else {
-      0L
-    }
-  }
   override def computeStats(): Statistics = {
     catalogTable
       .flatMap(_.stats.map(x =>
@@ -73,6 +67,10 @@ object QflockLogicalRelation {
   def unapply(relation: QflockLogicalRelation):
   Option[(BaseRelation, Seq[AttributeReference], Option[CatalogTable], Boolean)] = {
     relation.getArgs
+  }
+  def getColSize(dbName: String, tableName: String, colName: String): Double = {
+    val tbl = ExtHiveUtils.getTable(dbName, tableName)
+    colsSizeMap(colName)
   }
   val colsSizeMap = Map[String, Double]("cc_call_center_sk" -> (70.0 / 6.0),
     "cc_call_center_id" -> (84.0 / 6.0),
