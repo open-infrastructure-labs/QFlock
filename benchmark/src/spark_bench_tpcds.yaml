@@ -16,7 +16,7 @@
   spark:
     master: local
     hive-metastore: "qflock-storage"
-    hive-metastore-ports: "default:9083"
+    hive-metastore-ports: "default:9084"
     conf:
     - spark.driver.maxResultSize=2g
     - spark.driver.memory=2g

@@ -57,7 +57,7 @@ echo "Command is: ${CMD}"
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5007:5007 \
-  --expose 10001 --cpuset-cpus=5,6\
+  --expose 10001 \
   --name qflock-dc2-spark $STORAGE_HOST $LOCAL_DOCKER_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
