@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-docker stop hive
+docker stop qflock-hive
 

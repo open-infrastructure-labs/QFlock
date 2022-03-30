@@ -39,8 +39,8 @@ if [ "$RUNNING_MODE" = "interactive" ]; then
 fi
 
 # Check if hive network exists
-if ! docker network ls | grep hive-net; then
-  docker network create hive-net
+if ! docker network ls | grep qflock-net; then
+  docker network create qflock-net
 fi
 
 DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
@@ -54,15 +54,13 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/hdfs-site.xml:${HADOOP_HOME}/etc/hadoop/hdfs-site.xml \
   -v ${ROOT_DIR}/hive_home/conf/hive-site.xml:${HIVE_HOME}/conf/hive-site.xml \
   -v ${ROOT_DIR}/docker/run_services.sh:${HADOOP_HOME}/bin/run_services.sh \
-  -v ${ROOT_DIR}/metastore:${HADOOP_HOME}/bin/metastore \
-  -v ${ROOT_DIR}/metastore/start_hive_metastore.sh:${HIVE_HOME}/bin/start_hive_metastore.sh \
   -w ${HADOOP_HOME} \
   -e HADOOP_HOME=${HADOOP_HOME} \
   -e HIVE_HOME=${HIVE_HOME} \
   -e RUNNING_MODE=${RUNNING_MODE} \
-  --network hive-net \
-  --name hive  --hostname hive \
-  hive-${USER_NAME} ${CMD}"
+  --network qflock-net \
+  --name qflock-hive  --hostname qflock-hive \
+  qflock-hive-${USER_NAME} ${CMD}"
 
 # echo ${DOCKER_RUN}
 
@@ -77,10 +75,6 @@ else
   cat "${ROOT_DIR}/volume/status/HADOOP_STATE"
   #docker exec dikehdfs /server/dikeHDFS &
 fi
-
-# start metastore service
-echo "init metastore and start service..."
-docker exec hive ${HIVE_HOME}/bin/start_hive_metastore.sh &
 
 popd
 

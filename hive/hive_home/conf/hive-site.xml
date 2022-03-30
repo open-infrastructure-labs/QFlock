@@ -465,7 +465,7 @@
   </property>
   <property>
     <name>hive.metastore.uris</name>
-    <value>thrift://hive:9083</value>
+    <value>thrift://qflock-hive:9083</value>
     <description>Thrift URI for the remote metastore. Used by metastore client to connect to remote metastore.</description>
   </property>
   <property>
