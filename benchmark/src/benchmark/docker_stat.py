@@ -21,21 +21,31 @@ from benchmark.benchmark_stat import BenchmarkStat
 
 class DockerStat(BenchmarkStat):
 
-    def __init__(self):
+    def __init__(self, container_name, stat_name):
         self._docker_client = docker.DockerClient(base_url='http://10.124.48.63:2375')
         self._start_bytes = 0
         self._end_bytes = 0
+        self._container_name = container_name
+        self._stat_name = stat_name
 
     def start(self):
-        self._start_bytes = self._docker_client.containers.get("qflock-storage") \
-                                .stats(stream=False)['networks']['eth0']['tx_bytes']
+        self._start_bytes = self._docker_client.containers.get(self._container_name) \
+                                .stats(stream=False)['networks']['eth0'][self._stat_name]
 
     def end(self):
-        self._end_bytes = self._docker_client.containers.get("qflock-storage")\
-                              .stats(stream=False)['networks']['eth0']['tx_bytes']
+        self._end_bytes = self._docker_client.containers.get(self._container_name)\
+                              .stats(stream=False)['networks']['eth0'][self._stat_name]
 
     def __str__(self):
-        return f"storage tx_bytes {self._end_bytes - self._start_bytes} "
+        return f"{self._container_name} {self._stat_name} {self._end_bytes - self._start_bytes} "
+
+    @classmethod
+    def get_stats(cls, names):
+        stats = []
+        for item in names.split(","):
+            container_name, stat_name = item.split(":")
+            stats.append(DockerStat(container_name, stat_name))
+        return stats
 
 if __name__ == "__main__":
 

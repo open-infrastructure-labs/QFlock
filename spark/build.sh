@@ -7,3 +7,7 @@ popd
 scripts/extract_spark.sh
 
 mkdir -p spark
+
+pushd extensions
+./build.sh
+popd

@@ -209,12 +209,7 @@ class BenchmarkApp:
         if self._args.query_text or self._args.query_file or self._args.query_range:
             for i in range(0, self._args.loops):
                 if self._args.query_text:
-                    sh.set_db(self._config['benchmark']['db-name'])
-                    print("Spark query", self._args.query_text)
-                    result = sh.query(self._args.query_text, self._args.explain)
-                    if result is not None:
-                        result.process_result()
-                        print(result.brief_result())
+                    benchmark.query_text(self._args.query_text, self._args.explain)
                 elif self._args.query_file:
                     qc = self._get_query_config()
                     benchmark.query_file(self._args.query_file, self._args.explain)
