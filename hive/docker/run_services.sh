@@ -6,11 +6,6 @@ rm -f /opt/volume/status/HADOOP_STATE
 
 if [ ! -f /opt/volume/namenode/current/VERSION ]; then
     "${HADOOP_HOME}/bin/hdfs" namenode -format
-    # "${HADOOP_HOME}/bin/hdfs" dfs -mkdir /tmp
-    # "${HADOOP_HOME}/bin/hdfs" dfs -chmod g+w /tmp
-    # "${HADOOP_HOME}/bin/hdfs" dfs -mkdir -p /user/hive/warehouse
-    # "${HADOOP_HOME}/bin/hdfs" dfs -chmod g+w /user/hive/warehouse
-    # $HIVE_HOME/bin/schematool -dbType derby -initSchema
 fi
 
 export HADOOP_CONF_DIR=$HADOOP_HOME/etc/hadoop
@@ -26,11 +21,18 @@ sleep 1
 
 # Hive setup
 export PATH=$PATH:$HIVE_HOME/bin
+echo "Creating hive metastore directories..."
+"${HADOOP_HOME}/bin/hdfs" dfs -mkdir -p /tmp
+"${HADOOP_HOME}/bin/hdfs" dfs -chmod g+w /tmp
+"${HADOOP_HOME}/bin/hdfs" dfs -mkdir -p /user/hive/warehouse
+"${HADOOP_HOME}/bin/hdfs" dfs -chmod g+w /user/hive/warehouse
 
-#$HIVE_HOME/bin/hive --service metastore &
+if [ ! -d /opt/volume/metastore/metastore_db ]; then
+  "$HIVE_HOME/bin/schematool" -dbType derby -initSchema
+fi
+
+$HIVE_HOME/bin/hive --service metastore &
 sleep 1
-
-python3 ${HADOOP_HOME}/bin/metastore/hive_metastore_proxy.py &
 
 echo "HADOOP_READY"
 echo "HADOOP_READY" > /opt/volume/status/HADOOP_STATE
