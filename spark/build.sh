@@ -6,4 +6,4 @@ pushd docker
 popd
 scripts/extract_spark.sh
 
-mkdir spark
+mkdir -p spark

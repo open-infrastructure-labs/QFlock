@@ -7,7 +7,7 @@ pushd tpcds-kit/tools
 make
 popd
 BUILD_DIR=build
-mkdir ${BUILD_DIR} || true
+mkdir -p ${BUILD_DIR} || true
 HIVE_PACKAGE="apache-hive-3.1.2-bin"
 HIVE_PACKAGE_FILE="apache-hive-3.1.2-bin.tar.gz"
 HIVE_PACKAGE_URL="https://dlcdn.apache.org/hive/hive-3.1.2/${HIVE_PACKAGE_FILE}"
@@ -20,6 +20,6 @@ then
     curl -L ${HIVE_PACKAGE_URL} --output ${BUILD_DIR}/${HIVE_PACKAGE_FILE}
   fi
   tar -xzf ${BUILD_DIR}/${HIVE_PACKAGE_FILE} -C ${BUILD_DIR}
-  mkdir ${JARS_DIR} || true
+  mkdir -p ${JARS_DIR} || true
   mv ${BUILD_DIR}/${HIVE_PACKAGE}/lib/*.jar ${JARS_DIR}
 fi

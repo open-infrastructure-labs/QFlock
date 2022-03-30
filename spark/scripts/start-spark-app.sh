@@ -56,7 +56,7 @@ fi
 
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
-  -p 5006:5006 --cpuset-cpus=30,31\
+  -p 5006:5006 \
   --name qflock-dc1-spark-app $STORAGE_HOST $DC2_SPARK_HOST $LOCAL_DOCKER_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \

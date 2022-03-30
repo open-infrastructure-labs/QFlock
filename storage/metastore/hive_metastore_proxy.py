@@ -14,17 +14,24 @@ from thrift.server import TServer
 from thrift.server import TNonblockingServer
 from thrift.protocol.THeaderProtocol import THeaderProtocolFactory
 
+import pyarrow.parquet
+import pyarrow.fs
+
 my_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(my_path + '/pymetastore')
 
 from hive_metastore import ThriftHiveMetastore
 from hive_metastore import ttypes
 
+
+def log(*args):
+    print(*args, flush=True)
+    
 class ThriftHiveMetastoreHandler:
     def __init__(self):
         # Inspired by https://thrift.apache.org/tutorial/py.html
-        storage_ip = get_storage_ip()
-        client_transport = TSocket.TSocket(storage_ip, 9083)
+        self.storage_ip = get_storage_ip()
+        client_transport = TSocket.TSocket(self.storage_ip, 9083)
         client_transport = TTransport.TBufferedTransport(client_transport)
         client_protocol = TBinaryProtocol.TBinaryProtocol(client_transport)
         client = ThriftHiveMetastore.Client(client_protocol)
@@ -33,33 +40,48 @@ class ThriftHiveMetastoreHandler:
         self.client_transport = client_transport
 
     def close(self):
-        # print('Closing client transport ...')
+        # log('Closing client transport ...')
         self.client_transport.close()
 
     def add_qflock_statistics(self, table: ttypes.Table):
-        print(f'Adding statistics for {table.sd.location}')
-        for c in table.sd.cols:
-            table.parameters[f'spark.qflock.statistics.colStats.{c.name}.bytes_per_row'] = '0.5'
+        log(f'Adding statistics for {table.sd.location}')
+
+        fs, path = pyarrow.fs.FileSystem.from_uri(table.sd.location)
+        file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+        files = [finfo.path for finfo in file_info if finfo.is_file and finfo.size > 0]
+
+        f = fs.open_input_file(files[0])
+        reader = pyarrow.parquet.ParquetFile(f)
+
+        rg = reader.metadata.row_group(0)
+        for col in range(0, rg.num_columns):
+            col_info = rg.column(col)
+            bytes_per_row = round(col_info.total_compressed_size / rg.num_rows, 2)
+            param_key = f'spark.qflock.statistics.colStats.{col_info.path_in_schema}.bytes_per_row'
+            table.parameters[param_key] = str(bytes_per_row)
+            log(col, param_key, bytes_per_row)
+
+        f.close()
 
     def _decorator(self, f, attr):
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
             if attr == 'alter_table_with_environment_context':
-                print(attr, args[:2])
+                log(attr, args[:2])
                 self.add_qflock_statistics(args[2])
             else:
-                print(attr, args, kwargs)
+                log(attr, args, kwargs)
 
             try:
                 res = f(*args, **kwargs)
             except BaseException as error:
-                print('An exception occurred: {}'.format(error))
+                log('An exception occurred: {}'.format(error))
                 raise error
 
             # if isinstance(res, ttypes.GetTableResult):
             #     for c in res.table.sd.cols:
             #         res.table.parameters[f'spark.sql.statistics.colStats.{c.name}.bytes_per_row'] = '0.5'
-            #     # print(res.table.parameters)
+            #     # log(res.table.parameters)
 
             return res
 
@@ -112,16 +134,43 @@ def get_storage_ip():
     d = json.loads(result.stdout)
 
     for c in d[0]['Containers'].values():
-        print(c['Name'], c['IPv4Address'].split('/')[0])
+        log(c['Name'], c['IPv4Address'].split('/')[0])
         if c['Name'] == 'qflock-storage':
-            return c['IPv4Address'].split('/')[0]
+            addr = c['IPv4Address'].split('/')[0]
+            with open('host_aliases', 'w') as f:
+                f.write(f'qflock-storage {addr}')
+
+            os.environ.putenv('HOSTALIASES', 'host_aliases')
+            os.environ['HOSTALIASES'] = 'host_aliases'
+            return addr
 
     return None
 
 
+
+def parquet_test():
+    fname = f'hdfs://qflock-storage:9000/tpcds-parquet/call_center.parquet'
+
+    fs, path = pyarrow.fs.FileSystem.from_uri(fname)
+    file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+    files = [finfo.path for finfo in file_info if finfo.is_file and finfo.size > 0]
+
+    f = fs.open_input_file(files[0])
+    reader = pyarrow.parquet.ParquetFile(f)
+
+    rg = reader.metadata.row_group(0)
+    for col in range(0, rg.num_columns):
+        col_info = rg.column(col)
+        bytes_per_row = round(col_info.total_compressed_size / rg.num_rows, 2)
+        param_key = f'spark.qflock.statistics.colStats.{col_info.path_in_schema}.bytes_per_row'
+        log(col, param_key, bytes_per_row)
+
+    f.close()
+
 if __name__ == '__main__':
-    # Inspired by https://thrift.apache.org/tutorial/py.html
     storage_ip = get_storage_ip()
+
+    # Inspired by https://thrift.apache.org/tutorial/py.html
     client_transport = TSocket.TSocket(storage_ip, 9083)
     client_transport = TTransport.TBufferedTransport(client_transport)
     client_protocol = TBinaryProtocol.TBinaryProtocol(client_transport)
@@ -131,15 +180,13 @@ if __name__ == '__main__':
         try:
             client_transport.open()
         except BaseException as ex:
-            print('Metastore is not ready. Retry in 1 sec.')
+            log('Metastore is not ready. Retry in 1 sec.')
             time.sleep(1)
 
     catalogs = client.get_catalogs()
-    print(catalogs)
+    log(catalogs)
     client_transport.close()
 
-    # handler = ThriftHiveMetastoreHandler(client)
-    # processor = ThriftHiveMetastore.Processor(handler)
     server_transport = TSocket.TServerSocket(host=None, port=9084)
     tfactory = TTransport.TBufferedTransportFactory()
     pfactory = TBinaryProtocol.TBinaryProtocolFactory()
@@ -168,7 +215,7 @@ if __name__ == '__main__':
     It’s much more difficult to use compared to the other 2 servers.'''
     # server = TServer.TThreadPoolServer(processor, server_transport, tfactory, pfactory)
 
-    print('Starting the server...')
+    log('Starting the server...')
     try:
         server.serve()
     except BaseException as ex:
