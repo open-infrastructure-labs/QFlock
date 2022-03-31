@@ -70,8 +70,10 @@ class SparkHelper:
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
     def create_table_view(self, table, db_path):
+        # .option("driver", "com.github.qflock.jdbc.QflockDriver")\
         if self._jdbc:
             df = self._spark.read.option("url", db_path)\
+                 .option("batchSize", "100000")\
                  .format("jdbc")\
                  .option("header", "true")\
                  .option("dbtable", table).load()
@@ -232,7 +234,12 @@ class SparkHelper:
         self._spark.sql(f"USE {name}")
 
     def create_db(self, name):
+        print(f"creating database {name}")
         self._spark.sql(f"CREATE DATABASE IF NOT EXISTS {name}")
+
+    def delete_db(self, name):
+        print(f"deleting database {name}")
+        self._spark.sql(f"DROP DATABASE IF EXISTS {name}")
 
     def show_db(self, name):
         self._spark.sql(f"DESCRIBE DATABASE EXTENDED {name}")

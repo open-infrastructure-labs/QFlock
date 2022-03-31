@@ -204,6 +204,8 @@ class BenchmarkApp:
             self.trace("View {} catalog Complete".format(self._config['benchmark']['name']))
         if self._args.view_columns:
             sh.get_catalog_columns(self._args.view_columns)
+        if self._args.delete_catalog:
+            benchmark.delete_catalog()
         if self._args.no_catalog or self._args.jdbc:
             benchmark.create_tables_view()
         if self._args.query_text or self._args.query_file or self._args.query_range:
@@ -211,7 +213,6 @@ class BenchmarkApp:
                 if self._args.query_text:
                     benchmark.query_text(self._args.query_text, self._args.explain)
                 elif self._args.query_file:
-                    qc = self._get_query_config()
                     benchmark.query_file(self._args.query_file, self._args.explain)
                 elif self._args.query_range:
                     qc = self._get_query_config()

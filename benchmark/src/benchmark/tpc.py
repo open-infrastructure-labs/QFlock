@@ -16,8 +16,6 @@
 #
 import os
 import shutil
-import time
-from glob import glob
 
 from benchmark.command import shell_cmd
 from benchmark.benchmark import Benchmark
@@ -149,6 +147,12 @@ class TpcBenchmark(Benchmark):
         self._framework.set_db(self._config['db-name'])
         self._framework.create_tables(self._tables, files_path)
 
+    def delete_catalog(self):
+        print(f"deleting catalog {self._config['db-name']}")
+        self._framework.set_db(self._config['db-name'])
+        self._framework.delete_tables()
+        self._framework.delete_db(self._config['db-name'])
+
     def create_tables_view(self):
         if self._jdbc:
             db_path = self._config['jdbc-path']
@@ -172,6 +176,7 @@ class TpchBenchmark(TpcBenchmark):
 
     def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
         super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc)
+
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
