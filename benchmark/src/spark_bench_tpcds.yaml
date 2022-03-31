@@ -25,9 +25,9 @@
     - spark.driver.memory=2g
     - spark.executor.memory=2g
     - spark.sql.catalogImplementation=hive
-    - spark.sql.hive.metastore.version=3.1.2
-    - spark.sql.hive.metastore.jars=path
-    - spark.sql.hive.metastore.jars.path=jars/*.jar
+#    - spark.sql.hive.metastore.version=3.1.2
+#    - spark.sql.hive.metastore.jars=path
+#    - spark.sql.hive.metastore.jars.path=jars/*.jar
     - spark.sql.warehouse.dir=hdfs://qflock-storage:9000/user/hive/warehouse3
 #    - spark.sql.extensions=com.github.qflock.FederationExtensions,
     - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
