@@ -1,6 +1,7 @@
 #!/bin/bash
 
 rm -rf build
-rm -rf volume
-rm -rf docker/spark-*.tgz
-echo "Done cleaning spark"
+pushd extensions
+./clean.sh
+popd
+echo "spark clean done"
