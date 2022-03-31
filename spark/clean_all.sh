@@ -1,9 +1,12 @@
 #!/bin/bash
 
+pushd "$(dirname "$0")" # connect to root
+ROOT_DIR=$(pwd)
+echo "ROOT_DIR ${ROOT_DIR}"
+
 ./clean.sh
-rm -rf volume
-rm -rf docker/spark-*.tgz
+rm -rf ${ROOT_DIR}/volume
 echo "spark clean all done"
-pushd docker
-./clean.sh
+
+${ROOT_DIR}/docker/clean.sh
 popd
