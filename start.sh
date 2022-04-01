@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pushd storage
-./start_qflock_storage.sh
+./start_storage_dc.sh dc1
 popd
 
 pushd spark

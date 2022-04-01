@@ -455,7 +455,7 @@
   </property>
   <property>
     <name>hive.metastore.warehouse.dir</name>
-    <value>hdfs://qflock-storage:9000/user/hive/warehouse</value>
+    <value>hdfs://qflock-storage-dc1:9000/user/hive/warehouse</value>
     <description>location of default database for the warehouse</description>
   </property>
   <property>
