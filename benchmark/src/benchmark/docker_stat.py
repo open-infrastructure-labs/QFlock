@@ -20,21 +20,32 @@ from benchmark.benchmark_stat import BenchmarkStat
 
 
 class DockerStat(BenchmarkStat):
-
+    logged_exception = False
     def __init__(self, container_name, stat_name):
-        self._docker_client = docker.DockerClient(base_url='http://10.124.48.63:2375')
+        try:
+            self._docker_client = docker.DockerClient(base_url='http://local-docker-host:2375')
+        except BaseException as err:
+            if not DockerStat.logged_exception:
+                # print(f"Unexpected {err=}, {type(err)=}")
+                print("qflock:: Docker stats not available.  Please enable Docker External API Server.")
+                DockerStat.logged_exception = True
+            self._enabled = False
+        else:
+            self._enabled = True
         self._start_bytes = 0
         self._end_bytes = 0
         self._container_name = container_name
         self._stat_name = stat_name
 
     def start(self):
-        self._start_bytes = self._docker_client.containers.get(self._container_name) \
-                                .stats(stream=False)['networks']['eth0'][self._stat_name]
+        if self._enabled:
+            self._start_bytes = self._docker_client.containers.get(self._container_name) \
+                                    .stats(stream=False)['networks']['eth0'][self._stat_name]
 
     def end(self):
-        self._end_bytes = self._docker_client.containers.get(self._container_name)\
-                              .stats(stream=False)['networks']['eth0'][self._stat_name]
+        if self._enabled:
+            self._end_bytes = self._docker_client.containers.get(self._container_name)\
+                                  .stats(stream=False)['networks']['eth0'][self._stat_name]
 
     def __str__(self):
         return f"{self._container_name} {self._stat_name} {self._end_bytes - self._start_bytes} "
@@ -43,8 +54,10 @@ class DockerStat(BenchmarkStat):
     def get_stats(cls, names):
         stats = []
         for item in names.split(","):
-            container_name, stat_name = item.split(":")
-            stats.append(DockerStat(container_name, stat_name))
+            current_items = item.split(":")
+            if len(current_items) == 2:
+                container_name, stat_name = current_items
+                stats.append(DockerStat(container_name, stat_name))
         return stats
 
 if __name__ == "__main__":
