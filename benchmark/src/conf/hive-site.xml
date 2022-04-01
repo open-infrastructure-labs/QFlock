@@ -555,8 +555,8 @@
     <description>Number of retries upon failure of Thrift metastore calls</description>
   </property>
   <property>
-    <name>hive.metastore.port</name>
-    <value>9083</value>
+<!--    <name>hive.metastore.port</name>-->
+<!--    <value>9083</value>-->
     <description>Hive metastore listener port</description>
   </property>
   <property>
