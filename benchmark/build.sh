@@ -1,11 +1,17 @@
 #!/bin/bash
 
+pushd "$(dirname "$0")" # connect to root
+ROOT_DIR=$(pwd)
+echo "ROOT_DIR ${ROOT_DIR}"
+
 pushd tpch-dbgen
 make
 popd
+
 pushd tpcds-kit/tools
 make
 popd
+
 BUILD_DIR=build
 mkdir -p ${BUILD_DIR} || true
 HIVE_PACKAGE="apache-hive-3.1.2-bin"
@@ -23,3 +29,4 @@ then
   mkdir -p ${JARS_DIR} || true
   mv ${BUILD_DIR}/${HIVE_PACKAGE}/lib/*.jar ${JARS_DIR}
 fi
+popd

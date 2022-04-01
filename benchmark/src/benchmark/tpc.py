@@ -16,8 +16,6 @@
 #
 import os
 import shutil
-import time
-from glob import glob
 
 from benchmark.command import shell_cmd
 from benchmark.benchmark import Benchmark
@@ -41,6 +39,8 @@ class TpcBenchmark(Benchmark):
         self._jdbc = jdbc
         if self._jdbc:
             self._catalog = False
+        self._stat_list = [HdfsLogStat()]
+        self._stat_list.extend(DockerStat.get_stats(self._config['docker-stats']))
 
     def generate(self):
         raw_base_path = ""
@@ -66,20 +66,38 @@ class TpcBenchmark(Benchmark):
         print(f"{file_count} files copied {self._config['tool-path']} -> "
               f"{self._config['raw-data-path']}")
 
+    def query_text(self, query_string, explain=False):
+        if self._catalog:
+            self._framework.set_db(self._config['db-name'])
+        for s in self._stat_list:
+            s.start()
+        print("qflock::starting query::")
+        result = self._framework.query(query_string, explain=explain)
+        print("qflock::query finished::")
+        stat_result = ""
+        for s in self._stat_list:
+            s.end()
+            stat_result += str(s)
+
+        print("qflock::process result::")
+        if result is not None:
+            result.process_result()
+            print("qflock::process result done::")
+        print(result.brief_result() + " " + stat_result)
+        return result
+
     def query_file(self, query_file, explain=False):
         if self._catalog:
             self._framework.set_db(self._config['db-name'])
-        stat_list = [DockerStat(), HdfsLogStat()]
-        for s in stat_list:
+        for s in self._stat_list:
             s.start()
         print("qflock::starting query::")
         result = self._framework.query_from_file(query_file, explain=explain)
         print("qflock::query finished::")
         stat_result = ""
-        for s in stat_list:
+        for s in self._stat_list:
             s.end()
             stat_result += str(s)
-
         print("qflock::process result::")
         if result is not None:
             result.process_result()
@@ -129,6 +147,12 @@ class TpcBenchmark(Benchmark):
         self._framework.set_db(self._config['db-name'])
         self._framework.create_tables(self._tables, files_path)
 
+    def delete_catalog(self):
+        print(f"deleting catalog {self._config['db-name']}")
+        self._framework.set_db(self._config['db-name'])
+        self._framework.delete_tables()
+        self._framework.delete_db(self._config['db-name'])
+
     def create_tables_view(self):
         if self._jdbc:
             db_path = self._config['jdbc-path']
@@ -152,6 +176,7 @@ class TpchBenchmark(TpcBenchmark):
 
     def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
         super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc)
+
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
