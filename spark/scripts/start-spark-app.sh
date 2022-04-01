@@ -42,7 +42,7 @@ else
   echo "LAUNCHER_IP: $LAUNCHER_IP"
 fi
 START_LOCAL="YES"
-STORAGE_HOST="--add-host=qflock-storage:$(scripts/get-docker-ip.py qflock-storage)"
+STORAGE_HOST="--add-host=qflock-storage:$(scripts/get-docker-ip.py qflock-storage-dc1)"
 DC2_SPARK_HOST="--add-host=qflock-dc2-spark:$(scripts/get-docker-ip.py qflock-dc2-spark)"
 LOCAL_DOCKER_HOST="--add-host=local-docker-host:$(scripts/get-docker-ip.py qflock-net)"
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 pushd storage
-./stop_qflock_storage.sh
+./stop.sh
 popd
 
 pushd spark
