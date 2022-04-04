@@ -33,7 +33,7 @@ Use these commands to stop services, remove all artifacts and rebuild the repo.
 ```shell
 # Examples
 - Initialize benchmark completely
-benchmark/src/docker-bench.py --init
+./init.sh
 
 - Run all benchmark queries
 benchmark/src/docker-bench.py --queries "*"
