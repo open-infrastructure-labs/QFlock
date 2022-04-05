@@ -74,12 +74,21 @@ if __name__ == '__main__':
     tpcds = client.get_database(db_name)
     print(tpcds)
 
-    tables = client.get_all_tables(db_name)
-    print(tables)
+    table_names = client.get_all_tables(db_name)
+    print(table_names)
 
-    for table_name in tables:
-        table = client.get_table(db_name, table_name)
-        print(table.sd.location, table.sd.parameters['qflock.storage_size'])
+    tables = [client.get_table(db_name, table_name) for table_name in table_names]
+
+    tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
+
+    for i in range(0, len(tables), 2):
+        if 'hdfs://qflock-storage-dc1:' in tables[i].sd.location:
+            tables[i].sd.location = tables[i].sd.location.replace('hdfs://qflock-storage-dc1:', 'hdfs://qflock-storage-dc2:')
+            print(f'Alter {tables[i].tableName} location to dc2')
+            client.alter_table(db_name, tables[i].tableName, tables[i])
+
+    for t in tables:
+        print(t.sd.location, t.sd.parameters['qflock.storage_size'])
 
     client_transport.close()
 
