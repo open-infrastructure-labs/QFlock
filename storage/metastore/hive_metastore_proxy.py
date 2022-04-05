@@ -45,9 +45,13 @@ class ThriftHiveMetastoreHandler:
 
     def add_qflock_statistics(self, table: ttypes.Table):
         log(f'Adding statistics for {table.sd.location}')
-
+        storage_size = 0
         fs, path = pyarrow.fs.FileSystem.from_uri(table.sd.location)
         file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+        # PEP 572 – Assignment Expressions
+        tmp = [storage_size := storage_size + f.size for f in file_info if f.is_file]
+        table.sd.parameters['qflock.storage_size'] = str(storage_size)
+
         files = [finfo.path for finfo in file_info if finfo.is_file and finfo.size > 0]
 
         f = fs.open_input_file(files[0])
@@ -77,11 +81,6 @@ class ThriftHiveMetastoreHandler:
             except BaseException as error:
                 log('An exception occurred: {}'.format(error))
                 raise error
-
-            # if isinstance(res, ttypes.GetTableResult):
-            #     for c in res.table.sd.cols:
-            #         res.table.parameters[f'spark.sql.statistics.colStats.{c.name}.bytes_per_row'] = '0.5'
-            #     # log(res.table.parameters)
 
             return res
 
@@ -145,8 +144,6 @@ def get_storage_ip():
             return addr
 
     return None
-
-
 
 def parquet_test():
     fname = f'hdfs://qflock-storage:9000/tpcds-parquet/call_center.parquet'
