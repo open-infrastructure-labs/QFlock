@@ -24,10 +24,34 @@ from hive_metastore import ThriftHiveMetastore
 from hive_metastore import ttypes
 
 
-if __name__ == '__main__':
-    storage_ip = get_storage_ip()
+def get_docker_ip(docker_name: str):
+    result = subprocess.run('docker network inspect qflock-net'.split(' '), stdout=subprocess.PIPE)
+    d = json.loads(result.stdout)
 
-    # Inspired by https://thrift.apache.org/tutorial/py.html
+    for c in d[0]['Containers'].values():
+        if c['Name'] == docker_name:
+            addr = c['IPv4Address'].split('/')[0]
+            with open('host_aliases', 'w') as f:
+                f.write(f'{docker_name} {addr}')
+
+            os.environ.putenv('HOSTALIASES', 'host_aliases')
+            os.environ['HOSTALIASES'] = 'host_aliases'
+            return addr
+
+    return None
+
+
+def get_storage_size(location: str):
+    storage_size = 0
+    fs, path = pyarrow.fs.FileSystem.from_uri(table.sd.location)
+    file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+    [storage_size := storage_size + f.size for f in file_info if f.is_file]
+
+    return storage_size
+
+
+if __name__ == '__main__':
+    storage_ip = get_docker_ip('qflock-storage-dc1')
     client_transport = TSocket.TSocket(storage_ip, 9083)
     client_transport = TTransport.TBufferedTransport(client_transport)
     client_protocol = TBinaryProtocol.TBinaryProtocol(client_transport)
@@ -37,12 +61,37 @@ if __name__ == '__main__':
         try:
             client_transport.open()
         except BaseException as ex:
-            log('Metastore is not ready. Retry in 1 sec.')
+            print('Metastore is not ready. Retry in 1 sec.')
             time.sleep(1)
 
     catalogs = client.get_catalogs()
-    log(catalogs)
+    print(catalogs)
+
+    databases = client.get_all_databases()
+    print(databases)
+
+    db_name = 'tpcds'
+    tpcds = client.get_database(db_name)
+    print(tpcds)
+
+    table_names = client.get_all_tables(db_name)
+    print(table_names)
+
+    tables = [client.get_table(db_name, table_name) for table_name in table_names]
+
+    tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
+
+    for i in range(0, len(tables), 2):
+        if 'hdfs://qflock-storage-dc1:' in tables[i].sd.location:
+            tables[i].sd.location = tables[i].sd.location.replace('hdfs://qflock-storage-dc1:', 'hdfs://qflock-storage-dc2:')
+            print(f'Alter {tables[i].tableName} location to dc2')
+            client.alter_table(db_name, tables[i].tableName, tables[i])
+
+    for t in tables:
+        print(t.sd.location, t.sd.parameters['qflock.storage_size'])
+
     client_transport.close()
+
 
 
 
