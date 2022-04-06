@@ -25,3 +25,16 @@ show databases;
 benchmark/src/docker-bench.py --compute_stats
 
 benchmark/src/docker-bench.py --query_text "select ss_list_price from store_sales where ss_list_price < 100" --explain
+
+
+# NameNode stats
+http://172.18.0.2:9870/jmx
+
+# Datanode Stats
+http://172.18.0.2:9864/jmx
+http://172.18.0.2:9864/jmx?qry=Hadoop:service=DataNode,name=DataNodeActivity-qflock-storage-dc1-9866
+
+benchmark/src/docker-bench.py --query_text "select cs_sold_date_sk from catalog_sales"
+"BytesRead" : 553347,
+"BytesRead" : 624403,
+624403 - 553347
