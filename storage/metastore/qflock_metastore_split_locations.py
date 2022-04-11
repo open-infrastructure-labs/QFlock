@@ -86,9 +86,13 @@ if __name__ == '__main__':
             tables[i].sd.location = tables[i].sd.location.replace('hdfs://qflock-storage-dc1:', 'hdfs://qflock-storage-dc2:')
             print(f'Alter {tables[i].tableName} location to dc2')
             client.alter_table(db_name, tables[i].tableName, tables[i])
-
+        if 'path' in tables[i].sd.serdeInfo.parameters and \
+           'hdfs://qflock-storage-dc1:' in tables[i].sd.serdeInfo.parameters['path']:
+            tables[i].sd.serdeInfo.parameters['path'] = tables[i].sd.serdeInfo.parameters['path'].replace('hdfs://qflock-storage-dc1:',
+                                                                                                          'hdfs://qflock-storage-dc2:')
+            client.alter_table(db_name, tables[i].tableName, tables[i])
     for t in tables:
-        print(t.sd.location, t.sd.parameters['qflock.storage_size'])
+        print(t.sd.location, t.sd.serdeInfo.parameters['path'], t.sd.parameters['qflock.storage_size'])
 
     client_transport.close()
 
