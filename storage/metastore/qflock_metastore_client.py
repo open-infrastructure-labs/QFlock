@@ -30,14 +30,19 @@ def get_docker_ip(docker_name: str):
     result = subprocess.run('docker network inspect qflock-net'.split(' '), stdout=subprocess.PIPE)
     d = json.loads(result.stdout)
 
+    f = open('host_aliases', 'w')
+    for c in d[0]['Containers'].values():
+        name = c['Name']
+        addr = c['IPv4Address'].split('/')[0]
+        f.write(f'{name} {addr}\n')
+
+    f.close()
+    os.environ.putenv('HOSTALIASES', 'host_aliases')
+    os.environ['HOSTALIASES'] = 'host_aliases'
+
     for c in d[0]['Containers'].values():
         if c['Name'] == docker_name:
             addr = c['IPv4Address'].split('/')[0]
-            with open('host_aliases', 'w') as f:
-                f.write(f'{docker_name} {addr}')
-
-            os.environ.putenv('HOSTALIASES', 'host_aliases')
-            os.environ['HOSTALIASES'] = 'host_aliases'
             return addr
 
     return None
@@ -51,6 +56,31 @@ def get_bytes_read(datanode_name: str):
     d = json.loads(resp_data)
     conn.close()
     return d['beans'][0]['BytesRead']
+
+
+def get_column_sizes(location: str):
+    print(location)
+    # Open parquet file
+    fs, path = pyarrow.fs.FileSystem.from_uri(location)
+    file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+    files = [f.path for f in file_info if f.is_file and f.size > 0]
+
+    f = fs.open_input_file(files[0])
+    reader = pyarrow.parquet.ParquetFile(f)
+    print(f'num_rows: {reader.metadata.num_rows}')
+    rg = reader.metadata.row_group(0)
+    col_sizes = [0] * rg.num_columns
+    for rgi in range(0, reader.num_row_groups):
+        rg = reader.metadata.row_group(rgi)
+        for col_idx in range(0, rg.num_columns):
+            col_info = rg.column(col_idx)
+            col_sizes[col_idx] += col_info.total_compressed_size
+
+    for col_idx in range(0, rg.num_columns):
+        col_info = rg.column(col_idx)
+        print(col_info.path_in_schema, col_sizes[col_idx])
+
+    f.close()
 
 
 if __name__ == '__main__':
@@ -81,47 +111,23 @@ if __name__ == '__main__':
     table_names = client.get_all_tables(db_name)
     print(table_names)
 
-    table_name = 'catalog_sales'
-    table = client.get_table(db_name, table_name)
-    print(table.sd.location, table.sd.parameters['qflock.storage_size'])
+    tables = [client.get_table(db_name, table_name) for table_name in table_names]
+    tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
 
-    # Open parquet file
-    fs, path = pyarrow.fs.FileSystem.from_uri(table.sd.location)
-    file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
-    files = [f.path for f in file_info if f.is_file and f.size > 0]
+    for tbl in tables:
+        print(tbl.sd.location, tbl.sd.parameters['qflock.storage_size'])
 
-    f = fs.open_input_file(files[0])
-    reader = pyarrow.parquet.ParquetFile(f)
-    print(f'num_rows: {reader.metadata.num_rows}')
-    rg = reader.metadata.row_group(0)
-    col_sizes = [0] * rg.num_columns
-    for rgi in range(0, reader.num_row_groups):
-        rg = reader.metadata.row_group(rgi)
-        for col_idx in range(0, rg.num_columns):
-            col_info = rg.column(col_idx)
-            col_sizes[col_idx] += col_info.total_compressed_size
-
-    for col_idx in range(0, rg.num_columns):
-        col_info = rg.column(col_idx)
-        print(col_info.path_in_schema, col_sizes[col_idx])
-
-    f.close()
+    get_column_sizes(tables[0].sd.location)
     client_transport.close()
 
 '''
 benchmark/src/docker-bench.py --query_text "select cs_sold_date_sk from catalog_sales" --verbose
-Total bytes transferred 17764
-cs_sold_date_sk 43828 Overhead -26064
-
 benchmark/src/docker-bench.py --query_text "select cs_sold_time_sk from catalog_sales" --verbose
-Total bytes transferred 17764
-cs_sold_time_sk 1337719 Overhead -1319955
-
-
 cs_sold_date_sk 43828
 cs_sold_time_sk 1337719
 cs_ship_date_sk 1885012
 cs_bill_customer_sk 1593327
 cs_bill_cdemo_sk 2036827
 
+benchmark/src/docker-bench.py --query_text "select * from store_sales" 
 '''

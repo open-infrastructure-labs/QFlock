@@ -43,11 +43,12 @@ else
   echo "LAUNCHER_IP: $LAUNCHER_IP"
 fi
 START_LOCAL="YES"
-STORAGE_HOST="--add-host=qflock-storage:$(scripts/get-docker-ip.py qflock-storage-dc1)"
+STORAGE_HOST1="--add-host=qflock-storage-dc1:$(scripts/get-docker-ip.py qflock-storage-dc1)"
+STORAGE_HOST2="--add-host=qflock-storage-dc2:$(scripts/get-docker-ip.py qflock-storage-dc2)"
 LOCAL_DOCKER_HOST="--add-host=local-docker-host:$(scripts/get-docker-ip.py qflock-net)"
 
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
-echo "Storage ${STORAGE_HOST}"
+echo "Storage ${STORAGE_HOST1} ${STORAGE_HOST2}"
 
 DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
@@ -58,7 +59,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5007:5007 \
   --expose 10001 \
-  --name qflock-dc2-spark $STORAGE_HOST $LOCAL_DOCKER_HOST\
+  --name qflock-dc2-spark $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \

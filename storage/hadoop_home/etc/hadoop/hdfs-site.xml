@@ -62,7 +62,7 @@
       <name>dfs.permissions.enabled</name>
       <value>false</value>
     </property>
-    
+
     <property>
       <name>dfs.permissions.superusergroup</name>
       <value>operator</value>
