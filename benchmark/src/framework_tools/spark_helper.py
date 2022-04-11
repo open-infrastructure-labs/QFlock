@@ -28,9 +28,10 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=False):
+                 jdbc=False, output_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
+        self._output_path = output_path
         if self._jdbc:
             use_catalog = False
         if use_catalog:
@@ -70,12 +71,12 @@ class SparkHelper:
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
     def create_table_view(self, table, db_path):
-        # .option("driver", "com.github.qflock.jdbc.QflockDriver")\
         if self._jdbc:
             df = self._spark.read.option("url", db_path)\
                  .option("batchSize", "100000")\
                  .format("jdbc")\
-                 .option("header", "true")\
+                 .option("header", "true") \
+                 .option("driver", "com.github.qflock.jdbc.QflockDriver") \
                  .option("dbtable", table).load()
             df.createOrReplaceTempView(table)
         else:
@@ -85,9 +86,8 @@ class SparkHelper:
 
     def create_tables_view(self, tables, db_path):
         for t in tables.get_tables():
-            if 'store_sales' in t:
-                print("create temp view table for", t)
-                self.create_table_view(t, db_path)
+            print("create temp view table for", t)
+            self.create_table_view(t, db_path)
 
     def get_catalog_info(self):
         databases = {}
@@ -176,24 +176,31 @@ class SparkHelper:
         status = 0
         df = None
         explain_plan = None
+        rows = []
+        new_df = None
         try:
             if explain:
                 df = self._spark.sql(f"explain cost {query}")
                 explain_plan = df.collect()[0]['plan']
             else:
                 df = self._spark.sql(query)
-                df.collect()
+                df_rows = df.collect()
+                rows = df_rows
         except (ValueError, Exception):
             print(f"caught error executing query for {query}")
             print(traceback.format_exc())
             status = 1
         duration = time.time() - start_time
-        if self._verbose:
-            print(df)
-        return BenchmarkResult(df, status=status, duration_sec=duration, explain_text=explain_plan,
-                               verbose=self._verbose, explain=explain, query_name=query_name)
+        
+        # Make local df from rows to avoid re-evaluation of df if we want to write it.
+        if not explain:
+            new_df = self._spark.createDataFrame(data=rows, schema=df.schema)
+        
+        return BenchmarkResult(new_df, status=status, duration_sec=duration, explain_text=explain_plan,
+                               verbose=self._verbose, explain=explain, query_name=query_name,
+                               output_path=self._output_path, num_rows=len(rows))
 
-    def query_from_file(self, query_file, explain=False):
+    def query_from_file(self, query_file, explain=False, limit=None):
         with open(query_file, "r") as fd:
             lines = []
             for line in fd.readlines():
@@ -201,6 +208,8 @@ class SparkHelper:
                 new_line = re.sub("\\s+", " ", new_line)
                 lines.append(new_line)
             query = " ".join(lines)
+            if limit:
+                query += f" LIMIT {limit}"
             if self._verbose:
                 print(f"Executing spark query {query_file}: {query}")
             result = self.query(query, explain, query_name=query_file)
@@ -223,7 +232,7 @@ class SparkHelper:
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
         print(f"database {input_file} has {df.count()} rows")
 
-        df.repartition(1) \
+        df.repartition(1).fillna(0).fillna("") \
             .write \
             .option("header", True) \
             .option("partitions", "1") \

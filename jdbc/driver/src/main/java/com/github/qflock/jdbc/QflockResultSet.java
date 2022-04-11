@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -29,7 +30,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.qflock.jdbc.api.QFResultSet;
-import com.github.qflock.jdbc.api.QFValue;
 
 public class QflockResultSet implements ResultSet {
     
@@ -63,23 +63,6 @@ public class QflockResultSet implements ResultSet {
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
     }
-    
-    private QFValue getColumnValue(int columnIndex) throws SQLException {
-        if (this.resultset.rows == null) {
-          throw new SQLException("No row found.");
-        }
-        if (this.resultset.rows.size() == 0) {
-          throw new SQLException("RowSet does not contain any columns!");
-        }
-        if (columnIndex > this.resultset.rows.get(getRow() - 1).values.size()) {
-          throw new SQLException("Invalid columnIndex: " + columnIndex);
-        }
-        //Type columnType = getSchema().getColumnDescriptorAt(columnIndex - 1).getType();
-        //int columnType = this.metadata.getColumnType(columnIndex);
-
-        return this.resultset.rows.get(getRow() - 1).values.get(columnIndex - 1);
-      }
-    
 
     @Override
     public boolean isWrapperFor(Class<?> arg0) throws SQLException {
@@ -212,24 +195,7 @@ public class QflockResultSet implements ResultSet {
 
     @Override
     public boolean getBoolean(int columnIndex) throws SQLException {
-        try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return false;
-            } else if (val.getVal().isSetBool_val()) {
-                this.wasNull = false;
-                return val.getVal().getBool_val();
-            }
-            throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + 
-            "INTEGER value not present in raw protocol");
-            
-          } catch (Exception e) {
-            throw new SQLException(
-                "Cannot convert column " + columnIndex + " to long: " + e.toString(),
-                e);
-          }
+        throw new SQLException("Method not supported");
     }
 
     @Override
@@ -310,26 +276,9 @@ public class QflockResultSet implements ResultSet {
     @Override
     public double getDouble(int columnIndex) throws SQLException {
         try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return 0;
-            } else {
-                this.wasNull = false;
-            }
-            if (val.getVal().isSetDouble_val()) {
-                return val.getVal().getDouble_val();
-            } else if (val.getVal().isSetBigint_val()) {
-                return val.getVal().getBigint_val();
-            } else if (val.getVal().isSetInteger_val()) {
-                return val.getVal().getInteger_val();
-            } else if (val.getVal().isSetSmallint_val()) {
-                return val.getVal().getSmallint_val();
-            }
-            throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to double: " + 
-            "DOUBLE value not present in raw protocol");
-            
+            double value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                              .getDouble((rowIndex - 1) * 8);
+            return value;
           } catch (Exception e) {
             throw new SQLException(
                 "Cannot convert column " + columnIndex + " to double: " + e.toString(),
@@ -355,26 +304,9 @@ public class QflockResultSet implements ResultSet {
     @Override
     public float getFloat(int columnIndex) throws SQLException {
         try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return 0;
-            } else {
-                this.wasNull = false;
-            }
-            if (val.getVal().isSetDouble_val()) {
-                return (float) val.getVal().getDouble_val();
-            } else if (val.getVal().isSetBigint_val()) {
-                return val.getVal().getBigint_val();
-            } else if (val.getVal().isSetInteger_val()) {
-                return val.getVal().getInteger_val();
-            } else if (val.getVal().isSetSmallint_val()) {
-                return val.getVal().getSmallint_val();
-            }
-            throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to float: " + 
-            "DOUBLE value not present in raw protocol");
-            
+            float value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                                        .getFloat((rowIndex - 1) * 8);
+            return value;
           } catch (Exception e) {
             throw new SQLException(
                 "Cannot convert column " + columnIndex + " to float: " + e.toString(),
@@ -395,24 +327,9 @@ public class QflockResultSet implements ResultSet {
     @Override
     public int getInt(int columnIndex) throws SQLException {
         try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return 0;
-            } else {
-                this.wasNull = false;
-            }
-            if (val.getVal().isSetInteger_val()) {
-                return val.getVal().getInteger_val();
-            } else if (val.getVal().isSetSmallint_val()) {
-                return val.getVal().getSmallint_val();
-            } else if (val.getVal().isSetBigint_val()) {
-                return (int)val.getVal().getBigint_val();
-            }
-            throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + 
-            "INTEGER value not present in raw protocol");
-            
+            int value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                            .getInt((rowIndex - 1) * 4);
+            return value;
           } catch (Exception e) {
             throw new SQLException(
                 "Cannot convert column " + columnIndex + " to int: " + e.toString(),
@@ -428,33 +345,14 @@ public class QflockResultSet implements ResultSet {
     @Override
     public long getLong(int columnIndex) throws SQLException {
         try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return 0;
-            } else {
-                this.wasNull = false;
-            }
-            if (val.getVal().isSetBigint_val()) {
-                return val.getVal().getBigint_val();
-            } else if (val.getVal().isSetInteger_val()) {
-                return val.getVal().getInteger_val();
-            } else if (val.getVal().isSetSmallint_val()) {
-                return val.getVal().getSmallint_val();
-            } 
+            long l = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .getLong((rowIndex - 1) * 8);
+            return l;
+        } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + 
-            "BIGINT value not present in raw protocol");
-            
-          } catch (Exception e) {
-            throw new SQLException(
-                "Cannot convert column " + columnIndex + " to long: " + e.toString(),
-                e);
-          }
-    }
-
-    private QFValue getQFValue(int columnIndex) {
-        return this.resultset.rows.get(rowIndex-1).values.get(columnIndex-1);
+                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    e);
+        }
     }
 
     @Override
@@ -590,18 +488,9 @@ public class QflockResultSet implements ResultSet {
     @Override
     public short getShort(int columnIndex) throws SQLException {
         try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return 0;
-            } else if (val.getVal().isSetSmallint_val()) {
-                this.wasNull = false;
-                return val.getVal().getSmallint_val();
-            }
-            throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + 
-            "INTEGER value not present in raw protocol");
-            
+            short value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                              .getShort((rowIndex - 1) * 2);
+            return value;
           } catch (Exception e) {
             throw new SQLException(
                 "Cannot convert column " + columnIndex + " to long: " + e.toString(),
@@ -621,14 +510,19 @@ public class QflockResultSet implements ResultSet {
 
     @Override
     public String getString(int columnIndex) throws SQLException {
-        QFValue value = getColumnValue(columnIndex);
-        if (value.isnull) {
-            this.wasNull = true;
-            return null;
-        } else {
-            this.wasNull = false;
+        try {
+            Integer stringLen = this.resultset.columnSize.get(columnIndex - 1);
+            byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
+                                           .array();
+            String rString = new String(buffer, (rowIndex - 1) * stringLen,
+                                        stringLen,
+                                        StandardCharsets.UTF_8);
+            return rString;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    e);
         }
-        return value.getVal().getString_val();
     }
 
     @Override
@@ -658,24 +552,7 @@ public class QflockResultSet implements ResultSet {
 
     @Override
     public Timestamp getTimestamp(int columnIndex) throws SQLException {
-        try {
-            QFValue val = getQFValue(columnIndex);
-            if (val.isnull) {
-                this.wasNull = true;
-                return null;
-            } else if (val.getVal().isSetString_val()) {
-                this.wasNull = false;
-                return Timestamp.valueOf(val.getVal().getString_val());
-            }
-            throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to Timestamp: " +
-            "STRING value not present in raw protocol");
-
-          } catch (Exception e) {
-            throw new SQLException(
-                "Cannot convert column " + columnIndex + " to Timestamp: " + e.toString(),
-                e);
-          }
+        throw new SQLException("Method not supported");
     }
 
     @Override
@@ -732,7 +609,7 @@ public class QflockResultSet implements ResultSet {
 
     @Override
     public boolean isAfterLast() throws SQLException {
-        return (getRow()>this.resultset.getRowsSize());
+        return (getRow()>this.resultset.getNumRows());
     }
 
     @Override
@@ -752,12 +629,12 @@ public class QflockResultSet implements ResultSet {
 
     @Override
     public boolean isLast() throws SQLException {
-        return (getRow()==this.resultset.getRowsSize());
+        return (getRow()==this.resultset.getNumRows());
     }
 
     @Override
     public boolean last() throws SQLException {
-        this.rowIndex = this.resultset.getRowsSize();
+        this.rowIndex = this.resultset.getNumRows();
         return true;
     }
 
@@ -776,7 +653,8 @@ public class QflockResultSet implements ResultSet {
     @Override
     public boolean next() throws SQLException {
         this.rowIndex += 1;
-        if (this.rowIndex > this.resultset.getRows().size())
+        // was .getRows().size()
+        if (this.rowIndex > this.resultset.numRows)
             return false;
         return true;
     }

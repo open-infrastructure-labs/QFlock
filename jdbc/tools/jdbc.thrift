@@ -13,7 +13,7 @@ struct QFConnection
 
 struct QFStatement
 {
-  1: i32 id, 
+  1: i32 id,
   2: string sql
   3: i32 id_connection
 }
@@ -45,7 +45,7 @@ struct QFValue
   2: RawVal val
 }
 
-  
+
 struct QFRow
 {
   1: list<QFValue> values
@@ -83,8 +83,10 @@ struct QFResultSetMetaData
 struct QFResultSet
 {
   1: i32 id,
-  2: list<QFRow> rows,
-  3: QFResultSetMetaData metadata
+  2: QFResultSetMetaData metadata,
+  3: i32 numRows,
+  4: list<binary> binaryRows,
+  5: list<i32> columnSize
 }
 
 struct QFStaticMetaData
@@ -124,40 +126,40 @@ exception QFSQLException {
 service QflockJdbcService {
 
    QFConnection createConnection(1:string url, 2:map<string,string> properties),
-   
+
    QFStatement createStatement(1:QFConnection connection),
    QFPreparedStatement createPreparedStatement(1:QFConnection connection),
-   
+
    QFStaticMetaData connection_getstaticmetadata(1:QFConnection connection),
    bool connection_isvalid(1:QFConnection connection, 2:i32 timeout),
-   
+
    void connection_setAutoCommit(1:QFConnection connection, 2:bool autoCommit) throws (1:QFSQLException ouch)
    bool connection_getAutoCommit(1:QFConnection connection) throws (1:QFSQLException ouch)
    void connection_setTransactionIsolation(1:QFConnection connection, 2:i32 level) throws (1:QFSQLException ouch)
    i32 connection_getTransactionIsolation(1:QFConnection connection) throws (1:QFSQLException ouch)
    void connection_setReadOnly(1:QFConnection connection, 2:bool readOnly) throws (1:QFSQLException ouch)
    bool connection_getReadOnly(1:QFConnection connection) throws (1:QFSQLException ouch)
-   
+
    void connection_setCatalog(1:QFConnection connection, 2:string catalog) throws (1:QFSQLException ouch)
    string connection_getCatalog(1:QFConnection connection) throws (1:QFSQLException ouch)
    void connection_setSchema(1:QFConnection connection, 2:string schema) throws (1:QFSQLException ouch)
    string connection_getSchema(1:QFConnection connection) throws (1:QFSQLException ouch)
-   
+
    string connection_getCatalogSeparator(1:QFConnection connection),
    string connection_getCatalogTerm(1:QFConnection connection),
    string connection_getSchemaTerm(1:QFConnection connection),
-   
+
    QFResultSet connection_getCatalogs(1:QFConnection connection),
    QFResultSet connection_getSchemas(1:QFConnection connection, 2:string catalog, 3:string schemaPattern) throws (1:QFSQLException ouch)
    QFResultSet connection_getTables(1:QFConnection connection, 2:string catalog, 3:string schemaPattern, 4:string tableNamePattern, 5:list<string> types),
    QFResultSet connection_getColumns(1:QFConnection connection, 2:string catalog, 3:string schemaPattern, 4:string tableNamePattern, 5:string columnNamePattern),
    string connection_getSQLKeywords(1:QFConnection connection),
    QFResultSet connection_getTableTypes(1:QFConnection connection),
-   
+
    QFResultSet connection_getTypeInfo(1:QFConnection connection) throws (1:QFSQLException ouch)
 
    void closeConnection(1:QFConnection connection) throws (1:QFSQLException ouch)
-   
+
    void statement_close(1:QFStatement statement) throws (1:QFSQLException ouch)
    bool statement_execute(1:QFStatement statement, 2:string sql) throws (1:QFSQLException ouch)
    QFResultSet statement_executeQuery(1:QFStatement statement, 2:string sql) throws (1:QFSQLException ouch)
@@ -165,10 +167,10 @@ service QflockJdbcService {
    i32 statement_getUpdateCount(1:QFStatement statement),
    i32 statement_getResultSetType(1:QFStatement statement)
    void statement_cancel(1:QFStatement statement) throws (1:QFSQLException ouch)
-   
+
    statement_getWarnings_return statement_getWarnings(1:QFStatement statement) throws (1:QFSQLException ouch)
    void statement_clearWarnings(1:QFStatement statement) throws (1:QFSQLException ouch)
-   
+
    i32 statement_getMaxRows(1:QFStatement statement) throws (1:QFSQLException ouch)
    void statement_setMaxRows(1:QFStatement statement, 2:i32 max) throws (1:QFSQLException ouch)
    i32 statement_getQueryTimeout(1:QFStatement statement) throws (1:QFSQLException ouch)

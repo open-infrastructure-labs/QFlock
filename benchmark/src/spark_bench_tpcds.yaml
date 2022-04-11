@@ -11,10 +11,11 @@
     parquet-path: "hdfs://qflock-storage-dc1:9000/tpcds-parquet"
     # parquet-path: "webhdfs://qflock-storage:9870/tpcds-parquet"
     query-path: "queries/tpcds"
+#    limit-rows: "1000"
     query-extension: "sql"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
-    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds;compress=true;timeout=3600"
+    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
     docker-stats: "qflock-storage-dc1:tx_bytes,qflock-dc2-spark:tx_bytes,qflock-dc2-spark:rx_bytes,\
                    qflock-dc1-spark-app:tx_bytes,qflock-dc1-spark-app:rx_bytes"
   spark:
@@ -25,6 +26,7 @@
     - spark.driver.maxResultSize=2g
     - spark.driver.memory=2g
     - spark.executor.memory=2g
+#    - spark.sql.execution.arrow.enabled=true
     - spark.sql.catalogImplementation=hive
 #    - spark.sql.hive.metastore.version=3.1.2
 #    - spark.sql.hive.metastore.jars=path

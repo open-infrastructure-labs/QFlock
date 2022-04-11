@@ -23,8 +23,7 @@ from pyfiglet import Figlet
 import yaml
 import socket
 
-from benchmark.tpc import TpchBenchmark
-from benchmark.tpc import TpcdsBenchmark
+from benchmark.benchmark_factory import BenchmarkFactory
 from benchmark.metastore import MetastoreClient
 from framework_tools.spark_helper import SparkHelper
 from benchmark.config import Config
@@ -71,6 +70,9 @@ class BenchmarkApp:
             parser.add_argument("--view_columns", "-vcc", default=None,
                                 help="View details of catalog column. example: table.column \n" +
                                      " or column. Example web_site.web_city or web_city")
+            parser.add_argument("--output_path", default=None,
+                                help="Prefix of Path for output files. " +
+                                     "(.csv and/or .parquet is added to folder name)")
         parser.add_argument("--init_all", action="store_true",
                             help="Equivalent to --gen_data, --gen_parquet, \n"
                                  "--create_catalog, --compute_stats, --view_catalog")
@@ -98,6 +100,8 @@ class BenchmarkApp:
                             help="number of times to loop the range of tests.")
         parser.add_argument("--capture_log_level", default=None,
                             help="log level to capture to file.")
+        parser.add_argument("--continue_on_error", action="store_true",
+                            help="continue with remaining queries if query encounters an error.")
         return parser
 
     def _parse_args(self):
@@ -111,17 +115,15 @@ class BenchmarkApp:
         print(f.renderText('QFlock Bench'))
 
     def _get_benchmark(self, sh):
-        if self._config['benchmark']['db-name'] == "tpch":
-            return TpchBenchmark(self._config['benchmark'], sh, self._args.verbose,
-                                 not self._args.no_catalog, self._args.jdbc)
-        if self._config['benchmark']['db-name'] == "tpcds":
-            return TpcdsBenchmark(self._config['benchmark'], sh, self._args.verbose,
-                                  not self._args.no_catalog, self._args.jdbc)
-        return None
+        return BenchmarkFactory.get_benchmark(self._config,
+                                              sh,
+                                              self._args.verbose,
+                                              not self._args.no_catalog,
+                                              self._args.jdbc)
 
     def _get_query_config(self):
         qc = {}
-        args = ["query_range", "query_file"]
+        args = ["query_range", "query_file", "continue_on_error"]
         for arg in args:
             if arg in self._args.__dict__:
                 qc[arg] = self._args.__dict__[arg]
@@ -158,8 +160,10 @@ class BenchmarkApp:
         if not self._parse_args():
             return
         self._load_config()
-        sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc)
-        sh.load_extension()
+        sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc,
+                         output_path=self._args.output_path)
+        if self._args.jdbc:
+            sh.load_extension()
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
@@ -207,6 +211,9 @@ class BenchmarkApp:
         if self._args.delete_catalog:
             benchmark.delete_catalog()
         if self._args.no_catalog or self._args.jdbc:
+            if self._args.jdbc:
+                print(f"set database {self._config['benchmark']['db-name']}")
+                sh.set_db(self._config['benchmark']['db-name'])
             benchmark.create_tables_view()
         if self._args.query_text or self._args.query_file or self._args.query_range:
             for i in range(0, self._args.loops):
@@ -222,5 +229,8 @@ class BenchmarkApp:
 
 
 if __name__ == "__main__":
+    from benchmark.benchmark import Benchmark
+    q_list = Benchmark.get_query_list("14", "queries/tpcds", ".sql")
+    print(q_list)
     bench = BenchmarkApp()
     bench.run()

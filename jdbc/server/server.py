@@ -6,7 +6,9 @@ import logging
 import inspect
 from enum import Enum
 import pyspark
-from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType
+from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType, ShortType
+import numpy as np
+import pandas as pd
 
 from thrift.transport import TSocket
 from thrift.transport import TTransport
@@ -77,6 +79,7 @@ class ThriftJdbcHandler:
         self._pstatements = {}
         self._connection_id = 0
         self._pstatement_id = 0
+        self._query_id = 0
         # Inspired by https://thrift.apache.org/tutorial/py.html
         self._spark = pyspark.sql.SparkSession \
             .builder \
@@ -97,7 +100,7 @@ class ThriftJdbcHandler:
         logger.info(f"New connection id {current_id} dbname {dbname} url {url} properties {str(properties)}")
         self._connection_id += 1
         self._connections[current_id] = {'url': url, 'properties': properties,
-                                         'dbname': dbname }
+                                         'dbname': dbname}
         return ttypes.QFConnection(id=current_id)
 
     def createStatement(self, connection):
@@ -418,7 +421,7 @@ class ThriftJdbcHandler:
         logger.info(f"prepare result finished for {len(rows)} rows")
         return ttypes.QFResultSet(42, rows, self.get_metadata(df_schema))
 
-    def exec_query(self, sql):
+    def exec_query2(self, sql):
         query = sql.replace('\"', "") + " LIMIT 1000"
         logger.info(f"query starting {query}")
         df = self._spark.sql(query)
@@ -438,6 +441,55 @@ class ThriftJdbcHandler:
             rows = new_rows.collect()
         logger.info(f"query finished for {len(rows)} rows")
         return ttypes.QFResultSet(42, rows, self.get_metadata(df_schema))
+
+    @classmethod
+    def data_type_size(cls, data_type):
+        if isinstance(data_type, DoubleType):
+            return 8
+        elif isinstance(data_type, LongType):
+            return 8
+        elif isinstance(data_type, IntegerType):
+            return 4
+        elif isinstance(data_type, ShortType):
+            return 2
+        else:
+            # String also falls in this case.  We need to determine size per string.
+            raise Exception(f"unknown type {data_type}")
+
+    def get_query_id(self):
+        query_id = self._query_id
+        self._query_id += 1
+        return query_id
+
+    def exec_query(self, sql):
+        query_id = self.get_query_id()
+        query = sql.replace('\"', "") #+ " LIMIT 10"
+        logger.info(f"query id: {query_id} starting {query}")
+        df = self._spark.sql(query)
+        df_pandas = df.toPandas()
+        num_rows = len(df_pandas.index)
+        logger.info(f"query toPandas() done {query} rows {num_rows}")
+        df_schema = df.schema
+        binary_rows = []
+        col_size = []
+        if num_rows > 0:
+            columns = df.columns
+            for col_idx in range(0, len(columns)):
+                # data = np_array[:,col_idx]
+                data = df_pandas[columns[col_idx]].to_numpy()
+                data_type = df_schema.fields[col_idx].dataType
+                if isinstance(data_type, StringType):
+                    new_data1 = data.astype(str)
+                    new_data = np.char.encode(new_data1, encoding='utf-8')
+                    logger.info(f"item size for col idx: {col_idx} is: {new_data.dtype.itemsize}")
+                    binary_rows.append(new_data.tobytes())
+                    col_size.append(new_data.dtype.itemsize)
+                else:
+                    new_data = data.byteswap().newbyteorder().tobytes()
+                    binary_rows.append(new_data)
+                    col_size.append(ThriftJdbcHandler.data_type_size(data_type))
+        return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
+                                  numRows=num_rows, binaryRows=binary_rows, columnSize=col_size)
 
     def statement_getResultSet(self, statement):
         """
@@ -551,7 +603,7 @@ class ThriftJdbcHandler:
         """
         connection_id = self._pstatements[statement.id]['connection'].id
         connection = self._connections[connection_id]
-        logger.debug(f"preparedStatement_executeQuery:: statement id: {statement.id} sql: {sql}" +\
+        logger.info(f"preparedStatement_executeQuery:: statement id: {statement.id} sql: {sql}" +\
                      f" db {connection['dbname']}")
         # row = ttypes.QFRow([ttypes.QFValue(isnull=False, val=ttypes.RawVal(integer_val=42))])
         # rows = [row]
@@ -658,23 +710,22 @@ def get_jdbc_ip():
     return d[0]['IPAM']['Config'][0]['Gateway']
 
 def setup_logger():
-    # create logger
-    logger = logging.getLogger("qflock")
-    logger.setLevel(logging.DEBUG)
-
+    # logger = logging.getLogger("qflock")
+    # logger.setLevel(logging.DEBUG)
     # create console handler and set level to debug
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
-    # add ch to logger
-    logger.addHandler(ch)
+    # ch = logging.StreamHandler()
+    # ch.setLevel(logging.DEBUG)
+    # logger.addHandler(ch)
 
-    # create formatter
-    formatter = logging.Formatter("%(asctime)s.%(msecs)03d %(levelname)s %(message)s",
-                                  "%Y-%m-%d %H:%M:%S")
-
-    # add formatter to ch
-    ch.setFormatter(formatter)
-
+    formatter = logging.Formatter('%(asctime)s.%(msecs)03d %(levelname)s %(message)s',
+                                  '%Y-%m-%d %H:%M:%S')
+    # ch.setFormatter(formatter)
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+    root = logging.getLogger()
+    hdlr = root.handlers[0]
+    hdlr.setFormatter(formatter)
 
 
 if __name__ == '__main__':

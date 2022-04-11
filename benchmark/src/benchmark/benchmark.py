@@ -24,15 +24,17 @@ class Benchmark:
       - Generate the benchmark data
       - Generate the tables in a database.
       - run specific benchmark tests against the database."""
-    def __init__(self, name, config, framework):
+    def __init__(self, name, config, framework, tables):
         """
         :param name: Name of this benchmark
         :param config: Dict of configuration details
         :param framework: Framework (like spark) used to operate on data.
+        :param tables: Table definitions.
         """
         self._name = name
         self._config = config
         self._framework = framework
+        self.tables = tables
 
     def generate(self):
         """Generate the database for the given parameters."""
@@ -53,6 +55,15 @@ class Benchmark:
         return all_queries
 
     @classmethod
+    def get_query_files(cls, query, query_path, query_extension):
+        query_list = []
+        files = glob(os.path.join(query_path, str(query)) + "*" + query_extension)
+        for file in files:
+            if re.search(f"\/{query}.sql", file) or re.search(f"\/{query}[a-z].sql", file):
+                query_list.append(file)
+        return query_list
+
+    @classmethod
     def get_query_list(cls, query, query_path, query_extension):
         query_list = []
         query_selections = query.split(",")
@@ -63,9 +74,11 @@ class Benchmark:
                 r = i.split("-")
                 if len(r) == 2:
                     for t in range(int(r[0]), int(r[1]) + 1):
-                        query_list.append(os.path.join(query_path, str(t)) + "." + query_extension)
+                        qf = Benchmark.get_query_files(str(t), query_path, query_extension)
+                        query_list.extend(qf)
             else:
-                query_list.append(os.path.join(query_path, str(i)) + "." + query_extension)
+                qf = Benchmark.get_query_files(str(i), query_path, query_extension)
+                query_list.extend(qf)
         return query_list
 
 
