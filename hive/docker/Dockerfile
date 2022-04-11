@@ -21,7 +21,6 @@ RUN apt-get -q update \
     curl \
     netcat
 
-RUN mkdir -p /opt/hadoop
 ENV ENV_HADOOP_VERSION=3.3.0
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
@@ -40,6 +39,10 @@ ENV HADOOP_HOME=/opt/hadoop/hadoop-3.3.0
 ENV HIVE_HOME=/opt/hive/apache-hive-3.1.2-bin
 RUN rm ${HIVE_HOME}/lib/guava-19.0.jar \
     && cp ${HADOOP_HOME}/share/hadoop/hdfs/lib/guava-27.0-jre.jar $HIVE_HOME/lib/
+
+# Install tez 
+RUN mkdir -p /opt/tez
+ADD /apache-tez-0.10.1-bin.tar.gz /opt/tez
 
 RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \

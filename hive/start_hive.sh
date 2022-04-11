@@ -11,6 +11,7 @@ USER_NAME=${SUDO_USER:=$USER}
 # Set the home directory in the Docker container.
 HADOOP_HOME=/opt/hadoop/hadoop-3.3.0
 HIVE_HOME=/opt/hive/apache-hive-3.1.2-bin
+TEZ_HOME=/opt/tez/apache-tez-0.10.1-bin
 
 # Create NameNode and DataNode mount points
 mkdir -p ${ROOT_DIR}/volume/namenode
@@ -53,6 +54,7 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/core-site.xml:${HADOOP_HOME}/etc/hadoop/core-site.xml \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/hdfs-site.xml:${HADOOP_HOME}/etc/hadoop/hdfs-site.xml \
   -v ${ROOT_DIR}/hive_home/conf/hive-site.xml:${HIVE_HOME}/conf/hive-site.xml \
+  -v ${ROOT_DIR}/tez_home/conf/tez-site.xml:${TEZ_HOME}/conf/tez-site.xml \
   -v ${ROOT_DIR}/docker/run_services.sh:${HADOOP_HOME}/bin/run_services.sh \
   -w ${HADOOP_HOME} \
   -e HADOOP_HOME=${HADOOP_HOME} \
