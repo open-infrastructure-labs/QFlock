@@ -13,6 +13,7 @@
     query-path: "queries/tpcds"
 #    limit-rows: "1000"
     query-extension: "sql"
+    query-exceptions: "2,43,59,13,48,24a,24b,75"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
     jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
@@ -26,7 +27,7 @@
     - spark.driver.maxResultSize=2g
     - spark.driver.memory=2g
     - spark.executor.memory=2g
-#    - spark.sql.execution.arrow.enabled=true
+    - spark.sql.execution.arrow.enabled=true
     - spark.sql.catalogImplementation=hive
 #    - spark.sql.hive.metastore.version=3.1.2
 #    - spark.sql.hive.metastore.jars=path

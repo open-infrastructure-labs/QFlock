@@ -89,8 +89,8 @@ class ThriftJdbcHandler:
             .config("spark.driver.memory", "2g")\
             .config("spark.executor.memory", "2g")\
             .config("spark.sql.catalogImplementation", "hive")\
-            .config("spark.sql.warehouse.dir", "hdfs://qflock-storage:9000/user/hive/warehouse3")\
-            .config("spark.hadoop.hive.metastore.uris", "thrift://qflock-storage:9084")\
+            .config("spark.sql.warehouse.dir", "hdfs://qflock-storage-dc1:9000/user/hive/warehouse3")\
+            .config("spark.hadoop.hive.metastore.uris", "thrift://qflock-storage-dc1:9084")\
             .enableHiveSupport() \
             .getOrCreate()
 

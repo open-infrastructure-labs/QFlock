@@ -113,7 +113,8 @@ class TpcBenchmark(Benchmark):
         if self._catalog:
             self._framework.set_db(self._config['db-name'])
         query_list = Benchmark.get_query_list(query_config['query_range'], self._config['query-path'],
-                                              self._config['query-extension'])
+                                              self._config['query-extension'],
+                                              self._config['query-exceptions'].split(","))
         success_count, failure_count = 0, 0
         if self._verbose:
             print(f"query_list {query_list}")
