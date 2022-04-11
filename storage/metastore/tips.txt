@@ -30,6 +30,9 @@ benchmark/src/docker-bench.py --query_text "select ss_list_price from store_sale
 # NameNode stats
 http://172.18.0.2:9870/jmx
 
+# "Hadoop:service=NameNode,name=RpcDetailedActivityForPort9000"
+# Hadoop:service=NameNode,name=RpcActivityForPort9000
+
 # Datanode Stats
 http://172.18.0.2:9864/jmx
 http://172.18.0.2:9864/jmx?qry=Hadoop:service=DataNode,name=DataNodeActivity-qflock-storage-dc1-9866
