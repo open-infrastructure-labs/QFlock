@@ -48,8 +48,8 @@
                      where d_year = 1999 + 1 and d_moy = 12 and d_dom = 11)
   group by i_brand_id,i_class_id,i_category_id
   having sum(ss_quantity*ss_list_price) > (select average_sales from avg_sales)) this_year,
- (select 'store' channel, i_brand_id,i_class_id
-        ,i_category_id, sum(ss_quantity*ss_list_price) sales, count(*) number_sales
+ (select 'store' channel2, i_brand_id i_brand_id2,i_class_id i_class_id2
+        ,i_category_id i_category_id2, sum(ss_quantity*ss_list_price) sales2, count(*) number_sales2
  from store_sales, item, date_dim
  where ss_item_sk in (select ss_item_sk from cross_items)
    and ss_item_sk = i_item_sk
@@ -58,9 +58,9 @@
                      where d_year = 1999 and d_moy = 12 and d_dom = 11)
  group by i_brand_id,i_class_id,i_category_id
  having sum(ss_quantity*ss_list_price) > (select average_sales from avg_sales)) last_year
- where this_year.i_brand_id= last_year.i_brand_id
-   and this_year.i_class_id = last_year.i_class_id
-   and this_year.i_category_id = last_year.i_category_id
+ where this_year.i_brand_id= last_year.i_brand_id2
+   and this_year.i_class_id = last_year.i_class_id2
+   and this_year.i_category_id = last_year.i_category_id2
  order by this_year.channel, this_year.i_brand_id, this_year.i_class_id, this_year.i_category_id
  limit 100
             

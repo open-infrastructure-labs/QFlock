@@ -16,26 +16,40 @@
 #
 import os
 import glob
+from pathlib import Path
+from pyspark.sql import functions as func
+from pyspark.sql.types import DoubleType
 
 
 class BenchmarkResult:
     log_dir = "logs"
 
     def __init__(self, df, status=0, duration_sec=0, explain_text="",
-                 verbose=False, explain=False, query_name=None):
+                 verbose=False, explain=False, query_name=None, output_path=None,
+                 num_rows=None):
         self.df = df
         self.explain_text = explain_text
         self.status = status
         self.duration_sec = duration_sec
+        self.num_rows = num_rows
         self._verbose = verbose
         self._explain = explain
         self.query_name = query_name
         self.size_bytes_csv = 0
         self.size_bytes_pq = 0
         if self._verbose:
-            self._output = ["parquet", "csv"]
+            self._output = ["csv"]
+            # self._output = ["parquet", "csv"]
         else:
             self._output = []
+        if not output_path:
+            self._output_path = os.path.join(BenchmarkResult.log_dir, "output")
+        else:
+            self._output_path = output_path
+        if query_name:
+            qname = os.path.split(query_name)[1]
+            self._output_path = os.path.join(self._output_path, qname)
+            print(f"output path: {self._output_path} ")
 
     def filtered_explain(self):
         new_explain_text = ""
@@ -46,22 +60,34 @@ class BenchmarkResult:
                 new_explain_text += line + "\n"
         return new_explain_text
 
+    def formatted_df(self):
+        df1 = self.df
+        df1 = df1.orderBy(df1.columns, ascending=True)
+        for c in range(0, len(df1.columns)):
+            if isinstance(df1.schema.fields[c].dataType, DoubleType):
+                df1 = df1.withColumn(df1.schema.fields[c].name,
+                                     func.format_number(func.bround(df1[df1.schema.fields[c].name], 3), 2))
+        return df1
+
     def process_result(self):
         if self._verbose:
             if self._explain:
                 print(self.explain_text)
             # else:
             #     self.df.show(100, False)
+        root_path = os.path.split(self._output_path)[0]
+        if not os.path.exists(root_path):
+            print(f"creating {root_path}")
+            Path(root_path).mkdir(parents=True, exist_ok=True)
         if self._explain:
-            if not os.path.exists(BenchmarkResult.log_dir):
-                os.mkdir(BenchmarkResult.log_dir)
             with open("logs/explain.txt", "a") as fd:
                 if self.query_name:
                     print(f"query: {self.query_name}", file=fd)
                 print(self.filtered_explain(), file=fd)
         if "csv" in self._output:
-            output_path = os.path.join("logs", "output.csv")
-            self.df.repartition(1) \
+            output_path = self._output_path + ".csv"
+            print(f"csv output path is {output_path}")
+            self.formatted_df().repartition(1) \
                 .write.mode("overwrite") \
                 .format("csv") \
                 .option("header", "true") \
@@ -73,7 +99,7 @@ class BenchmarkResult:
             else:
                 self.size_bytes_csv = os.path.getsize(output_path)
         if "parquet" in self._output:
-            output_path = os.path.join("logs", "output.parquet")
+            output_path = self._output_path + ".parquet"
             self.df.repartition(1) \
                 .write.mode("overwrite") \
                 .format("parquet") \
@@ -88,9 +114,9 @@ class BenchmarkResult:
 
     def brief_result(self):
         if self._verbose:
-            result = f"qflock:: {self.query_name} rows {self.df.count()} "\
+            result = f"qflock:: {self.query_name} rows {self.num_rows} "\
                      f"bytes {self.size_bytes_pq} seconds {self.duration_sec:.3f}"
         else:
-            result = f"qflock:: {self.query_name} "\
+            result = f"qflock:: {self.query_name} rows {self.num_rows} "\
                      f"seconds {self.duration_sec:.3f}"
         return result

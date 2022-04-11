@@ -31,8 +31,8 @@ class TpcBenchmark(Benchmark):
 
     def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
                  jdbc=False):
-        super().__init__(name, config, framework)
-        self._tables = tables
+        super().__init__(name, config, framework, tables)
+        # self._tables = tables
         self._file_ext = "." + self._config['file-extension']
         self._verbose = verbose
         self._catalog = catalog
@@ -41,6 +41,9 @@ class TpcBenchmark(Benchmark):
             self._catalog = False
         self._stat_list = [HdfsLogStat()]
         self._stat_list.extend(DockerStat.get_stats(self._config['docker-stats']))
+        self._limit_rows = None
+        if 'limit-rows' in self._config and self._config['limit-rows'] != "":
+            self._limit_rows = self._config['limit-rows']
 
     def generate(self):
         raw_base_path = ""
@@ -92,7 +95,8 @@ class TpcBenchmark(Benchmark):
         for s in self._stat_list:
             s.start()
         print("qflock::starting query::")
-        result = self._framework.query_from_file(query_file, explain=explain)
+        result = self._framework.query_from_file(query_file, explain=explain,
+                                                 limit=self._limit_rows)
         print("qflock::query finished::")
         stat_result = ""
         for s in self._stat_list:
@@ -109,7 +113,8 @@ class TpcBenchmark(Benchmark):
         if self._catalog:
             self._framework.set_db(self._config['db-name'])
         query_list = Benchmark.get_query_list(query_config['query_range'], self._config['query-path'],
-                                              self._config['query-extension'])
+                                              self._config['query-extension'],
+                                              self._config['query-exceptions'].split(","))
         success_count, failure_count = 0, 0
         if self._verbose:
             print(f"query_list {query_list}")
@@ -121,18 +126,20 @@ class TpcBenchmark(Benchmark):
                 success_count += 1
             else:
                 failure_count += 1
+                if query_config.get('continue_on_error') is False:
+                    break
 
         print(f"SUCCESS: {success_count} FAILURE: {failure_count}")
 
     def write_parquet(self, base_input_path, base_output_path):
-        for table in self._tables.get_tables():
+        for table in self.tables.get_tables():
             full_output_path = base_output_path + os.path.sep + table + ".parquet"
             full_input_path = base_input_path + os.path.sep + table + self._file_ext
             if not os.path.exists(full_input_path):
                 print(f"input file {full_input_path} does not exist")
                 exit(1)
             if not os.path.exists(full_output_path):
-                self._framework.write_file_as_parquet(self._tables.get_struct_type(table),
+                self._framework.write_file_as_parquet(self.tables.get_struct_type(table),
                                                       full_input_path,
                                                       full_output_path)
             else:
@@ -145,7 +152,7 @@ class TpcBenchmark(Benchmark):
         print(f"creating catalog for {files_path}")
         self._framework.create_db(self._config['db-name'])
         self._framework.set_db(self._config['db-name'])
-        self._framework.create_tables(self._tables, files_path)
+        self._framework.create_tables(self.tables, files_path)
 
     def delete_catalog(self):
         print(f"deleting catalog {self._config['db-name']}")
@@ -162,10 +169,10 @@ class TpcBenchmark(Benchmark):
                 db_path = os.path.abspath(self._config['parquet-path'])
         if self._verbose:
             print(f"qflock::creating table view for {db_path}")
-        self._framework.create_tables_view(self._tables, db_path)
+        self._framework.create_tables_view(self.tables, db_path)
 
     def compute_stats(self):
-        for table in self._tables.get_tables():
+        for table in self.tables.get_tables():
             print(f"computing stats for table {table}")
             self._framework.query(f"analyze table {table} COMPUTE STATISTICS FOR ALL COLUMNS")
 
@@ -184,3 +191,5 @@ class TpcdsBenchmark(TpcBenchmark):
 
     def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
         super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc)
+
+

@@ -21,10 +21,13 @@ import time
 import argparse
 from argparse import RawTextHelpFormatter
 import yaml
+
+from benchmark.benchmark_factory import BenchmarkFactory
 from framework_tools.spark_launcher import SparkLauncher
 import bench
 from benchmark.benchmark import Benchmark
 from benchmark.config import Config
+from framework_tools.spark_helper import SparkHelper
 
 
 class QflockBench:
@@ -37,6 +40,7 @@ class QflockBench:
     def __init__(self):
         self._args = None
         self._remaining_args = None
+        self._extra_args = ""
         self._query_list = []
         self._workers_list = []
         self._test_results = []
@@ -145,6 +149,10 @@ class QflockBench:
                             help="name for test")
         parser.add_argument("--catalog_name",  default="default",
                             help="catalog to use (maps to port)")
+        parser.add_argument("--dump_tables", action="store_true",
+                            help="cause every row from every table to be generated as output.")
+        parser.add_argument("--output_path", default=None,
+                            help="root folder to output results.")
         return parser
 
     def _parse_args(self):
@@ -209,7 +217,9 @@ class QflockBench:
         for w in self._workers_list:
             for q in self._query_list:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
-                      f'--query_file {q} {" ".join(self._remaining_args)}'
+                      f'--query_file {q} {" ".join(self._remaining_args)} '
+                if self._args.output_path:
+                    cmd += f'--output_path {self._args.output_path} '
                 rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
                                                                enable_stdout=self._args.log_level != "OFF",
                                                                wait_text=self._wait_for_string)
@@ -223,6 +233,8 @@ class QflockBench:
 
     def run_cmd(self):
         cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} '
+        if self._args.output_path:
+            cmd += f'--output_path {self._args.output_path} '
         if self._args.query_range:
             cmd += f'--query_range "{self._args.query_range}" '
         if self._args.query_text:
@@ -230,6 +242,7 @@ class QflockBench:
         if self._args.view_columns:
             cmd += f'--view_columns "{self._args.view_columns}" '
         cmd += " ".join(self._remaining_args)
+        cmd += self._extra_args
 
         for w in self._workers_list:
             rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
@@ -238,6 +251,15 @@ class QflockBench:
             if rc != 0:
                 self._exit_code = rc
             #print(output)
+
+    def dump_tables(self):
+        output_path = self._args.output_path
+        self._args.output_path = None
+        new_bench = BenchmarkFactory.get_benchmark(self._config, None)
+        for t in new_bench.tables.get_tables():
+            self._extra_args = f" --output_path {output_path}/table_{t}"
+            self._args.query_text = f"select * from {t}"
+            self.run_cmd()
 
     def run(self):
         if not self._parse_args():
@@ -250,6 +272,8 @@ class QflockBench:
         for loop in range(0, loops):
             if self._query_list:
                 self.run_query()
+            elif self._args.dump_tables:
+                self.dump_tables()
             else:
                 self.run_cmd()
         exit(self._exit_code)
