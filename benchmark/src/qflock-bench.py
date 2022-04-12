@@ -124,7 +124,7 @@ class QflockBench:
         parser.add_argument("--log_level", "-ll", default="OFF",
                             help="log level set to input arg.\n"
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
-        parser.add_argument("--file", "-f", default="spark_bench_tpcds.yaml",
+        parser.add_argument("--file", "-f", default="config.yaml",
                             help="config file to use, defaults to spark_bench.yaml")
         parser.add_argument("--queries", "-q",
                             help="queries to run by spark_bench.py\n"
