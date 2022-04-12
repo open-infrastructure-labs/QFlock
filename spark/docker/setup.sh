@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,9 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-QFLOCK_VERSION=1
-echo "VERSION: ${QFLOCK_VERSION}"
+pushd "$(dirname "${BASH_SOURCE[0]}")" # connect to root
 ROOT_DIR=$(pwd)
+echo "ROOT_DIR ${ROOT_DIR}"
+
+QFLOCK_VERSION=$(cat ../../qflock_version)
+echo "QFLOCK VERSION: ${QFLOCK_VERSION}"
 DOCKER_DIR=docker
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 USER_NAME=${SUDO_USER:=$USER}
@@ -43,3 +44,4 @@ mkdir -p ${ROOT_DIR}/build/.cache
 mkdir -p ${ROOT_DIR}/build/.sbt
 
 echo "Successfully included setup.sh"
+popd

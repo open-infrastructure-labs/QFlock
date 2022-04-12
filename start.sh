@@ -9,6 +9,8 @@ pushd jdbc
 ./start.sh
 popd
 
+sleep 10
+
 pushd spark
 ./start.sh
 popd
