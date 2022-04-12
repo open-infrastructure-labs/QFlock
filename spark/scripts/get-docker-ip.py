@@ -3,13 +3,12 @@ import sys
 import subprocess
 import json
 
-if len(sys.argv) < 2:
-    print("get-docker-ip.py <docker-name>")
-    print("missing docker name")
+if len(sys.argv) < 3:
+    print("Usage: get-docker-ip.py <network-name> <docker-name>")
     exit(1)
 
-network_name = 'qflock-net'
-docker_name = sys.argv[1]
+network_name = sys.argv[1]
+docker_name = sys.argv[2]
 result = subprocess.run(f'docker network inspect {network_name}'.split(' '), stdout=subprocess.PIPE)
 d = json.loads(result.stdout)
 

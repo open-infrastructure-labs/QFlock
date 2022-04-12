@@ -25,7 +25,8 @@ from hive_metastore import ttypes
 
 
 def log(*args):
-    print(*args, flush=True)
+    if False:
+        print(*args, flush=True)
     
 class ThriftHiveMetastoreHandler:
     def __init__(self):
