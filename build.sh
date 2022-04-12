@@ -17,3 +17,7 @@ pushd benchmark
 ./build.sh
 popd
 
+pushd jdbc
+./build.sh
+popd
+

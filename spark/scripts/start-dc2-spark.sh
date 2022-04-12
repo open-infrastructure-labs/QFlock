@@ -59,7 +59,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5007:5007 \
   --expose 10001 \
-  --name qflock-dc2-spark $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
+  --name qflock-spark-dc2 $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
   --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
@@ -86,7 +86,7 @@ if [ ${START_LOCAL} == "YES" ]; then
 else
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name qflock-dc2-spark \
+  --name qflock-spark-dc2 \
   --network qflock-net --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
   -w /qflock/benchmark/src \
   -e MASTER=spark://sparkmaster:7077 \

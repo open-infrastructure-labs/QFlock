@@ -16,9 +16,10 @@
     query-exceptions: "2,43,59,13,48,24a,24b,75"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
-    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
-    docker-stats: "qflock-storage-dc1:tx_bytes,qflock-dc2-spark:tx_bytes,qflock-dc2-spark:rx_bytes,\
-                   qflock-dc1-spark-app:tx_bytes,qflock-dc1-spark-app:rx_bytes"
+#    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
+    jdbc-path: "jdbc:qflock://qflock-jdbc-dc2:1433/tpcds"
+    docker-stats: "qflock-storage-dc1:tx_bytes,qflock-jdbc-dc2:tx_bytes,qflock-jdbc-dc2:rx_bytes,\
+                   qflock-spark-dc1:tx_bytes,qflock-spark-dc1:rx_bytes"
   spark:
     master: local
     hive-metastore: "qflock-storage-dc1"
@@ -41,10 +42,10 @@
 #    - spark.sql.cbo.planStats.enabled=true
 #    - spark.sql.cbo.joinReorder.enabled=true
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder
-    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.19.0.4:5006'
+    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.20.0.5:5006'
 #    packages:
 #    - org.apache.spark:spark-hive_2.12:3.2.1
     jars:
     - /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar
-#    - /qflock/jdbc/driver/target/thrift-jdbc-server-0.0.4-SNAPSHOT.jar
+    - /qflock/jdbc/driver/target/thrift-jdbc-server-0.0.4-SNAPSHOT.jar
 
