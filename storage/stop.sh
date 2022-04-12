@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
-# docker stop qflock-storage
-docker container stop $(docker container ls -q --filter name="qflock-storage*")
+QFLOCK_STORAGE=$(docker container ls -q --filter name="qflock-storage*")
 
+if [ ! -z "$QFLOCK_STORAGE" ]
+then
+  docker container stop ${QFLOCK_STORAGE}
+fi

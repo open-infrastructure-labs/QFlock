@@ -12,11 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-pushd "$(dirname "${BASH_SOURCE[0]}")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
 
-QFLOCK_VERSION=$(cat ../../qflock_version)
+# ROOT_DIR=$(pwd)
+# echo "ROOT_DIR ${ROOT_DIR}"
+
+pushd "$(dirname "${BASH_SOURCE[0]}")" # connect to root
+QFLOCK_VERSION=$(cat ${PWD}/../../qflock_version)
+popd
+
 echo "QFLOCK VERSION: ${QFLOCK_VERSION}"
 DOCKER_DIR=docker
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
@@ -37,11 +40,10 @@ DOCKER_INTERACTIVE_RUN=${DOCKER_INTERACTIVE_RUN-"-i -t"}
 # within the container and use the result on your normal
 # system.  And this also is a significant speedup in subsequent
 # builds because the dependencies are downloaded only once.
-mkdir -p ${ROOT_DIR}/build/.m2
-mkdir -p ${ROOT_DIR}/build/.gnupg
-mkdir -p ${ROOT_DIR}/build/.ivy2
-mkdir -p ${ROOT_DIR}/build/.cache
-mkdir -p ${ROOT_DIR}/build/.sbt
+mkdir -p ${PWD}/build/.m2
+mkdir -p ${PWD}/build/.gnupg
+mkdir -p ${PWD}/build/.ivy2
+mkdir -p ${PWD}/build/.cache
+mkdir -p ${PWD}/build/.sbt
 
 echo "Successfully included setup.sh"
-popd

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e # exit on error
+
 if [ ! -f docker/setup.sh ]; then
   echo "please launch script from spark directory"
   exit 1
@@ -8,6 +10,12 @@ fi
 # Include the setup for our cached local directories. (.m2, .ivy2, etc)
 source docker/setup.sh
 source docker/spark_version
+
+pushd "$(dirname "$0")" # connect to root
+ROOT_DIR=${PWD}/../
+echo "ROOT_DIR ${ROOT_DIR}"
+popd
+
 mkdir -p "${ROOT_DIR}/volume/logs"
 rm -f "${ROOT_DIR}/volume/logs/hiveserver2*.log"
 
@@ -43,12 +51,11 @@ else
   echo "LAUNCHER_IP: $LAUNCHER_IP"
 fi
 START_LOCAL="YES"
-STORAGE_HOST1="--add-host=qflock-storage-dc1:$(scripts/get-docker-ip.py qflock-storage-dc1)"
-STORAGE_HOST2="--add-host=qflock-storage-dc2:$(scripts/get-docker-ip.py qflock-storage-dc2)"
-LOCAL_DOCKER_HOST="--add-host=local-docker-host:$(scripts/get-docker-ip.py qflock-net)"
+STORAGE_HOST2="--add-host=qflock-storage-dc2:$(scripts/get-docker-ip.py qflock-net-dc2 qflock-storage-dc2)"
+LOCAL_DOCKER_HOST="--add-host=local-docker-host:$(scripts/get-docker-ip.py qflock-net qflock-net)"
 
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
-echo "Storage ${STORAGE_HOST1} ${STORAGE_HOST2}"
+echo "Storage ${STORAGE_HOST2}"
 
 DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
@@ -59,8 +66,8 @@ if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5007:5007 \
   --expose 10001 \
-  --name qflock-spark-dc2 $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
-  --network qflock-net \
+  --name qflock-spark-dc2 ${STORAGE_HOST2} ${LOCAL_DOCKER_HOST} \
+  --network qflock-net-dc2 \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
@@ -87,7 +94,7 @@ else
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
   --name qflock-spark-dc2 \
-  --network qflock-net --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
+  --network qflock-net-dc2 --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
   -w /qflock/benchmark/src \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \

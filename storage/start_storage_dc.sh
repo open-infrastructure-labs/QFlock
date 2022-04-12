@@ -5,7 +5,6 @@ pushd "$(dirname "$0")" # connect to root
 ROOT_DIR=$(pwd)
 echo "ROOT_DIR ${ROOT_DIR}"
 
-
 if [ -z "$1" ]
   then
     DC=dc1
@@ -42,11 +41,6 @@ mkdir -p ${ROOT_DIR}/data
 CMD="bin/run_services.sh"
 RUNNING_MODE="daemon"
 
-# Check if qflock network exists
-if ! docker network ls | grep qflock-net; then
-  docker network create qflock-net
-fi
-
 DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/data:/data \
   -v ${ROOT_DIR}/volume/${DC}/namenode:/opt/volume/namenode \
@@ -63,7 +57,7 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -e HADOOP_HOME=${HADOOP_HOME} \
   -e HIVE_HOME=${HIVE_HOME} \
   -e RUNNING_MODE=${RUNNING_MODE} \
-  --network qflock-net \
+  --network qflock-net-${DC} \
   --name qflock-storage-${DC}  --hostname qflock-storage-${DC} \
   qflock-storage-${USER_NAME} ${CMD}"
 
