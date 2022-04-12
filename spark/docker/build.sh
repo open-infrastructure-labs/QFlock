@@ -32,9 +32,20 @@ if [ ! -f ${DOCKER_DIR}/${SPARK_PACKAGE} ]
 then
   exit
 fi
+if [ ! -f ${DOCKER_DIR}/${HADOOP_PACKAGE} ]
+then
+  echo "build.sh: Downloading ${HADOOP_PACKAGE}"
+  curl -L ${HADOOP_PACKAGE_URL} --output ${DOCKER_DIR}/${HADOOP_PACKAGE}
+fi
+if [ ! -f ${DOCKER_DIR}/${HADOOP_PACKAGE} ]
+then
+  exit
+fi
 
 echo "build.sh: Building ${SPARK_DOCKER_BASE_NAME} docker"
-docker build -f Dockerfile --build-arg SPARK_VERSION=$SPARK_VERSION -t ${SPARK_DOCKER_BASE_NAME} -f Dockerfile .
+docker build -f Dockerfile --build-arg SPARK_VERSION=$SPARK_VERSION \
+                           --build-arg HADOOP_VERSION=$HADOOP_VERSION \
+                           -t ${SPARK_DOCKER_BASE_NAME} -f Dockerfile .
 STATUS=$?
 if [ $STATUS -ne 0 ]; then
     echo "build.sh: Error building docker (status=$STATUS)"

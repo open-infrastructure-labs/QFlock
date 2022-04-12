@@ -18,6 +18,11 @@ echo "ROOT_DIR ${ROOT_DIR}"
 
 QFLOCK_VERSION=$(cat ../../qflock_version)
 echo "QFLOCK VERSION: ${QFLOCK_VERSION}"
+
+HADOOP_VERSION="2.7.4"
+HADOOP_PACKAGE_URL="https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz"
+HADOOP_PACKAGE="hadoop-${HADOOP_VERSION}.tar.gz"
+HADOOP_DIR="hadoop-${HADOOP_VERSION}"
 DOCKER_DIR=docker
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 USER_NAME=${SUDO_USER:=$USER}

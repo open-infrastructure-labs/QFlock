@@ -63,6 +63,15 @@ RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /e
 && sudo apt-get update \
 && sudo apt-get install sbt
 
+# Setup Hadoop
+ARG HADOOP_VERSION=
+ENV HADOOP_VERSION ${HADOOP_VERSION}
+ENV HADOOP_PACKAGE hadoop-${HADOOP_VERSION}.tar.gz
+ADD /${HADOOP_PACKAGE} /opt
+ENV HADOOP_HOME /opt/hadoop-${HADOOP_VERSION}
+ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
+RUN echo $LD_LIBRARY_PATH $HADOOP_HOME
+
 # Setup Spark Environment
 ARG SPARK_VERSION=
 ENV SPARK_VERSION ${SPARK_VERSION}
