@@ -12,11 +12,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-pushd "$(dirname "${BASH_SOURCE[0]}")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
 
+ROOT_DIR=$(pwd)
+
+pushd "$(dirname "${BASH_SOURCE[0]}")" # connect to root
 QFLOCK_VERSION=$(cat ../../qflock_version)
+popd
 echo "QFLOCK VERSION: ${QFLOCK_VERSION}"
 
 ROOT_DIR=$(pwd)
@@ -47,4 +48,3 @@ mkdir -p ${ROOT_DIR}/build/.cache
 mkdir -p ${ROOT_DIR}/build/.sbt
 
 echo "Successfully included setup.sh"
-popd
