@@ -19,9 +19,9 @@ CMD="${DOCKER_HOME_DIR}/bin/start-thrift.sh"
 
 RUNNING_MODE="daemon"
 START_LOCAL="YES"
-STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc1)"
-STORAGE_HOST2="--add-host=qflock-storage-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc2)"
-LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py qflock-net)"
+# STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc1)"
+STORAGE_HOST2="--add-host=qflock-storage-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-net-dc2 qflock-storage-dc2)"
+LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py qflock-net-dc2 qflock-net-dc2)"
 
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
 echo "Storage ${STORAGE_HOST1} ${STORAGE_HOST2}"
@@ -37,8 +37,8 @@ if [ ${START_LOCAL} == "YES" ]; then
   -p 5007:5007 \
   --expose 10001 \
   --name $DOCKER_NAME --hostname $DOCKER_NAME \
-  $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
-  --network qflock-net \
+  $STORAGE_HOST2 $LOCAL_DOCKER_HOST \
+  --network qflock-net-dc2 \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \

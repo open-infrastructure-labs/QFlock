@@ -6,3 +6,5 @@ driver/src/main/java/com/github/qflock/jdbc/api/
 driver/target/
 server/__init__.py
 server/com/
+*.tar.gz
+
