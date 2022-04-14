@@ -19,11 +19,11 @@ mkdir -p "${SPARK_DIR}/volume/user/hive"
 CMD="sleep 365d"
 RUNNING_MODE="daemon"
 START_LOCAL="YES"
-STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc1)"
-STORAGE_HOST2="--add-host=qflock-storage-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc2)"
+STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qflock-net-dc1 qflock-storage-dc1)"
+# STORAGE_HOST2="--add-host=qflock-storage-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc2)"
 #DC2_SPARK_HOST="--add-host=qflock-spark-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-spark-dc2)"
-LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py qflock-net)"
-JDBC_DOCKER="--add-host=qflock-jdbc-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-jdbc-dc2)"
+LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py qflock-net-dc1 qflock-net-dc1)"
+# JDBC_DOCKER="--add-host=qflock-jdbc-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-jdbc-dc2)"
 
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
 echo "Storage ${STORAGE_HOST1} ${STORAGE_HOST1}"
@@ -38,8 +38,8 @@ if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
   --name $DOCKER_NAME --hostname $DOCKER_NAME \
-  $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST $JDBC_DOCKER \
-  --network qflock-net \
+  $STORAGE_HOST1 $LOCAL_DOCKER_HOST \
+  --network qflock-net-dc1 \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \

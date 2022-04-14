@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="configuration.xsl"?>
+
+<configuration>
+    <property>
+        <name>dfs.data.dir</name>
+        <value>file:///opt/volume/datanode</value>
+    </property>
+
+    <property>
+        <name>dfs.name.dir</name>
+        <value>file:///opt/volume/namenode</value>
+    </property>
+
+    <property>
+        <name>dfs.webhdfs.enabled</name>
+        <value>true</value>
+    </property>
+
+    <property>
+      <name>dfs.replication</name>
+      <value>1</value>
+      <description>Block Replication factor</description>
+    </property>
+
+    <property>
+      <name>dfs.stream-buffer-size</name>
+      <value>65536</value>
+      <description>Block Replication factor</description>
+    </property>
+
+    <property>
+      <name>dfs.datanode.handler.count</name>
+      <value>1024</value>
+      <description>Block Replication factor</description>
+    </property>
+
+   <property>
+      <name>dfs.stream-buffer-size</name>
+      <value>131072</value>
+      <description>Determines how much data is buffered during read and write operations</description>
+    </property>
+
+   <property>
+      <name>dfs.datanode.readahead.bytes</name>
+      <value>0</value>
+      <description>
+          Datanode can use the posix_fadvise system call to explicitly page data
+          into the operating system buffer cache ahead of the current reader's position.
+      </description>
+    </property>
+
+   <property>
+      <name>dfs.datanode.drop.cache.behind.reads</name>
+      <value>true</value>
+      <description>
+          Automatically purge all data from the buffer cache after it is delivered to the client.
+       </description>
+    </property>
+
+    <property>
+      <name>dfs.permissions.enabled</name>
+      <value>false</value>
+    </property>
+
+    <property>
+      <name>dfs.permissions.superusergroup</name>
+      <value>operator</value>
+    </property>
+
+<property>
+  <name>dfs.namenode.rpc-bind-host</name>
+  <value>0.0.0.0</value>
+  <description>
+    The actual address the RPC server will bind to. If this optional address is
+    set, it overrides only the hostname portion of dfs.namenode.rpc-address.
+    It can also be specified per name node or name service for HA/Federation.
+    This is useful for making the name node listen on all interfaces by
+    setting it to 0.0.0.0.
+  </description>
+</property>
+
+    <property>
+      <name>dfs.namenode.servicerpc-bind-host</name>
+      <value>0.0.0.0</value>
+      <description>
+        The actual address the service RPC server will bind to. If this optional address is
+        set, it overrides only the hostname portion of dfs.namenode.servicerpc-address.
+        It can also be specified per name node or name service for HA/Federation.
+        This is useful for making the name node listen on all interfaces by
+        setting it to 0.0.0.0.
+      </description>
+    </property>
+
+    <property>
+      <name>dfs.namenode.http-bind-host</name>
+      <value>0.0.0.0</value>
+      <description>
+        The actual address the HTTP server will bind to. If this optional address
+        is set, it overrides only the hostname portion of dfs.namenode.http-address.
+        It can also be specified per name node or name service for HA/Federation.
+        This is useful for making the name node HTTP server listen on all
+        interfaces by setting it to 0.0.0.0.
+      </description>
+    </property>
+
+    <property>
+      <name>dfs.namenode.https-bind-host</name>
+      <value>0.0.0.0</value>
+      <description>
+        The actual address the HTTPS server will bind to. If this optional address
+        is set, it overrides only the hostname portion of dfs.namenode.https-address.
+        It can also be specified per name node or name service for HA/Federation.
+        This is useful for making the name node HTTPS server listen on all
+        interfaces by setting it to 0.0.0.0.
+      </description>
+    </property>
+
+    <property>
+      <name>dfs.client.use.datanode.hostname</name>
+      <value>true</value>
+      <description>Whether clients should use datanode hostnames when
+        connecting to datanodes.
+      </description>
+    </property>
+
+</configuration>
