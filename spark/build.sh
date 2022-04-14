@@ -1,12 +1,11 @@
 #!/bin/bash
 set -e
 
-pushd "$(dirname "$0")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
+pushd "$(dirname "$0")"
 
 if [ ! -d build ]; then
-  mkdir build
+  echo "Creating build directories"
+  source docker/setup_build.sh
 fi
 
 pushd docker

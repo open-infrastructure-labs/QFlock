@@ -208,7 +208,7 @@ class SparkHelper:
                 new_line = re.sub("\\s+", " ", new_line)
                 lines.append(new_line)
             query = " ".join(lines)
-            if limit:
+            if limit and 'LIMIT' not in query:
                 query += f" LIMIT {limit}"
             if self._verbose:
                 print(f"Executing spark query {query_file}: {query}")

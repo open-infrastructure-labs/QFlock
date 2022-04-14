@@ -1,12 +1,11 @@
 #!/bin/bash
 
 pushd "$(dirname "$0")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
+WORKING_DIR=$(pwd)
+echo "WORKING_DIR ${WORKING_DIR}"
 
 ./clean.sh
-rm -rf ${ROOT_DIR}/volume
-echo "spark clean all done"
-
-${ROOT_DIR}/docker/clean.sh
+rm -rf ${WORKING_DIR}/volume
+${WORKING_DIR}/docker/clean.sh
 popd
+echo "spark clean all done"

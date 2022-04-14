@@ -1,10 +1,11 @@
 #!/bin/bash
-pushd "$(dirname "$0")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
 
-rm -rf ${ROOT_DIR}/build
-pushd ${ROOT_DIR}/extensions
+pushd "$(dirname "$0")" # connect to root
+WORKING_DIR=$(pwd)
+echo "WORKING_DIR ${WORKING_DIR}"
+
+rm -rf ${WORKING_DIR}/build
+pushd ${WORKING_DIR}/extensions
 ./clean.sh
 popd
 echo "spark clean done"

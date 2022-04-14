@@ -26,10 +26,12 @@ DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
   DOCKER_IT="-i -t"
 fi
+DOCKER_NAME="qflock-jdbc-dc2"
 CMD="/scripts/start-jdbc-daemon.sh"
 DOCKER_RUN="docker run ${DOCKER_IT} --rm \
-  --name qflock-jdbc-dc2 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
-  --network qflock-net-dc2 \
+  --name $DOCKER_NAME --hostname $DOCKER_NAME \
+  $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST\
+  --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
@@ -63,4 +65,3 @@ else
 
   cat "${ROOT_DIR}/volume/status/JDBC_STATE"
 fi
-popd

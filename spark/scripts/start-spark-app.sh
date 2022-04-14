@@ -1,115 +1,89 @@
 #!/bin/bash
 
-if [ ! -f docker/setup.sh ]; then
-  echo "please launch script from spark directory"
-  exit 1
-fi
-
+pushd "$(dirname "$0")"
+ROOT_DIR=$(git rev-parse --show-toplevel)
+SPARK_DIR=$ROOT_DIR/spark
+SCRIPTS_DIR=$SPARK_DIR/scripts
 # Include the setup for our cached local directories. (.m2, .ivy2, etc)
-source docker/setup.sh
-source docker/spark_version
+source ../docker/setup.sh
+source ../docker/spark_version
+mkdir -p "${SPARK_DIR}/volume/logs"
+rm -f "${SPARK_DIR}/volume/logs/master*.log"
 
-pushd "$(dirname "$0")" # connect to root
-ROOT_DIR=${PWD}/../
-echo "ROOT_DIR ${ROOT_DIR}"
-popd
+mkdir -p "${SPARK_DIR}/volume/status"
+rm -f "${SPARK_DIR}/volume/status/MASTER*"
 
-mkdir -p "${ROOT_DIR}/volume/logs"
-rm -f "${ROOT_DIR}/volume/logs/master*.log"
-
-mkdir -p "${ROOT_DIR}/volume/status"
-rm -f "${ROOT_DIR}/volume/status/MASTER*"
-
-mkdir -p "${ROOT_DIR}/volume/metastore"
-mkdir -p "${ROOT_DIR}/volume/user/hive"
+mkdir -p "${SPARK_DIR}/volume/metastore"
+mkdir -p "${SPARK_DIR}/volume/user/hive"
 
 CMD="sleep 365d"
 RUNNING_MODE="daemon"
-START_LOCAL="NO"
-CONFIG="scripts/conf/spark.config"
-if [ ! -f ${CONFIG} ]; then
-  START_LOCAL="YES"
-else
-  DOCKER_HOSTS="$(cat ${CONFIG} | grep DOCKER_HOSTS)"
-  IFS='=' read -a IP_ARRAY <<< "$DOCKER_HOSTS"
-  DOCKER_HOSTS=${IP_ARRAY[1]}
-  HOSTS=""
-  IFS=',' read -a IP_ARRAY <<< "$DOCKER_HOSTS"
-  for i in "${IP_ARRAY[@]}"
-  do
-    HOSTS="$HOSTS --add-host=$i"
-  done
-  DOCKER_HOSTS=$HOSTS
-  echo "Docker Hosts: $DOCKER_HOSTS"
-
-  LAUNCHER_IP="$(cat ${CONFIG} | grep LAUNCHER_IP)"
-  IFS='=' read -a IP_ARRAY <<< "$LAUNCHER_IP"
-  LAUNCHER_IP=${IP_ARRAY[1]}
-  echo "LAUNCHER_IP: $LAUNCHER_IP"
-fi
 START_LOCAL="YES"
-STORAGE_HOST1="--add-host=qflock-storage-dc1:$(scripts/get-docker-ip.py qflock-net-dc1 qflock-storage-dc1)"
-LOCAL_DOCKER_HOST="--add-host=local-docker-host:$(scripts/get-docker-ip.py qflock-net qflock-net)"
-
+STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc1)"
+STORAGE_HOST2="--add-host=qflock-storage-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-storage-dc2)"
+#DC2_SPARK_HOST="--add-host=qflock-spark-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-spark-dc2)"
+LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py qflock-net)"
+JDBC_DOCKER="--add-host=qflock-jdbc-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-jdbc-dc2)"
 
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
-echo "Storage ${STORAGE_HOST1} "
+echo "Storage ${STORAGE_HOST1} ${STORAGE_HOST1}"
 
 DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
   DOCKER_IT="-i -t"
 fi
-
+echo "Command is: ${CMD}"
+DOCKER_NAME="qflock-spark-dc1"
 if [ ${START_LOCAL} == "YES" ]; then
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name qflock-spark-dc1 \
-  ${STORAGE_HOST1} ${LOCAL_DOCKER_HOST} \
-  --network qflock-net-dc1 \
+  --name $DOCKER_NAME --hostname $DOCKER_NAME \
+  $STORAGE_HOST1 $STORAGE_HOST2 $LOCAL_DOCKER_HOST $JDBC_DOCKER \
+  --network qflock-net \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
   -e SPARK_LOG_DIR=/opt/volume/logs \
-  --mount type=bind,source=$(pwd)/../,target=/qflock \
+  --mount type=bind,source=$ROOT_DIR,target=/qflock \
   -w /qflock/benchmark/src \
-  --mount type=bind,source=$(pwd)/spark,target=/spark \
-  --mount type=bind,source=$(pwd)/extensions/,target=/extensions \
-  -v $(pwd)/conf/master:/opt/spark-$SPARK_VERSION/conf  \
-  -v ${ROOT_DIR}/volume/metastore:/opt/volume/metastore \
-  -v ${ROOT_DIR}/volume/user/hive:/user/hive \
-  -v ${ROOT_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \
-  -v ${ROOT_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg \
-  -v ${ROOT_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt \
-  -v ${ROOT_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache \
-  -v ${ROOT_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2 \
-  -v ${ROOT_DIR}/volume/status:/opt/volume/status \
-  -v ${ROOT_DIR}/volume/logs:/opt/volume/logs \
-  -v ${ROOT_DIR}/bin/:${DOCKER_HOME_DIR}/bin \
+  --mount type=bind,source=$SPARK_DIR/spark,target=/spark \
+  --mount type=bind,source=$SPARK_DIR/extensions/,target=/extensions \
+  -v $SPARK_DIR/conf/master:/opt/spark-$SPARK_VERSION/conf  \
+  -v ${SPARK_DIR}/volume/metastore:/opt/volume/metastore \
+  -v ${SPARK_DIR}/volume/user/hive:/user/hive \
+  -v ${SPARK_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \
+  -v ${SPARK_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg \
+  -v ${SPARK_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt \
+  -v ${SPARK_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache \
+  -v ${SPARK_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2 \
+  -v ${SPARK_DIR}/volume/status:/opt/volume/status \
+  -v ${SPARK_DIR}/volume/logs:/opt/volume/logs \
+  -v ${SPARK_DIR}/bin/:${DOCKER_HOME_DIR}/bin \
   -e RUNNING_MODE=${RUNNING_MODE} \
   -u ${USER_ID} \
   ${SPARK_DOCKER_NAME} ${CMD}"
 else
   DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -p 5006:5006 \
-  --name qflock-spark-dc1 \
-  --network qflock-net-dc1 --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
+  --name $DOCKER_NAME --hostname $DOCKER_NAME \
+  --network qflock-net --ip ${LAUNCHER_IP} ${DOCKER_HOSTS} \
   -w /qflock/benchmark/src \
   -e MASTER=spark://sparkmaster:7077 \
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
   -e SPARK_MASTER="spark://sparkmaster:7077" \
   -e SPARK_DRIVER_HOST=${LAUNCHER_IP} \
-  --mount type=bind,source=$(pwd)/spark,target=/spark \
-  --mount type=bind,source=$(pwd)/build,target=/build \
-  -v $(pwd)/conf/master:/conf  \
-  -v ${ROOT_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \
-  -v ${ROOT_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg \
-  -v ${ROOT_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt \
-  -v ${ROOT_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache \
-  -v ${ROOT_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2 \
-  -v ${ROOT_DIR}/volume/status:/opt/volume/status \
-  -v ${ROOT_DIR}/volume/logs:/opt/volume/logs \
-  -v ${ROOT_DIR}/bin/:${DOCKER_HOME_DIR}/bin \
+  --mount type=bind,source=$SPARK_DIR/spark,target=/spark \
+  --mount type=bind,source=$SPARK_DIR/build,target=/build \
+  -v $SPARK_DIR/conf/master:/conf  \
+  -v ${SPARK_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \
+  -v ${SPARK_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg \
+  -v ${SPARK_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt \
+  -v ${SPARK_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache \
+  -v ${SPARK_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2 \
+  -v ${SPARK_DIR}/volume/status:/opt/volume/status \
+  -v ${SPARK_DIR}/volume/logs:/opt/volume/logs \
+  -v ${SPARK_DIR}/bin/:${DOCKER_HOME_DIR}/bin \
   -e RUNNING_MODE=${RUNNING_MODE} \
   -u ${USER_ID} \
   ${SPARK_DOCKER_NAME} ${CMD}"

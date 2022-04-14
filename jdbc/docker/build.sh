@@ -14,11 +14,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-ROOT_DIR=$(pwd)
+pushd "$(dirname "$0")"
 source setup.sh
 
-DOCKER_DIR=${ROOT_DIR}
+DOCKER_DIR=$(pwd)
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 
 THRIFT_VERSION=0.16.0
@@ -82,3 +81,4 @@ else
     exit 0
 fi
 
+popd
