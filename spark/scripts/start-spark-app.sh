@@ -44,6 +44,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   -e SPARK_CONF_DIR=/conf \
   -e SPARK_PUBLIC_DNS=localhost \
   -e SPARK_LOG_DIR=/opt/volume/logs \
+  -e HADOOP_CONF_DIR=/opt/spark-$SPARK_VERSION/conf \
   --mount type=bind,source=$ROOT_DIR,target=/qflock \
   -w /qflock/benchmark/src \
   --mount type=bind,source=$SPARK_DIR/spark,target=/spark \
