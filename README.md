@@ -19,10 +19,21 @@ git submodule update --recursive --progress
 ```shell
 ./stop.sh
 ```
-# clean
+# clean<BR>
+to clean out build artifacts
 ```shell
 ./clean.sh
 ```
+# clean all<BR>
+cleans out build artifacts and all other artifacts including dockers and downloads
+```shell
+./clean_all.sh
+```
+# clean all but skip docker removal
+```shell
+NO_CLEAN_DOCKERS ./clean_all.sh
+```
+
 # reinitialize
 Use these commands to stop services, remove all artifacts and rebuild the repo.
 ```shell
