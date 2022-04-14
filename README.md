@@ -31,7 +31,7 @@ cleans out build artifacts and all other artifacts including dockers and downloa
 ```
 # clean all but skip docker removal
 ```shell
-NO_CLEAN_DOCKERS ./clean_all.sh
+NO_CLEAN_DOCKERS=1 ./clean_all.sh
 ```
 
 # reinitialize
