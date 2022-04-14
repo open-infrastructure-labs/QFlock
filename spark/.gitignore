@@ -3,3 +3,4 @@ volume/
 /build
 /spark
 /docker/spark-*.tgz
+/docker/hadoop-*tar.gz

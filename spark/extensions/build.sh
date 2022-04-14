@@ -1,5 +1,15 @@
+#!/bin/bash
+
+pushd "$(dirname "$0")"
 source ../docker/spark_version
 source ../docker/setup.sh
+WORKING_DIR=$(pwd)
+echo "WORKING_DIR: $WORKING_DIR"
+
+if [ ! -d build ]; then
+  # Create build directories.
+  source ../docker/setup_build.sh
+fi
 
 SPARK_JAR_DIR=../build/spark-${SPARK_VERSION}/jars/
 if [ ! -d $SPARK_JAR_DIR ]; then
@@ -26,11 +36,11 @@ if [ "$#" -gt 0 ]; then
     docker run --rm -it --name extensions-build-debug \
       --network host \
       --mount type=bind,source="$(pwd)",target=/extensions \
-      -v "${ROOT_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2" \
-      -v "${ROOT_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg" \
-      -v "${ROOT_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt" \
-      -v "${ROOT_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache" \
-      -v "${ROOT_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2" \
+      -v "${WORKING_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2" \
+      -v "${WORKING_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg" \
+      -v "${WORKING_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt" \
+      -v "${WORKING_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache" \
+      -v "${WORKING_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2" \
       -u "${USER_ID}" \
       --entrypoint /bin/bash -w /extensions \
       ${SPARK_DOCKER_NAME}
@@ -40,12 +50,13 @@ else
   docker run --rm -it --name extensions-build \
     --network qflock-net \
     --mount type=bind,source="$(pwd)",target=/extensions \
-    -v "${ROOT_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2" \
-    -v "${ROOT_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg" \
-    -v "${ROOT_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt" \
-    -v "${ROOT_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache" \
-    -v "${ROOT_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2" \
+    -v "${WORKING_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2" \
+    -v "${WORKING_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg" \
+    -v "${WORKING_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt" \
+    -v "${WORKING_DIR}/build/.cache:${DOCKER_HOME_DIR}/.cache" \
+    -v "${WORKING_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2" \
     -u "${USER_ID}" \
     --entrypoint /extensions/scripts/build.sh -w /extensions \
     ${SPARK_DOCKER_NAME}
 fi
+popd
