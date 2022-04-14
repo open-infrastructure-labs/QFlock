@@ -168,7 +168,9 @@ class QflockBench:
         parser = self.get_parser()
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
-        self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
+        self._wait_for_string = None
+        if not self._args.terse:
+            self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
         if "--capture_log_level" in self._remaining_args:
             self._wait_for_string = None
         return True
