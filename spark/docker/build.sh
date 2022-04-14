@@ -14,13 +14,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+pushd "$(dirname "$0")"
 source spark_version
 echo "build.sh: SPARK_VERSION $SPARK_VERSION"
-
-ROOT_DIR=$(pwd)
 source setup.sh
 
-DOCKER_DIR=${ROOT_DIR}
+DOCKER_DIR=$(pwd)
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 
 if [ ! -f ${DOCKER_DIR}/${SPARK_PACKAGE} ]
@@ -90,3 +89,4 @@ else
     exit 0
 fi
 
+popd

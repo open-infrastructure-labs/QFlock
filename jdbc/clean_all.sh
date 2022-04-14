@@ -1,12 +1,12 @@
 #!/bin/bash
 
 pushd "$(dirname "$0")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
+WORKING_DIR=$(pwd)
+echo "WORKING_DIR ${WORKING_DIR}"
 
 ./clean.sh
 
 rm -rf volume
-${ROOT_DIR}/docker/clean.sh
+${WORKING_DIR}/docker/clean.sh
 popd
 echo "jdbc clean all done"

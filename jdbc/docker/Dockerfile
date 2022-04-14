@@ -39,7 +39,7 @@ RUN echo "$THRIFT_VERSION $THRIFT_PATH $THRIFT_PACKAGE"
 
 COPY /${THRIFT_PACKAGE} /opt
 RUN cd /opt && tar -xzf ${THRIFT_PACKAGE} && \
-    cd ${THRIFT_PATH} && pwd && ls -l && \
+    cd ${THRIFT_PATH} && \
   ./configure --with-java --with-python --host=x86_64 --target=x86_64 --build=x86_64\
   make && \
   make install && \
