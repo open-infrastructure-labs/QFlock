@@ -58,7 +58,8 @@ class QflockBench:
         if self._args.queries:
             self._query_list = Benchmark.get_query_list(self._args.queries,
                                                         self._config['benchmark']['query-path'],
-                                                        self._config['benchmark']['query-extension'])
+                                                        self._config['benchmark']['query-extension'],
+                                                        self._config['benchmark']['query-exceptions'].split(","))
 
     def _parse_workers_list(self):
         increment = self._args.workers.split("+")

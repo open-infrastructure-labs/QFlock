@@ -41,7 +41,8 @@ class Benchmark:
         pass
 
     @classmethod
-    def _get_all_queries(cls, query_path, query_extension, exception_list=None):
+    def _get_all_queries(cls, query_path, query_extension, exception_list=None,
+                         start_query=None):
         all_queries = []
         if os.path.exists(query_path):
             queries = glob(os.path.join(query_path, f"*.{query_extension}"))
@@ -59,6 +60,16 @@ class Benchmark:
                    int(re.sub("\D+", "",
                        f.rsplit(os.path.sep, 1)[1].rsplit(os.path.extsep, 1)[0]))
                        if re.search("\d", f) else 99999999)
+            if start_query:
+                new_queries = []
+                start_pattern = f"\/{start_query}.sql"
+                skip = True
+                for q in queries:
+                    if re.search(start_pattern, q):
+                        skip = False
+                    if not skip:
+                        new_queries.append(q)
+                queries = new_queries
 
             all_queries.extend(queries)
         return all_queries
@@ -84,6 +95,11 @@ class Benchmark:
         for i in query_selections:
             if i == "*":
                 query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions))
+            elif "-*" in i:
+                r = i.split("-")
+                if len(r) == 2:
+                    query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions,
+                                                                 start_query=r[0]))
             elif "-" in i:
                 r = i.split("-")
                 if len(r) == 2:

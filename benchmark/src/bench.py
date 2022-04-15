@@ -232,5 +232,9 @@ class BenchmarkApp:
 
 
 if __name__ == "__main__":
+    # from benchmark.benchmark import Benchmark
+    # exception_list = ["2","43","59","13","48","24a","24b","75"]
+    # q_list = Benchmark.get_query_list("*", "queries/tpcds", "sql", exception_list)
+    # print(q_list)
     bench = BenchmarkApp()
     bench.run()
