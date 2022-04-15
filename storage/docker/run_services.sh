@@ -27,7 +27,7 @@ sleep 1
 # Hive setup
 export PATH=$PATH:$HIVE_HOME/bin
 
-$HIVE_HOME/bin/hive --service metastore &
+$HIVE_HOME/bin/hive --service metastore &> /opt/volume/metastore/metastore.log &
 sleep 1
 
 python3 ${HADOOP_HOME}/bin/metastore/hive_metastore_proxy.py &
