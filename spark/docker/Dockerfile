@@ -92,6 +92,9 @@ RUN mv /opt/${SPARK_PACKAGE_FOLDER} ${SPARK_HOME}
 RUN sudo python3 -mpip install pyspark==${SPARK_VERSION}
 WORKDIR $SPARK_HOME
 
+# Install iperf3 for bandwidth testing
+RUN apt-get -q update && apt-get -q install -y --no-install-recommends iperf3
+
 COPY entry.sh /usr/local/bin/entry.sh
 RUN chmod a+x /usr/local/bin/entry.sh
 
