@@ -36,6 +36,7 @@ class DockerStat(BenchmarkStat):
         self._end_bytes = 0
         self._container_name = container_name
         self._stat_name = stat_name
+        self.header = f"{self._container_name}:{self._stat_name}"
 
     def start(self):
         if self._enabled:
@@ -48,7 +49,7 @@ class DockerStat(BenchmarkStat):
                                   .stats(stream=False)['networks']['eth0'][self._stat_name]
 
     def __str__(self):
-        return f"{self._container_name} {self._stat_name} {self._end_bytes - self._start_bytes} "
+        return f"{self._end_bytes - self._start_bytes} "
 
     @classmethod
     def get_stats(cls, names):

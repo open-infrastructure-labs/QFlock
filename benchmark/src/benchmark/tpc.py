@@ -30,7 +30,7 @@ class TpcBenchmark(Benchmark):
        running queries against those tables."""
 
     def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
-                 jdbc=False):
+                 jdbc=False, test_num=0):
         super().__init__(name, config, framework, tables)
         # self._tables = tables
         self._file_ext = "." + self._config['file-extension']
@@ -39,7 +39,9 @@ class TpcBenchmark(Benchmark):
         self._jdbc = jdbc
         if self._jdbc:
             self._catalog = False
-        self._stat_list = [HdfsLogStat()]
+        print(f"test_num: {test_num}")
+        self._test_num = test_num
+        self._stat_list = [] #[HdfsLogStat()]
         self._stat_list.extend(DockerStat.get_stats(self._config['docker-stats']))
         self._limit_rows = None
         if 'limit-rows' in self._config and self._config['limit-rows'] != "":
@@ -78,15 +80,18 @@ class TpcBenchmark(Benchmark):
         result = self._framework.query(query_string, explain=explain)
         print("qflock::query finished::")
         stat_result = ""
+        stat_header = ""
         for s in self._stat_list:
             s.end()
-            stat_result += str(s)
-
+            stat_result += f"{str(s)},"
+            stat_header += f"{str(s.header)},"
         print("qflock::process result::")
         if result is not None:
             result.process_result()
             print("qflock::process result done::")
-        print(result.brief_result() + " " + stat_result)
+        if self._test_num == 0:
+            print(f"qflock:: ,{result.header()},{stat_header}")
+        print(f"qflock:: ,{result.brief_result()},{stat_result}")
         return result
 
     def query_file(self, query_file, explain=False):
@@ -99,14 +104,18 @@ class TpcBenchmark(Benchmark):
                                                  limit=self._limit_rows)
         print("qflock::query finished::")
         stat_result = ""
+        stat_header = ""
         for s in self._stat_list:
             s.end()
-            stat_result += str(s)
+            stat_result += f"{str(s)},"
+            stat_header += f"{str(s.header)},"
         print("qflock::process result::")
         if result is not None:
             result.process_result()
             print("qflock::process result done::")
-        print(result.brief_result() + " " + stat_result)
+        if self._test_num == 0:
+            print(f"qflock:: ,{result.header()},{stat_header}")
+        print(f"qflock:: ,{result.brief_result()},{stat_result}")
         return result
 
     def query_range(self, query_config, explain=False):
@@ -128,6 +137,7 @@ class TpcBenchmark(Benchmark):
                 failure_count += 1
                 if query_config.get('continue_on_error') is False:
                     break
+            self._test_num += 1
 
         print(f"SUCCESS: {success_count} FAILURE: {failure_count}")
 
@@ -181,15 +191,15 @@ class TpchBenchmark(TpcBenchmark):
     """A TPC-H benchmark, which is capable of generating the TPC-H tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
-        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False, test_num=0):
+        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc, test_num)
 
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False):
-        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False, test_num=0):
+        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc, test_num)
 
 

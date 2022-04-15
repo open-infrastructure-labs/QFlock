@@ -21,11 +21,11 @@ from benchmark.tpc import TpcdsBenchmark
 
 class BenchmarkFactory:
     @classmethod
-    def get_benchmark(cls, config, sh, verbose=False, no_catalog=False, jdbc=False):
+    def get_benchmark(cls, config, sh, verbose=False, no_catalog=False, jdbc=False, test_num=0):
         if config['benchmark']['db-name'] == "tpch":
             return TpchBenchmark(config['benchmark'], sh, verbose,
-                                 no_catalog, jdbc)
+                                 no_catalog, jdbc, test_num)
         if config['benchmark']['db-name'] == "tpcds":
             return TpcdsBenchmark(config['benchmark'], sh, verbose,
-                                  no_catalog, jdbc)
+                                  no_catalog, jdbc, test_num)
         return None
