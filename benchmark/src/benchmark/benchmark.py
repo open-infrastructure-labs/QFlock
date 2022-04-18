@@ -42,7 +42,7 @@ class Benchmark:
 
     @classmethod
     def _get_all_queries(cls, query_path, query_extension, exception_list=None,
-                         start_query=None):
+                         start_query=None, end_query=None):
         all_queries = []
         if os.path.exists(query_path):
             queries = glob(os.path.join(query_path, f"*.{query_extension}"))
@@ -63,10 +63,14 @@ class Benchmark:
             if start_query:
                 new_queries = []
                 start_pattern = f"\/{start_query}.sql"
+                end_pattern = f"\/{end_query}.sql"
                 skip = True
                 for q in queries:
                     if re.search(start_pattern, q):
                         skip = False
+                    if end_query and re.search(end_pattern, q):
+                        new_queries.append(q)
+                        break
                     if not skip:
                         new_queries.append(q)
                 queries = new_queries
@@ -103,9 +107,8 @@ class Benchmark:
             elif "-" in i:
                 r = i.split("-")
                 if len(r) == 2:
-                    for t in range(int(r[0]), int(r[1]) + 1):
-                        qf = Benchmark.get_query_files(str(t), query_path, query_extension, exceptions)
-                        query_list.extend(qf)
+                    query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions,
+                                                                 start_query=r[0], end_query=r[1]))
             else:
                 qf = Benchmark.get_query_files(str(i), query_path, query_extension, exceptions)
                 query_list.extend(qf)
