@@ -112,11 +112,18 @@ class BenchmarkResult:
             else:
                 self.size_bytes_pq = os.path.getsize(output_path)
 
+    def header(self):
+        if self._verbose:
+            header = f"query,rows,bytes,seconds"
+        else:
+            header = f"query,rows,seconds"
+        return header
+
     def brief_result(self):
         if self._verbose:
-            result = f"qflock:: {self.query_name} rows {self.num_rows} "\
-                     f"bytes {self.size_bytes_pq} seconds {self.duration_sec:.3f}"
+            result = f"{self.query_name},{self.num_rows},"\
+                     f"{self.size_bytes_pq},{self.duration_sec:.3f}"
         else:
-            result = f"qflock:: {self.query_name} rows {self.num_rows} "\
-                     f"seconds {self.duration_sec:.3f}"
+            result = f"{self.query_name},{self.num_rows},"\
+                     f"{self.duration_sec:.3f}"
         return result

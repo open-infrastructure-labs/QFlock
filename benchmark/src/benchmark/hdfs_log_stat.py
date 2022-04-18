@@ -26,6 +26,7 @@ class HdfsLogStat(BenchmarkStat):
     def __init__(self, log_file="logs/log.txt"):
         self._total_bytes = 0
         self._file = log_file
+        self.header = "DFSClient:bytes"
 
     def start(self):
         # This stat relies on a log file already being generated ()
@@ -47,7 +48,7 @@ class HdfsLogStat(BenchmarkStat):
 
     def __str__(self):
         if self._total_bytes > 0:
-            return f"DFSClient bytes {self._total_bytes} "
+            return f"{self._total_bytes}"
         return ""
 
 
