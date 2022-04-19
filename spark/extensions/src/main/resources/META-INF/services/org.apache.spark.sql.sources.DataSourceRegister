@@ -1,2 +1,2 @@
-com.github.qflock.extensions.generic.GenericPushdownDatasource
+com.github.qflock.extensions.jdbc.QflockJdbcDatasource
 com.github.qflock.extensions.rules.QflockRelationProvider

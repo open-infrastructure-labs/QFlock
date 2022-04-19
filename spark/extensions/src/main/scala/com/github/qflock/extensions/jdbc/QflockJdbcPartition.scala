@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.hdfs
+package com.github.qflock.extensions.jdbc
 
 import com.github.qflock.extensions.common.PushdownPartition
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition
-/** Represents a partition on an hdfs file system
+/** Represents a partition for jdbc
  *
  * @param index the position in order of partitions.
  * @param offset the byte offset from start of file
@@ -28,12 +28,12 @@ import org.apache.spark.sql.connector.read.InputPartition
  * @param name the full path of the file
  * @param modifiedTime the last modification time of the file.
  */
-class HdfsPartition(var index: Int,
-                    var offset: Long = 0,
-                    var length: Long = 0,
-                    var name: String = "",
-                    var rows: Long = 0,
-                    var modifiedTime: Long = 0)
+class QflockJdbcPartition(var index: Int,
+                          var offset: Long = 0,
+                          var length: Long = 0,
+                          var name: String = "",
+                          var rows: Long = 0,
+                          var modifiedTime: Long = 0)
   extends Partition with InputPartition with PushdownPartition {
 
   override def toString() : String = {
@@ -51,7 +51,7 @@ class HdfsPartition(var index: Int,
    *  @return String the query clause for use on this partition.
    */
   override def getObjectClause(partition: PushdownPartition): String = {
-    val part = partition.asInstanceOf[HdfsPartition]
+    val part = partition.asInstanceOf[QflockJdbcPartition]
     "S3Object"
   }
 }
