@@ -1,0 +1,10 @@
+docker/thrift-0.16.0.tar.gz
+driver/build/
+driver/clean.sh
+driver/project/
+driver/src/main/java/com/github/qflock/jdbc/api/
+driver/target/
+server/__init__.py
+server/com/
+*.tar.gz
+

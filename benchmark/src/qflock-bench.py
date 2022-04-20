@@ -58,7 +58,8 @@ class QflockBench:
         if self._args.queries:
             self._query_list = Benchmark.get_query_list(self._args.queries,
                                                         self._config['benchmark']['query-path'],
-                                                        self._config['benchmark']['query-extension'])
+                                                        self._config['benchmark']['query-extension'],
+                                                        self._config['benchmark']['query-exceptions'].split(","))
 
     def _parse_workers_list(self):
         increment = self._args.workers.split("+")
@@ -124,7 +125,7 @@ class QflockBench:
         parser.add_argument("--log_level", "-ll", default="OFF",
                             help="log level set to input arg.\n"
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
-        parser.add_argument("--file", "-f", default="spark_bench_tpcds.yaml",
+        parser.add_argument("--file", "-f", default="config.yaml",
                             help="config file to use, defaults to spark_bench.yaml")
         parser.add_argument("--queries", "-q",
                             help="queries to run by spark_bench.py\n"
@@ -168,7 +169,9 @@ class QflockBench:
         parser = self.get_parser()
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
-        self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
+        self._wait_for_string = None
+        if not self._args.terse:
+            self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
         if "--capture_log_level" in self._remaining_args:
             self._wait_for_string = None
         return True
@@ -215,9 +218,11 @@ class QflockBench:
     def run_query(self):
         # timestr = time.strftime("%Y%m%d-%H%M%S")
         for w in self._workers_list:
+            idx = 0
             for q in self._query_list:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
-                      f'--query_file {q} {" ".join(self._remaining_args)} '
+                      f'--query_file {q} {" ".join(self._remaining_args)} ' + \
+                      f'--test_num {idx} '
                 if self._args.output_path:
                     cmd += f'--output_path {self._args.output_path} '
                 rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
@@ -225,6 +230,7 @@ class QflockBench:
                                                                wait_text=self._wait_for_string)
                 if rc != 0:
                     self._exit_code = rc
+                idx += 1
         print("")
         # self.show_results()
         self.display_elapsed()

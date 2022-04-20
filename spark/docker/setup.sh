@@ -1,5 +1,3 @@
-#!/bin/bash
-
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,11 +12,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-QFLOCK_VERSION=1
-echo "VERSION: ${QFLOCK_VERSION}"
-ROOT_DIR=$(pwd)
-DOCKER_DIR=docker
-DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
+set -e
+WORKING_DIR=$(pwd)
+ROOT_DIR=$(git rev-parse --show-toplevel)
+echo "ROOT_DIR $ROOT_DIR"
+echo "WORKING_DIR $WORKING_DIR"
+
+QFLOCK_VERSION=$(cat $ROOT_DIR/qflock_version)
+echo "QFLOCK VERSION: ${QFLOCK_VERSION}"
+
+HADOOP_VERSION="2.7.4"
+HADOOP_PACKAGE_URL="https://archive.apache.org/dist/hadoop/common/hadoop-${HADOOP_VERSION}/hadoop-${HADOOP_VERSION}.tar.gz"
+HADOOP_PACKAGE="hadoop-${HADOOP_VERSION}.tar.gz"
+HADOOP_DIR="hadoop-${HADOOP_VERSION}"
 USER_NAME=${SUDO_USER:=$USER}
 USER_ID=$(id -u "${USER_NAME}")
 
@@ -31,15 +37,5 @@ DOCKER_HOME_DIR=${DOCKER_HOME_DIR:-/home/${USER_NAME}}
 #If this env variable is empty, docker will be started
 # in non interactive mode
 DOCKER_INTERACTIVE_RUN=${DOCKER_INTERACTIVE_RUN-"-i -t"}
-
-# By mapping the .m2 directory you can do an mvn install from
-# within the container and use the result on your normal
-# system.  And this also is a significant speedup in subsequent
-# builds because the dependencies are downloaded only once.
-mkdir -p ${ROOT_DIR}/build/.m2
-mkdir -p ${ROOT_DIR}/build/.gnupg
-mkdir -p ${ROOT_DIR}/build/.ivy2
-mkdir -p ${ROOT_DIR}/build/.cache
-mkdir -p ${ROOT_DIR}/build/.sbt
 
 echo "Successfully included setup.sh"

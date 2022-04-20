@@ -14,13 +14,12 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+pushd "$(dirname "$0")"
 source spark_version
 echo "build.sh: SPARK_VERSION $SPARK_VERSION"
-
-ROOT_DIR=$(pwd)
 source setup.sh
 
-DOCKER_DIR=${ROOT_DIR}
+DOCKER_DIR=$(pwd)
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 
 if [ ! -f ${DOCKER_DIR}/${SPARK_PACKAGE} ]
@@ -32,9 +31,20 @@ if [ ! -f ${DOCKER_DIR}/${SPARK_PACKAGE} ]
 then
   exit
 fi
+if [ ! -f ${DOCKER_DIR}/${HADOOP_PACKAGE} ]
+then
+  echo "build.sh: Downloading ${HADOOP_PACKAGE}"
+  curl -L ${HADOOP_PACKAGE_URL} --output ${DOCKER_DIR}/${HADOOP_PACKAGE}
+fi
+if [ ! -f ${DOCKER_DIR}/${HADOOP_PACKAGE} ]
+then
+  exit
+fi
 
 echo "build.sh: Building ${SPARK_DOCKER_BASE_NAME} docker"
-docker build -f Dockerfile --build-arg SPARK_VERSION=$SPARK_VERSION -t ${SPARK_DOCKER_BASE_NAME} -f Dockerfile .
+docker build -f Dockerfile --build-arg SPARK_VERSION=$SPARK_VERSION \
+                           --build-arg HADOOP_VERSION=$HADOOP_VERSION \
+                           -t ${SPARK_DOCKER_BASE_NAME} -f Dockerfile .
 STATUS=$?
 if [ $STATUS -ne 0 ]; then
     echo "build.sh: Error building docker (status=$STATUS)"
@@ -79,3 +89,4 @@ else
     exit 0
 fi
 
+popd

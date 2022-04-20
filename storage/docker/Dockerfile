@@ -50,7 +50,12 @@ RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
         python3-pip python3-venv python3-wheel
 
-RUN pip3 install pandas sqlparse duckdb fastparquet pyarrow thrift
+RUN pip3 install pandas sqlparse fastparquet pyarrow thrift
+
+RUN apt-get -q update \
+    && apt-get -q install -y --no-install-recommends \
+        iperf3
+
 
 COPY entry.sh /usr/local/bin/entry.sh
 RUN chmod a+x /usr/local/bin/entry.sh

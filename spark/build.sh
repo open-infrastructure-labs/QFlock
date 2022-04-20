@@ -1,9 +1,12 @@
 #!/bin/bash
 set -e
 
-pushd "$(dirname "$0")" # connect to root
-ROOT_DIR=$(pwd)
-echo "ROOT_DIR ${ROOT_DIR}"
+pushd "$(dirname "$0")"
+
+if [ ! -d build ]; then
+  echo "Creating build directories"
+  source docker/setup_build.sh
+fi
 
 pushd docker
 ./build.sh || (echo "*** Spark build failed with $?" ; exit 1)

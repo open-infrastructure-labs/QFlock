@@ -73,6 +73,8 @@ class BenchmarkApp:
             parser.add_argument("--output_path", default=None,
                                 help="Prefix of Path for output files. " +
                                      "(.csv and/or .parquet is added to folder name)")
+            parser.add_argument("--test_num", default=0, type=int,
+                                help="The index of the test")
         parser.add_argument("--init_all", action="store_true",
                             help="Equivalent to --gen_data, --gen_parquet, \n"
                                  "--create_catalog, --compute_stats, --view_catalog")
@@ -119,7 +121,8 @@ class BenchmarkApp:
                                               sh,
                                               self._args.verbose,
                                               not self._args.no_catalog,
-                                              self._args.jdbc)
+                                              self._args.jdbc,
+                                              self._args.test_num)
 
     def _get_query_config(self):
         qc = {}
@@ -229,8 +232,9 @@ class BenchmarkApp:
 
 
 if __name__ == "__main__":
-    from benchmark.benchmark import Benchmark
-    q_list = Benchmark.get_query_list("14", "queries/tpcds", ".sql")
-    print(q_list)
+    # from benchmark.benchmark import Benchmark
+    # exception_list = ["2","43","59","13","48","24a","24b","75"]
+    # q_list = Benchmark.get_query_list("*", "queries/tpcds", "sql", exception_list)
+    # print(q_list)
     bench = BenchmarkApp()
     bench.run()

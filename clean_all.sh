@@ -12,3 +12,7 @@ pushd benchmark
 ./clean_all.sh
 popd
 
+pushd jdbc
+./clean_all.sh
+popd
+
