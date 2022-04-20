@@ -23,6 +23,13 @@ then
   curl -L https://downloads.apache.org/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz --output ${DOCKER_DIR}/apache-hive-3.1.2-bin.tar.gz
 fi
 
+if [ ! -f ${DOCKER_DIR}/apache-tez-0.10.1-bin.tar.gz ]
+then
+  echo "Downloading apache-tez-0.10.1-bin.tar.gz"
+  curl -L https://downloads.apache.org/tez/0.10.1/apache-tez-0.10.1-bin.tar.gz --output ${DOCKER_DIR}/apache-tez-0.10.1-bin.tar.gz
+fi
+
+
 DOCKER_CMD="docker build -t ${DOCKER_NAME} --build-arg HADOOP_VERSION -f $DOCKER_FILE $DOCKER_DIR"
 eval "$DOCKER_CMD"
 
