@@ -109,8 +109,36 @@ class QflockJdbcServer:
         except BaseException as ex:
             pass
 
+    def filter_config(self, conf):
+        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
+            return False
+        else:
+            return True
+
+    def get_spark_cmd(self, cmd):
+        spark_conf = self._config['spark']
+        spark_cmd = f'spark-submit --master {spark_conf["master"]} '
+        workers = spark_conf.get("workers")
+        if workers is not None and int(workers) > 0:
+            spark_cmd += f"--total-executor-cores {workers} "
+
+        # Filter out any conf items that are not enabled by arguments.
+        conf = list(filter(self.filter_config, spark_conf["conf"]))
+        spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in conf])
+        if "packages" in spark_conf and spark_conf["packages"]:
+            spark_cmd += " --packages " + ",".join([arg for arg in spark_conf["packages"]])
+        if "jars" in spark_conf and len(spark_conf["jars"]):
+            spark_cmd += " --jars " + ",".join([arg for arg in spark_conf["jars"]])
+        spark_cmd += f" --conf spark.hadoop.hive.metastore.uris=thrift://{spark_conf['hive-metastore']}" +\
+                     f":{spark_conf['hive-metastore-port']}"
+        spark_cmd += f" {cmd}"
+        return spark_cmd
+
     def spark_submit(self):
-        spark_cmd = f"spark-submit --master {self._config['spark']['master']} {sys.argv[0]} --mode local"
+        spark_cmd = self.get_spark_cmd(f"{sys.argv[0]} --mode local")
+        print(80*"*")
+        print(spark_cmd)
+        print(80*"*")
         subprocess.call(spark_cmd, shell=True)
 
     def run(self):

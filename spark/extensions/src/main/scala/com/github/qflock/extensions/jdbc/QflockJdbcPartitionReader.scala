@@ -28,12 +28,10 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 
 
-
-/** PartitionReader of HdfsPartitions
+/** PartitionReader of JDBC
  *
- * @param pushdown object handling filter, project and aggregate pushdown
  * @param options the options including "path"
- * @param partition the HdfsPartition to read from
+ * @param partition the QflockJdbcPartition to read from
  */
 class QflockJdbcPartitionReader(options: util.Map[String, String],
                                 partition: QflockJdbcPartition,
@@ -42,12 +40,10 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
   extends PartitionReader[InternalRow] {
 
   private val logger = LoggerFactory.getLogger(getClass)
-
-  private var rowIterator: Iterator[InternalRow] = {
+  private var (rowIterator: Iterator[InternalRow], connection: Option[Connection]) = {
     var query = options.get("query")
     var driver = options.get("driver")
     var url = options.get("url")
-    var connection: Option[Connection] = None
     try {
       logger.info("Loading " + driver)
       // scalastyle:off classforname
@@ -57,19 +53,18 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
       case e: Exception =>
         logger.warn("Failed to load JDBC driver.")
     }
-    val resultSet: ResultSet = {
+    val (resultSet: ResultSet, con: Option[Connection]) = {
       logger.info(s"connecting to ${url}")
       val properties = new Properties
       properties.setProperty("compression", "true")
       properties.setProperty("bufferSize", "42")
       val con = DriverManager.getConnection(url, properties)
-      connection = Some(con)
       val select = con.prepareStatement(query)
       val result = select.executeQuery(query)
-      // connection.get.close()
-      result
+      // return the result and the connection so we can close it later.
+      (result, Some(con))
     }
-    QflockJdbcUtil.getResultSetRowIterator(resultSet)
+    (QflockJdbcUtil.getResultSetRowIterator(resultSet), con)
   }
 
   // var index = 0
@@ -87,5 +82,9 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
     row
   }
 
-  def close(): Unit = Unit
+  def close(): Unit = {
+    if (connection.isDefined) {
+      connection.get.close()
+    }
+  }
 }

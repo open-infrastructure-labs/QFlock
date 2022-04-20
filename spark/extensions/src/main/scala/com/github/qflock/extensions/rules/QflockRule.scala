@@ -344,11 +344,11 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("url", "jdbc:qflock://qflock-jdbc-dc2:1433/tpcds")
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
-//    val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
+    val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
 //    val query = "SELECT \"ss_list_price\" FROM store_sales " +
 //      "WHERE (\"ss_list_price\" IS NOT NULL) AND " +
 //      "(\"ss_list_price\" > 1.0) AND (\"ss_list_price\" < 1.05) "
-    val query = "select * from call_center"
+//    val query = "select * from call_center"
     opt.put("query", query)
 
     // Once we know what the file is, we will replace the FILE_TAG
