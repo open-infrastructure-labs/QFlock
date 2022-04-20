@@ -46,6 +46,7 @@ import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRela
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.hive.client.HiveClientImpl
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.sources.BaseRelation
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util._
@@ -174,9 +175,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   private def needsRule(project: Seq[NamedExpression],
                         filters: Seq[Expression],
                         child: Any): Boolean = {
-//    if (project.length > 0 || filters.length > 0) {
-//      true
-//    } else {
     child match {
       case DataSourceV2ScanRelation(relation, scan, output) =>
         (!scan.isInstanceOf[QflockJdbcScan])
@@ -226,6 +224,18 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       return false
     }
     val relationArgs = relationArgsOpt.get
+    if (relationArgs.catalogTable.isEmpty) {
+      return false
+    }
+    val catalogTable = relationArgs.catalogTable.get
+    var tableName = catalogTable.identifier.table
+    var dbName = catalogTable.identifier.database.getOrElse("")
+    val table = ExtHiveUtils.getTable(dbName, tableName)
+
+    // We only continue with the rule if this table is stored remotely.
+    if (!table.getSd.getLocation.contains("-dc2")) {
+      return false
+    }
     //    if (relationArgs.dataSchema == relationArgs.readSchema) {
     //      logger.warn("Plan not modified. No Project Necessary. " +
     //        relationArgs.options.get("currenttest"))
@@ -345,10 +355,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
     val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
-//    val query = "SELECT \"ss_list_price\" FROM store_sales " +
-//      "WHERE (\"ss_list_price\" IS NOT NULL) AND " +
-//      "(\"ss_list_price\" > 1.0) AND (\"ss_list_price\" < 1.05) "
-//    val query = "select * from call_center"
     opt.put("query", query)
 
     // Once we know what the file is, we will replace the FILE_TAG
