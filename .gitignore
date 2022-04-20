@@ -1,3 +1,5 @@
 .idea
 volume
 *.pyc
+conf/spark/hdfs-site.xml
+conf/spark/hive-site.xml

@@ -95,7 +95,7 @@ class QflockJdbcServer:
         self.setup_logger()
         jdbc_port = self._config['server-port']
         jdbc_ip = self.get_jdbc_ip()
-        handler = QflockThriftJdbcHandler()
+        handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'])
         processor = QflockJdbcService.Processor(handler)
         transport = TSocket.TServerSocket(host=jdbc_ip, port=jdbc_port)
         tfactory = TTransport.TBufferedTransportFactory()
@@ -103,7 +103,7 @@ class QflockJdbcServer:
 
         jdbc_server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
         logger = logging.getLogger("qflock")
-        logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port}')
+        logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port} spark log-level:{self._config["log-level"]}')
         try:
             jdbc_server.serve()
         except BaseException as ex:

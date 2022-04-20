@@ -26,7 +26,7 @@ from com.github.qflock.jdbc.api import ttypes
 
 
 class QflockThriftJdbcHandler:
-    def __init__(self):
+    def __init__(self, spark_log_level="INFO"):
         self._connections = {}
         self._pstatements = {}
         self._connection_id = 0
@@ -37,6 +37,7 @@ class QflockThriftJdbcHandler:
             .appName("qflock-jdbc") \
             .enableHiveSupport() \
             .getOrCreate()
+        self._spark.sparkContext.setLogLevel(spark_log_level)
 
     def createConnection(self, url, properties):
         current_id = self._connection_id

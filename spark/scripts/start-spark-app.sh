@@ -51,6 +51,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   --mount type=bind,source=$SPARK_DIR/extensions/,target=/extensions \
   -v $ROOT_DIR/conf/spark:/opt/spark-$SPARK_VERSION/conf  \
   -v $ROOT_DIR/conf/hdfs-site.xml:/opt/spark-$SPARK_VERSION/conf/hdfs-site.xml  \
+  -v $ROOT_DIR/conf/hive-site.xml:/opt/spark-$SPARK_VERSION/conf/hive-site.xml  \
   -v ${SPARK_DIR}/volume/metastore:/opt/volume/metastore \
   -v ${SPARK_DIR}/volume/user/hive:/user/hive \
   -v ${SPARK_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \

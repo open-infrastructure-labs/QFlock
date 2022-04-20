@@ -44,6 +44,7 @@ DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -w /jdbc/server \
   -v $ROOT_DIR/conf/spark:/opt/spark-$SPARK_VERSION/conf  \
   -v $ROOT_DIR/conf/hdfs-site.xml:/opt/spark-$SPARK_VERSION/conf/hdfs-site.xml  \
+  -v $ROOT_DIR/conf/hive-site.xml:/opt/spark-$SPARK_VERSION/conf/hive-site.xml  \
   -v ${JDBC_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \
   -v ${JDBC_DIR}/build/.gnupg:${DOCKER_HOME_DIR}/.gnupg \
   -v ${JDBC_DIR}/build/.sbt:${DOCKER_HOME_DIR}/.sbt \
