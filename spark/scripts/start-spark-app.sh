@@ -3,10 +3,10 @@
 pushd "$(dirname "$0")"
 ROOT_DIR=$(git rev-parse --show-toplevel)
 SPARK_DIR=$ROOT_DIR/spark
-SCRIPTS_DIR=$SPARK_DIR/scripts
+SCRIPTS_DIR=$ROOT_DIR/scripts
 # Include the setup for our cached local directories. (.m2, .ivy2, etc)
 source ../docker/setup.sh
-source ../docker/spark_version
+source $ROOT_DIR/scripts/spark/spark_version
 mkdir -p "${SPARK_DIR}/volume/logs"
 rm -f "${SPARK_DIR}/volume/logs/master*.log"
 
@@ -49,7 +49,8 @@ if [ ${START_LOCAL} == "YES" ]; then
   -w /qflock/benchmark/src \
   --mount type=bind,source=$SPARK_DIR/spark,target=/spark \
   --mount type=bind,source=$SPARK_DIR/extensions/,target=/extensions \
-  -v $SPARK_DIR/conf/master:/opt/spark-$SPARK_VERSION/conf  \
+  -v $ROOT_DIR/conf/spark:/opt/spark-$SPARK_VERSION/conf  \
+  -v $ROOT_DIR/conf/hdfs-site.xml:/opt/spark-$SPARK_VERSION/conf/hdfs-site.xml  \
   -v ${SPARK_DIR}/volume/metastore:/opt/volume/metastore \
   -v ${SPARK_DIR}/volume/user/hive:/user/hive \
   -v ${SPARK_DIR}/build/.m2:${DOCKER_HOME_DIR}/.m2 \

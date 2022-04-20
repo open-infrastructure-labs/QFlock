@@ -15,7 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 pushd "$(dirname "$0")"
-source spark_version
+ROOT_DIR=$(git rev-parse --show-toplevel)
+source $ROOT_DIR/scripts/spark/spark_version
 echo "build.sh: SPARK_VERSION $SPARK_VERSION"
 source setup.sh
 
