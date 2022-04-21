@@ -4,13 +4,13 @@
   server-port: 1433
   server-name: qflock-jdbc-dc2
   spark:
-    master: local
+    master: local[4]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-port: "9084"
     conf:
-    - spark.driver.maxResultSize=2g
-    - spark.driver.memory=2g
-    - spark.executor.memory=2g
+    - spark.driver.maxResultSize=10g
+    - spark.driver.memory=20g
+    - spark.executor.memory=20g
     - spark.sql.execution.arrow.pyspark.enabled=true
     - spark.sql.catalogImplementation=hive
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3

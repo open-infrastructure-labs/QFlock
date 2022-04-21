@@ -59,26 +59,29 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
       properties.setProperty("compression", "true")
       properties.setProperty("bufferSize", "42")
       val con = DriverManager.getConnection(url, properties)
+      logger.info(s"connected to ${url}")
       val select = con.prepareStatement(query)
+      logger.info(s"Starting query ${query}")
       val result = select.executeQuery(query)
+      logger.info(s"Query complete ${query}")
       // return the result and the connection so we can close it later.
       (result, Some(con))
     }
     (QflockJdbcUtil.getResultSetRowIterator(resultSet), con)
   }
 
-  // var index = 0
+  var index = 0
   def next: Boolean = {
     rowIterator.hasNext
   }
   def get: InternalRow = {
     val row = rowIterator.next
-    /* if (((index % 500000) == 0) ||
+    if (((index % 500000) == 0) ||
         (!next)) {
       logger.info(s"get: partition: ${partition.index} ${partition.offset}" +
                   s" ${partition.length} ${partition.name} index: ${index}")
     }
-    index = index + 1 */
+    index = index + 1
     row
   }
 

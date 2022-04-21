@@ -165,7 +165,14 @@ class PushdownSQL(schema: StructType,
    * @return String representing the query to send to the endpoint.
    */
   def query: String = {
-    var columnList = schema.fields.map(x => s"" + s"${x.name}").mkString(",")
+    var columnList = {
+      if (schema.length != 0) {
+        schema.fields.map(x => s"" + s"${x.name}").mkString(",")
+      } else {
+        // There is no schema, just return all columns.
+        "*"
+      }
+    }
     val whereClause = buildWhereClause()
     val objectClause = "TABLE_TAG"
     var retVal = ""
