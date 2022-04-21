@@ -154,6 +154,8 @@ class QflockBench:
                             help="cause every row from every table to be generated as output.")
         parser.add_argument("--output_path", default=None,
                             help="root folder to output results.")
+        parser.add_argument("--qflock_explain", action="store_true",
+                            help="Do explain instead of query. Use explain extension.")
         return parser
 
     def _parse_args(self):
@@ -223,6 +225,9 @@ class QflockBench:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)} ' + \
                       f'--test_num {idx} '
+                if self._args.qflock_explain:
+                    # Auto enable explain on this query if we are using explain extension.
+                    cmd += '--explain '
                 if self._args.output_path:
                     cmd += f'--output_path {self._args.output_path} '
                 rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
@@ -247,6 +252,9 @@ class QflockBench:
             cmd += f'--query_text "{self._args.query_text}" '
         if self._args.view_columns:
             cmd += f'--view_columns "{self._args.view_columns}" '
+        if self._args.explain_ext:
+            # Auto enable explain on this query if we are using explain extension.
+            cmd += '--explain '
         cmd += " ".join(self._remaining_args)
         cmd += self._extra_args
 

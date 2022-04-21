@@ -24,13 +24,21 @@ class SparkLauncher:
         self._metastore_ports = Config.get_metadata_ports(self._config)
 
     def filter_config(self, conf):
-        if "spark.sql.extensions" in conf and\
-                ("extensions" not in self._args or not self._args.extensions):
-            return False
-        elif "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
+        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
             return False
         else:
             return True
+
+    def get_extensions(self):
+        ext_string = ""
+        if self._args.qflock_explain or self._args.extensions:
+            print(self._args.qflock_explain, self._args.extensions)
+            ext_string = " --conf spark.sql.extensions="
+            if self._args.qflock_explain:
+                ext_string += "com.github.qflock.extensions.rules.QflockExplainExtensions"
+            else:
+                ext_string += "com.github.qflock.extensions.rules.QflockExplainExtensions"
+        return ext_string
 
     def get_spark_cmd(self, cmd, workers):
         spark_cmd = f'spark-submit --master {self._config["master"]} '
@@ -45,6 +53,7 @@ class SparkLauncher:
         if self._args.catalog_name:
             spark_cmd += f" --conf spark.hadoop.hive.metastore.uris=thrift://{self._config['hive-metastore']}" +\
                          f":{self._metastore_ports[self._args.catalog_name]}"
+        spark_cmd += self.get_extensions()
         spark_cmd += f" {cmd}"
         return spark_cmd
 

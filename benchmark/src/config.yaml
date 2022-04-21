@@ -35,7 +35,7 @@
 #    - spark.sql.hive.metastore.jars.path=jars/*.jar
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3
 #    - spark.sql.extensions=com.github.qflock.FederationExtensions,
-    - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
+#    - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
     - spark.sql.cbo.enabled=true
     - spark.sql.statistics.histogram.enabled=true
 #    - spark.sql.statistics.histogram.numBins=4096
