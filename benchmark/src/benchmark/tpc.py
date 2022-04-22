@@ -30,14 +30,15 @@ class TpcBenchmark(Benchmark):
        running queries against those tables."""
 
     def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
-                 jdbc=False, test_num=0):
+                 jdbc=False, qflock_ds=False, test_num=0):
         super().__init__(name, config, framework, tables)
         # self._tables = tables
         self._file_ext = "." + self._config['file-extension']
         self._verbose = verbose
         self._catalog = catalog
         self._jdbc = jdbc
-        if self._jdbc:
+        self._qflock_ds = qflock_ds
+        if self._jdbc or self._qflock_ds:
             self._catalog = False
         print(f"test_num: {test_num}")
         self._test_num = test_num
@@ -191,15 +192,19 @@ class TpchBenchmark(TpcBenchmark):
     """A TPC-H benchmark, which is capable of generating the TPC-H tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False, test_num=0):
-        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc, test_num)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False,
+                 qflock_ds=False, test_num=0):
+        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc,
+                         qflock_ds, test_num)
 
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False, test_num=0):
-        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc, test_num)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False,
+                 qflock_ds=False, test_num=0):
+        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc,
+                         qflock_ds, test_num)
 
 

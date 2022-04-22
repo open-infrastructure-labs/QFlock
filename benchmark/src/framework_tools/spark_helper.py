@@ -28,11 +28,12 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=False, output_path=None):
+                 jdbc=False, qflock_ds=False, output_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
+        self._qflock_ds = qflock_ds
         self._output_path = output_path
-        if self._jdbc:
+        if self._jdbc or self._qflock_ds:
             use_catalog = False
         if use_catalog:
             self._spark = pyspark.sql.SparkSession\
@@ -78,6 +79,16 @@ class SparkHelper:
                  .option("header", "true") \
                  .option("driver", "com.github.qflock.jdbc.QflockDriver") \
                  .option("dbtable", table).load()
+            df.createOrReplaceTempView(table)
+        elif self._qflock_ds:
+            table_path = os.path.join(db_path, f"{table}.parquet")
+            df = self._spark.read\
+                .format("qflockDs") \
+                .option("format", "parquet") \
+                .option("dbtable", table) \
+                .option("db_path", db_path) \
+                .option("path", table_path) \
+                .load()
             df.createOrReplaceTempView(table)
         else:
             table_path = os.path.join(db_path, f"{table}.parquet")

@@ -18,7 +18,9 @@
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
 #    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
     jdbc-path: "jdbc:qflock://qflock-jdbc-dc2:1433/tpcds"
-    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth1,\
+    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth0,\
+                   qflock-storage-dc2:tx_bytes:eth1,\
+                   qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
                    qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
   spark:
     master: local[4]

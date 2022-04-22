@@ -31,13 +31,13 @@ class SparkLauncher:
 
     def get_extensions(self):
         ext_string = ""
-        if self._args.qflock_explain or self._args.extensions:
-            print(self._args.qflock_explain, self._args.extensions)
-            ext_string = " --conf spark.sql.extensions="
-            if self._args.qflock_explain:
+        if self._args.extensions:
+            if self._args.extensions == "explain":
                 ext_string += "com.github.qflock.extensions.rules.QflockExplainExtensions"
+            elif self._args.extensions == "jdbc":
+                ext_string += "com.github.qflock.extensions.rules.QflockExtensions"
             else:
-                ext_string += "com.github.qflock.extensions.rules.QflockExplainExtensions"
+                return ""
         return ext_string
 
     def get_spark_cmd(self, cmd, workers):
