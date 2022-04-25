@@ -1,6 +1,6 @@
 ---
   debug: false
-  log-level: INFO
+  log-level: "OFF"
   server-port: 1433
   server-name: qflock-jdbc-dc2
   spark:

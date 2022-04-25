@@ -71,7 +71,7 @@ class SparkHelper:
         gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
-    def create_table_view(self, table, db_path):
+    def create_table_view(self, table, db_path, db_name):
         if self._jdbc:
             df = self._spark.read.option("url", db_path)\
                  .option("batchSize", "100000")\
@@ -82,12 +82,12 @@ class SparkHelper:
             df.createOrReplaceTempView(table)
         elif self._qflock_ds:
             table_path = os.path.join(db_path, f"{table}.parquet")
+            # The table path is something like: hdfs://server/db_dir/table_dir
             df = self._spark.read\
                 .format("qflockDs") \
                 .option("format", "parquet") \
-                .option("dbtable", table) \
-                .option("db_path", db_path) \
-                .option("path", table_path) \
+                .option("tableName", table) \
+                .option("dbName", db_name) \
                 .load()
             df.createOrReplaceTempView(table)
         else:
@@ -95,10 +95,10 @@ class SparkHelper:
             df = self._spark.read.parquet(table_path)
             df.createOrReplaceTempView(table)
 
-    def create_tables_view(self, tables, db_path):
+    def create_tables_view(self, tables, db_path, db_name):
         for t in tables.get_tables():
             print("create temp view table for", t)
-            self.create_table_view(t, db_path)
+            self.create_table_view(t, db_path, db_name)
 
     def get_catalog_info(self):
         databases = {}

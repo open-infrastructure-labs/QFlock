@@ -22,6 +22,8 @@ import scala.collection.JavaConverters._
 
 import com.github.qflock.datasource.common.Pushdown
 import com.github.qflock.datasource.hdfs.{HdfsScan, HdfsStore}
+import org.apache.hadoop.hive.conf.HiveConf
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
@@ -29,6 +31,7 @@ import org.apache.spark.sql.connector.catalog.{SessionConfigSupport, SupportsRea
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
@@ -48,12 +51,21 @@ class QflockDatasource extends TableProvider
   private val sparkSession: SparkSession = SparkSession
       .builder()
       .getOrCreate()
-
+  private var path: String = ""
+  private def getPath(dbName: String, tableName: String): String = {
+    if (path != "") path
+    else {
+      val table = ExtHiveUtils.getTable(dbName, tableName)
+      val sd = table.getSd()
+      sd.getLocation()
+    }
+  }
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
+
+    val path = getPath(options.get("dbName"), options.get("tableName"))
     if (options.get("format") == "parquet") {
       /* With parquet, we infer the schema from the metadata.
        */
-      val path = options.get("path")
       // logger.info(s"inferSchema path: ${path}")
       val fileStatusArray = HdfsStore.getFileStatusList(path)
       val schema = ParquetUtils.inferSchema(sparkSession, options.asScala.toMap, fileStatusArray)
@@ -67,8 +79,9 @@ class QflockDatasource extends TableProvider
   override def getTable(schema: StructType,
                         transforms: Array[Transform],
                         options: util.Map[String, String]): Table = {
+    val path = getPath(options.get("dbName"), options.get("tableName"))
     logger.trace("getTable: Options " + options)
-    new QflockBatchTable(schema, options)
+    new QflockBatchTable(schema, options, path)
   }
 
   override def keyPrefix(): String = {
@@ -87,7 +100,8 @@ class QflockDatasource extends TableProvider
  *                 "path" is the full path to the file.
  */
 class QflockBatchTable(schema: StructType,
-                       options: util.Map[String, String])
+                       options: util.Map[String, String],
+                       path: String)
   extends Table with SupportsRead {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -100,7 +114,7 @@ class QflockBatchTable(schema: StructType,
     Set(TableCapability.BATCH_READ).asJava
 
   override def newScanBuilder(params: CaseInsensitiveStringMap): ScanBuilder =
-      new QflockScanBuilder(schema, options)
+      new QflockScanBuilder(schema, options, path)
 }
 
 /** Creates a builder for scan objects.
@@ -110,7 +124,8 @@ class QflockBatchTable(schema: StructType,
  * @param options the options (see PushdownBatchTable for full list.)
  */
 class QflockScanBuilder(schema: StructType,
-                        options: util.Map[String, String])
+                        options: util.Map[String, String],
+                        path: String)
   extends ScanBuilder
     with SupportsPushDownFilters
     with SupportsPushDownRequiredColumns {
@@ -130,18 +145,19 @@ class QflockScanBuilder(schema: StructType,
      */
     val opt: util.Map[String, String] = new util.HashMap[String, String](options)
 
-      if (!options.get("path").contains("hdfs")) {
-        throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
-      }
-      new HdfsScan(schema, opt, pushedFilter, prunedSchema)
+    if (!path.contains("hdfs")) {
+      throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
+    }
+    opt.put("path", path)
+    new HdfsScan(schema, opt, pushedFilter, prunedSchema)
   }
   /** returns true if pushdowns are supported for this type of connector.
    *
    * @return true if pushdown supported, false otherwise
    */
   private def pushdownSupported(): Boolean = {
-    if (!options.get("path").contains("hdfs")) {
-      throw new Exception(s"path ${options.get("path")} is unexpected")
+    if (!path.contains("hdfs")) {
+      throw new Exception(s"path ${path} is unexpected")
     }
     HdfsStore.pushdownSupported(options)
   }
@@ -151,8 +167,8 @@ class QflockScanBuilder(schema: StructType,
    */
   private def filterPushdownFullySupported(): Boolean = {
 
-    if (!options.get("path").contains("hdfs")) {
-      throw new Exception(s"path ${options.get("path")} is unexpected")
+    if (!path.contains("hdfs")) {
+      throw new Exception(s"path ${path} is unexpected")
     }
     HdfsStore.filterPushdownFullySupported(options)
   }
