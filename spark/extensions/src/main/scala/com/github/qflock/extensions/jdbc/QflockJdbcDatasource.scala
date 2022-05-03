@@ -77,12 +77,6 @@ class QflockJdbcDatasource extends TableProvider
   }
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
     if (options.get("format") == "parquet") {
-      /* With parquet, we infer the schema from the metadata.
-       */
-//      val file = NdpApi.extractFilename(options.get("path"))
-//      val server = NdpApi.extractServer(options.get("path"))
-//      logger.info(s"getting schema for: ${server}/${file}")
-//      NdpApi.getSchema(file, server)
         val path = options.get("path")
         // logger.info(s"inferSchema path: ${path}")
         val fileStatusArray = getFileStatusList(path)

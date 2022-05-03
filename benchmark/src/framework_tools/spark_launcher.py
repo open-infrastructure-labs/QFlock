@@ -29,17 +29,6 @@ class SparkLauncher:
         else:
             return True
 
-    def get_extensions(self):
-        ext_string = ""
-        if self._args.extensions:
-            if self._args.extensions == "explain":
-                ext_string += "com.github.qflock.extensions.rules.QflockExplainExtensions"
-            elif self._args.extensions == "jdbc":
-                ext_string += "com.github.qflock.extensions.rules.QflockExtensions"
-            else:
-                return ""
-        return ext_string
-
     def get_spark_cmd(self, cmd, workers):
         spark_cmd = f'spark-submit --master {self._config["master"]} '
         if workers is not None and workers > 0:
@@ -53,7 +42,6 @@ class SparkLauncher:
         if self._args.catalog_name:
             spark_cmd += f" --conf spark.hadoop.hive.metastore.uris=thrift://{self._config['hive-metastore']}" +\
                          f":{self._metastore_ports[self._args.catalog_name]}"
-        spark_cmd += self.get_extensions()
         spark_cmd += f" {cmd}"
         return spark_cmd
 

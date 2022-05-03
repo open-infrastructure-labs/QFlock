@@ -13,17 +13,18 @@
     query-path: "queries/tpcds"
 #    limit-rows: "1000"
     query-extension: "sql"
-    query-exceptions: "2,5,43,59,13,48,24a,24b,75"
+    query-exceptions: "2,43,59,13,48,24a,24b,75"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
 #    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
     jdbc-path: "jdbc:qflock://qflock-jdbc-dc2:1433/tpcds"
-    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth0,\
-                   qflock-storage-dc2:tx_bytes:eth1,\
-                   qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
-                   qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
+    docker-stats: ""
+#    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth0,\
+#                   qflock-storage-dc2:tx_bytes:eth1,\
+#                   qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
+#                   qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
   spark:
-    master: local[4]
+    master: local[1]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-ports: "default:9084"
     conf:

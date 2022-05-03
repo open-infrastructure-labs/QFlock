@@ -137,6 +137,7 @@ class TpcBenchmark(Benchmark):
             else:
                 failure_count += 1
                 if query_config.get('continue_on_error') is False:
+                    print(f"qflock:: Failure seen in test {q}")
                     break
             self._test_num += 1
 
@@ -180,7 +181,7 @@ class TpcBenchmark(Benchmark):
                 db_path = os.path.abspath(self._config['parquet-path'])
         if self._verbose:
             print(f"qflock::creating table view for {db_path}")
-        self._framework.create_tables_view(self.tables, db_path)
+        self._framework.create_tables_view(self.tables, db_path, self._config['db-name'])
 
     def compute_stats(self):
         for table in self.tables.get_tables():

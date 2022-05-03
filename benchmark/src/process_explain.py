@@ -11,7 +11,7 @@ def process_explain(file):
             if 'query: ' in line:
                 items = line.rstrip().split(" ")
                 key = items[1].rsplit(os.path.sep, 1)[1]
-                print(f"found key {key} in {line}")
+                #print(f"found key {key} in {line}")
                 queries[key] = {'data': [], 'totals': {}}
             if 'QflockLogicalRelation' in line:
                 new_line = re.sub(".*QflockLogicalRelation ", "", line)

@@ -167,10 +167,11 @@ class QflockScanBuilder(schema: StructType,
    */
   private def filterPushdownFullySupported(): Boolean = {
 
-    if (!path.contains("hdfs")) {
-      throw new Exception(s"path ${path} is unexpected")
-    }
-    HdfsStore.filterPushdownFullySupported(options)
+//    if (!path.contains("hdfs")) {
+//      throw new Exception(s"path ${path} is unexpected")
+//    }
+//    HdfsStore.filterPushdownFullySupported(options)
+    true
   }
   /** Pushes down the list of columns specified by requiredSchema
    *
@@ -184,7 +185,7 @@ class QflockScanBuilder(schema: StructType,
   }
 
   override def pushedFilters: Array[Filter] = {
-    logger.trace("pushedFilters" + pushedFilter.toList)
+    logger.info("pushedFilters" + pushedFilter.toList)
     pushedFilter
   }
 
@@ -201,7 +202,7 @@ class QflockScanBuilder(schema: StructType,
     } else {
     val pushdown = new Pushdown(schema, prunedSchema, pushedFilter, None, options)
       val f = filters.map(f => pushdown.buildFilterExpression(f))
-      logger.trace("compiled filter list: " + f.mkString(", "))
+      logger.warn("compiled filter list: " + f.mkString(", "))
       if (!f.contains(None)) {
         pushedFilter = filters
         if (filterPushdownFullySupported()) {

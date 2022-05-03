@@ -226,6 +226,8 @@ class QflockBench:
                 if self._args.extensions == "explain":
                     # Auto enable explain on this query if we are using explain extension.
                     cmd += '--explain '
+                if self._args.extensions == "jdbc":
+                    cmd += '--ext jdbc '
                 if self._args.extensions == "ds":
                     # Auto enable qflock_ds if we are using qflock_ds extension.
                     cmd += '--qflock_ds '
@@ -255,7 +257,9 @@ class QflockBench:
             cmd += f'--view_columns "{self._args.view_columns}" '
         if self._args.extensions == "explain":
             # Auto enable explain on this query if we are using explain extension.
-            cmd += '--explain '
+            cmd += '--explain --ext explain '
+        if self._args.extensions == "jdbc":
+            cmd += '--ext jdbc '
         if self._args.extensions == "ds":
             # Auto enable qflock_ds if we are using qflock_ds extension.
             cmd += '--qflock_ds '

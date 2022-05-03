@@ -313,7 +313,7 @@ class Pushdown(val schema: StructType, val prunedSchema: StructType,
   def getColString(attr: String, disableCast: Boolean = false): String = {
     var allowCast = !disableCast
     val colString =
-      if (options.containsKey("useColumnNames")) {
+      if (true || options.containsKey("useColumnNames")) {
         s"${attr}"
       } else {
         val index = getSchemaIndex(attr)

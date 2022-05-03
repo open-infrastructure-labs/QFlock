@@ -28,7 +28,7 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=False, qflock_ds=False, output_path=None):
+                 jdbc=None, qflock_ds=False, output_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
         self._qflock_ds = qflock_ds
@@ -39,12 +39,14 @@ class SparkHelper:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
                 .appName(app_name)\
+                .config("qflockJdbcUrl", self._jdbc)\
                 .enableHiveSupport()\
                 .getOrCreate()
         else:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
                 .appName(app_name)\
+                .config("qflockJdbcUrl", self._jdbc)\
                 .getOrCreate()
 
     def set_log_level(self, level="INFO"):
@@ -70,6 +72,18 @@ class SparkHelper:
         java_import(gw.jvm, "com.github.qflock.extensions.QflockJdbcDialect")
         gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
+
+    def load_rule(self, ext):
+        from py4j.java_gateway import java_import
+        gw = self._spark.sparkContext._gateway
+        if ext == "explain":
+            # print("Loading explain rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockExplainRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockExplainRuleBuilder.injectExtraOptimization()
+        elif ext == "jdbc":
+            # print("Loading jdbc rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockRuleBuilder.injectExtraOptimization()
 
     def create_table_view(self, table, db_path, db_name):
         if self._jdbc:
@@ -108,6 +122,7 @@ class SparkHelper:
         print("*" * 50)
 
         for db in db_list:
+            self._spark.sql(f"USE {db.name}")
             if self._verbose:
                 self._spark.sql(f"DESCRIBE DATABASE EXTENDED {db.name}").show(5000, False)
             else:
@@ -120,7 +135,8 @@ class SparkHelper:
                 if self._verbose:
                     self._spark.sql(f"DESCRIBE TABLE EXTENDED {db.name}.{tbl.name}").show(5000, False)
                 else:
-                    print(f"  {i}) {tbl.database}.{tbl.name} {tbl.tableType}")
+                    rows = self._spark.sql(f"select * from {tbl.name}").count()
+                    print(f"  {i}) {tbl.database}.{tbl.name} {tbl.tableType} {rows}")
                 i += 1
                 c = 0
                 tables[tbl.name] = {'columns': []}
@@ -243,6 +259,7 @@ class SparkHelper:
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
         print(f"database {input_file} has {df.count()} rows")
 
+        #df.repartition(1) \
         df.repartition(1).fillna(0).fillna("") \
             .write \
             .option("header", True) \

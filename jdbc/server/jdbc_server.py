@@ -90,18 +90,23 @@ class QflockJdbcServer:
         root = logging.getLogger()
         hdlr = root.handlers[0]
         hdlr.setFormatter(formatter)
+        logging.info("Logger Configured")
 
     def serve(self):
         self.setup_logger()
         jdbc_port = self._config['server-port']
         jdbc_ip = self.get_jdbc_ip()
-        handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'])
+        logging.info(f"Starting JDBC Server ip: {jdbc_ip}:{jdbc_port}")
+        handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'],
+                                          metastore_ip=self._config['spark']['hive-metastore'],
+                                          metastore_port=self._config['spark']['hive-metastore-port'])
         processor = QflockJdbcService.Processor(handler)
         transport = TSocket.TServerSocket(host=jdbc_ip, port=jdbc_port)
         tfactory = TTransport.TBufferedTransportFactory()
         pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
-        jdbc_server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
+        # jdbc_server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
+        jdbc_server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
         logger = logging.getLogger("qflock")
         logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port} spark log-level:{self._config["log-level"]}')
         try:

@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
+import sys
+import threading
 import inspect
 import logging
 import pyspark
@@ -24,9 +26,13 @@ import numpy as np
 from com.github.qflock.jdbc.api import QflockJdbcService
 from com.github.qflock.jdbc.api import ttypes
 
+from metastore_client import HiveMetastoreClient
+
 
 class QflockThriftJdbcHandler:
-    def __init__(self, spark_log_level="INFO"):
+    def __init__(self, spark_log_level="INFO",
+                 metastore_ip="", metastore_port=""):
+        self._lock = threading.Lock()
         self._connections = {}
         self._pstatements = {}
         self._connection_id = 0
@@ -34,18 +40,56 @@ class QflockThriftJdbcHandler:
         self._query_id = 0
         self._spark = pyspark.sql.SparkSession \
             .builder \
-            .appName("qflock-jdbc") \
-            .enableHiveSupport() \
+            .appName("qflock-jdbc")\
+            .enableHiveSupport()\
+            .config("spark.driver.maxResultSize", "10g")\
+            .config("spark.driver.memory", "20g")\
+            .config("spark.executor.memory", "20g")\
+            .config("spark.sql.execution.arrow.pyspark.enabled", "true")\
+            .config("spark.sql.catalogImplementation", "hive")\
+            .config("spark.sql.warehouse.dir", "hdfs://qflock-storage-dc1:9000/user/hive/warehouse3")\
+            .config("spark.hadoop.hive.metastore.uris", "thrift://qflock-storage-dc1:9084")\
             .getOrCreate()
         self._spark.sparkContext.setLogLevel(spark_log_level)
+        self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
+        # self._get_tables()
+        # self._create_views()
+
+    def _get_tables(self):
+        client = self._metastore_client.client
+        dbs = self._metastore_client.client.get_all_databases()
+        tables = []
+        logging.info(f"Fetching tables from metastore")
+        for db_name in dbs:
+            table_names = client.get_all_tables(db_name)
+            tables.extend([client.get_table(db_name, table_name)for table_name in table_names])
+        self._tables = tables
+        logging.info(f"Fetching tables from metastore...Complete")
+
+    def _create_views(self):
+        for table in self._tables:
+            logging.info(f"Create view for table: {table.tableName}")
+            df = self._spark.read \
+                .format("qflockDs") \
+                .option("format", "parquet") \
+                .option("tableName", table.tableName) \
+                .option("dbName", table.dbName) \
+                .load()
+            df.createOrReplaceTempView(table.tableName)
+
+    def get_connection_id(self):
+        current_id = self._connection_id
+        self._connection_id += 1
+        return current_id
 
     def createConnection(self, url, properties):
-        current_id = self._connection_id
         dbname = url.split(";")[0].lstrip("/")
-        logging.info(f"New connection id {current_id} dbname {dbname} url {url} properties {str(properties)}")
-        self._connection_id += 1
+        self._lock.acquire()
+        current_id = self.get_connection_id()
         self._connections[current_id] = {'url': url, 'properties': properties,
                                          'dbname': dbname}
+        self._lock.release()
+        logging.info(f"New connection id {current_id} dbname {dbname} url {url} properties {str(properties)}")
         return ttypes.QFConnection(id=current_id)
 
     def createStatement(self, connection):
@@ -355,10 +399,11 @@ class QflockThriftJdbcHandler:
         self._query_id += 1
         return query_id
 
-    def exec_query(self, sql):
+    def exec_query(self, sql, connection):
         query_id = self.get_query_id()
         query = sql.replace('\"', "") #+ " LIMIT 10"
-        logging.info(f"query id: {query_id} starting {query}")
+        queryStats = connection['properties']['queryStats']
+        logging.info(f"qid: {query_id} stats:[{queryStats}] query: {query} ")
         df = self._spark.sql(query)
         df_pandas = df.toPandas()
         num_rows = len(df_pandas.index)
@@ -366,6 +411,7 @@ class QflockThriftJdbcHandler:
         df_schema = df.schema
         binary_rows = []
         col_size = []
+        total_bytes = 0
         if num_rows > 0:
             columns = df.columns
             for col_idx in range(0, len(columns)):
@@ -376,14 +422,25 @@ class QflockThriftJdbcHandler:
                     new_data1 = data.astype(str)
                     new_data = np.char.encode(new_data1, encoding='utf-8')
                     logging.debug(f"item size for col idx: {col_idx} is: {new_data.dtype.itemsize}")
-                    binary_rows.append(new_data.tobytes())
+                    raw_bytes = new_data.tobytes()
+                    # total_bytes += sys.getsizeof(raw_bytes)
+                    binary_rows.append(raw_bytes)
                     col_size.append(new_data.dtype.itemsize)
                 else:
                     new_data = data.byteswap().newbyteorder().tobytes()
+                    # total_bytes += sys.getsizeof(new_data)
                     binary_rows.append(new_data)
                     col_size.append(QflockThriftJdbcHandler.data_type_size(data_type))
-
-        logging.info(f"query done {query} rows {num_rows}")
+        # stats = queryStats.split(" ")
+        # prevBytes = stats[1].split(":")[1]
+        # prevRows = stats[2].split(":")[1]
+        # currentBytes = stats[3].split(":")[1]
+        # currentRows = stats[4].split(":")[1]
+        # logging.info(f"query-done rows:{num_rows} estRows:{currentRows} " +
+        #              f"estBytes:{currentBytes} " +
+        #              f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
+        #              f"query: {query}")
+        logging.info(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnSize=col_size)
 
@@ -510,7 +567,7 @@ class QflockThriftJdbcHandler:
         # metadata = ttypes.QFResultSetMetaData(parts)
         # return ttypes.QFResultSet(42, rows, metadata)
         self._spark.sql(f"USE {connection['dbname']}")
-        return self.exec_query(sql)
+        return self.exec_query(sql, connection)
 
     def preparedStatement_getResultSet(self, statement):
         """

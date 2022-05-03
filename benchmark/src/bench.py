@@ -106,6 +106,8 @@ class BenchmarkApp:
                             help="log level to capture to file.")
         parser.add_argument("--continue_on_error", action="store_true",
                             help="continue with remaining queries if query encounters an error.")
+        parser.add_argument("--ext", default=None,
+                            help="Extension to load")
         return parser
 
     def _parse_args(self):
@@ -166,11 +168,15 @@ class BenchmarkApp:
         if not self._parse_args():
             return
         self._load_config()
-        sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc,
+        jdbc_config = None
+        if self._args.jdbc or self._args.ext == "jdbc":
+            jdbc_config = self._config['benchmark']['jdbc-path']
+        sh = SparkHelper(verbose=self._args.verbose, jdbc=jdbc_config,
                          qflock_ds=self._args.qflock_ds,
                          output_path=self._args.output_path)
         if self._args.jdbc:
             sh.load_extension()
+        sh.load_rule(self._args.ext)
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
