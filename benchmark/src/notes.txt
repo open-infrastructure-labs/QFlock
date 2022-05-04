@@ -23,3 +23,15 @@ java_import(gw.jvm, "com.github.qflock.extensions.QflockJdbcDialect")
 gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
 beeline -u 'jdbc:hive2://localhost:10001/;transportMode=http;httpPath=cliservice' -n rob --outputformat=csv2 -e "select * from tpcds.call_center;" > /tmp/output.csv
+
+import pyarrow
+import pyarrow.parquet
+reader = pyarrow.parquet.ParquetFile("/data/store_sales.parquet/part-00000-2b94e42c-0762-4085-ad6e-b3f057eca1d8-c000.snappy.parquet")
+rg = reader.metadata.row_group(0)
+col_sizes = [0] * rg.num_columns
+for rgi in range(0, reader.num_row_groups):
+    rg = reader.metadata.row_group(rgi)
+    for col_idx in range(0, rg.num_columns):
+        col_info = rg.column(col_idx)
+        col_sizes[col_idx] += col_info.total_compressed_size
+        print(f"{rgi}:{col_idx} = {col_sizes[col_idx]}")

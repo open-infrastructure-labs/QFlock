@@ -23,6 +23,9 @@ import pyspark
 from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType, ShortType
 import numpy as np
 
+import pyarrow
+import pyarrow.parquet
+
 from com.github.qflock.jdbc.api import QflockJdbcService
 from com.github.qflock.jdbc.api import ttypes
 
@@ -38,10 +41,12 @@ class QflockThriftJdbcHandler:
         self._connection_id = 0
         self._pstatement_id = 0
         self._query_id = 0
+        # .enableHiveSupport()\
+        # We do not use hive since we create
+        # our own temp views with names of the table.
         self._spark = pyspark.sql.SparkSession \
             .builder \
             .appName("qflock-jdbc")\
-            .enableHiveSupport()\
             .config("spark.driver.maxResultSize", "10g")\
             .config("spark.driver.memory", "20g")\
             .config("spark.executor.memory", "20g")\
@@ -52,8 +57,8 @@ class QflockThriftJdbcHandler:
             .getOrCreate()
         self._spark.sparkContext.setLogLevel(spark_log_level)
         self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
-        # self._get_tables()
-        # self._create_views()
+        self._get_tables()
+        self._create_views()
 
     def _get_tables(self):
         client = self._metastore_client.client
@@ -403,7 +408,8 @@ class QflockThriftJdbcHandler:
         query_id = self.get_query_id()
         query = sql.replace('\"', "") #+ " LIMIT 10"
         queryStats = connection['properties']['queryStats']
-        logging.info(f"qid: {query_id} stats:[{queryStats}] query: {query} ")
+        table_name = connection['properties']['table']
+        logging.info(f"qid: {query_id} table:{table_name} stats:[{queryStats}] query: {query} ")
         df = self._spark.sql(query)
         df_pandas = df.toPandas()
         num_rows = len(df_pandas.index)
@@ -431,16 +437,16 @@ class QflockThriftJdbcHandler:
                     # total_bytes += sys.getsizeof(new_data)
                     binary_rows.append(new_data)
                     col_size.append(QflockThriftJdbcHandler.data_type_size(data_type))
-        # stats = queryStats.split(" ")
-        # prevBytes = stats[1].split(":")[1]
-        # prevRows = stats[2].split(":")[1]
-        # currentBytes = stats[3].split(":")[1]
-        # currentRows = stats[4].split(":")[1]
-        # logging.info(f"query-done rows:{num_rows} estRows:{currentRows} " +
-        #              f"estBytes:{currentBytes} " +
-        #              f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
-        #              f"query: {query}")
-        logging.info(f"query-done rows:{num_rows} query: {query}")
+        stats = queryStats.split(" ")
+        prevBytes = stats[1].split(":")[1]
+        prevRows = stats[2].split(":")[1]
+        currentBytes = stats[3].split(":")[1]
+        currentRows = stats[4].split(":")[1]
+        logging.info(f"query-done rows:{num_rows} estRows:{currentRows} " +
+                     f"estBytes:{currentBytes} " +
+                     f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
+                     f"query: {query}")
+        # logging.info(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnSize=col_size)
 

@@ -9,8 +9,8 @@ from glob import glob
 class CompareFiles:
     """Application for comparing output files."""
 
-    #exception_list = ["2", "13", "24a", "24b", "43", "48", "59"]
-    exception_list = []
+    exception_list = ["2", "13", "24a", "24b", "43", "48", "59"]
+    #exception_list = []
     def __init__(self):
         self._args = None
 

@@ -47,7 +47,9 @@ class QflockJdbcServer:
         parser.add_argument("--file", "-f", default="config.yaml",
                             help="config .yaml file to use")
         parser.add_argument("--mode", default="spark-submit",
-                            help="mode to launch in (spark-submit, local, debug)")
+                            help="mode to launch in (spark-submit, local)")
+        parser.add_argument("--debug", action="store_true",
+                            help="allow debug of server")
         self._args = parser.parse_args()
 
     def _init_config(self):
@@ -64,7 +66,7 @@ class QflockJdbcServer:
                 exit(1)
 
     def get_jdbc_ip(self):
-        if self._args.mode == "local":
+        if self._args.mode == "local" or self._args.debug:
             return self._config['server-name']
 
         # The below gets the IP for debugging.

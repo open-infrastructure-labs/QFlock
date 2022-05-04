@@ -1,10 +1,11 @@
 ---
   debug: false
-  log-level: "OFF"
+  log-level: "INFO"
   server-port: 1433
   server-name: qflock-jdbc-dc2
+#  server-name: 10.124.48.63
   spark:
-    master: local[4]
+    master: local[1]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-port: "9084"
     conf:
@@ -14,10 +15,10 @@
     - spark.sql.execution.arrow.pyspark.enabled=true
     - spark.sql.catalogImplementation=hive
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3
-    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.20.0.5:5006'
+    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.24.0.3:5006'
 #    packages:
 #    - org.apache.spark:spark-hive_2.12:3.2.1
-#    jars:
-#    - /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar
+    jars:
+    - /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar
 #    - /qflock/jdbc/driver/target/thrift-jdbc-server-0.0.4-SNAPSHOT.jar
 

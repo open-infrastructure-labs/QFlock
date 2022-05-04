@@ -151,37 +151,13 @@ class QflockScanBuilder(schema: StructType,
     opt.put("path", path)
     new HdfsScan(schema, opt, pushedFilter, prunedSchema)
   }
-  /** returns true if pushdowns are supported for this type of connector.
-   *
-   * @return true if pushdown supported, false otherwise
-   */
-  private def pushdownSupported(): Boolean = {
-    if (!path.contains("hdfs")) {
-      throw new Exception(s"path ${path} is unexpected")
-    }
-    HdfsStore.pushdownSupported(options)
-  }
-  /** returns true if filters can be fully pushed down
-   *
-   * @return true if pushdown supported, false otherwise
-   */
-  private def filterPushdownFullySupported(): Boolean = {
-
-//    if (!path.contains("hdfs")) {
-//      throw new Exception(s"path ${path} is unexpected")
-//    }
-//    HdfsStore.filterPushdownFullySupported(options)
-    true
-  }
   /** Pushes down the list of columns specified by requiredSchema
    *
    * @param requiredSchema the list of coumns we should use, and prune others.
    */
   override def pruneColumns(requiredSchema: StructType): Unit = {
-    if (pushdownSupported() && !options.containsKey("DisableProjectPush")) {
-      prunedSchema = requiredSchema
-      logger.info("pruneColumns " + requiredSchema.toString)
-    }
+    prunedSchema = requiredSchema
+    logger.info("pruneColumns " + requiredSchema.toString)
   }
 
   override def pushedFilters: Array[Filter] = {
@@ -197,27 +173,9 @@ class QflockScanBuilder(schema: StructType,
    */
   override def pushFilters(filters: Array[Filter]): Array[Filter] = {
     logger.trace("pushFilters" + filters.toList)
-    if (!pushdownSupported() || options.containsKey("DisableFilterPush")) {
-      filters
-    } else {
-    val pushdown = new Pushdown(schema, prunedSchema, pushedFilter, None, options)
-      val f = filters.map(f => pushdown.buildFilterExpression(f))
-      logger.warn("compiled filter list: " + f.mkString(", "))
-      if (!f.contains(None)) {
-        pushedFilter = filters
-        if (filterPushdownFullySupported()) {
-          // return empty array to indicate we pushed down all the filters.
-          Array[Filter]()
-        } else {
-          // In this case we know that we need to re-evaluate the filters
-          // since the pushdown cannot guarantee application of the filter.
-          filters
-        }
-      } else {
-        logger.info("Not pushing down filters.")
-        // If we return all filters it will indicate they need to be re-evaluated.
-        filters
-      }
-    }
+    pushedFilter = filters
+    // In this case we know that we need to re-evaluate the filters
+    // since the pushdown cannot guarantee application of the filter.
+    filters
   }
 }

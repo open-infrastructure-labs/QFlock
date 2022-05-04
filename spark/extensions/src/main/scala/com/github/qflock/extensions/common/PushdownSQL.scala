@@ -127,6 +127,15 @@ class PushdownSQL(schema: StructType,
       Option(s"(${expr1_str}" + s" $mathOp ${expr2_str})")
     }
 
+    def buildSubstring(str: Expression,
+                       pos: Expression,
+                       len: Expression): Option[String] = {
+      val str_expr = buildFilterExpression(str).getOrElse("")
+      val pos_expr = buildFilterExpression(pos).getOrElse("")
+      val len_expr = buildFilterExpression(len).getOrElse("")
+      Option(s"substr(${str_expr},${pos_expr},${len_expr})")
+    }
+
     filter match {
       case Or(left, right) => buildOr(buildFilterExpression(left),
         buildFilterExpression(right))
@@ -152,8 +161,9 @@ class PushdownSQL(schema: StructType,
       // Allow the pushdown to continue without IS NULL,
       // to help evaluate pushdown.  For production consider to reject
       // the pushdown completely.
-      case IsNotNull(attr) => if (true) {
-        Option(s"${attr.asInstanceOf[AttributeReference].name} IS NOT NULL")
+      case IsNotNull(expr) => if (true) {
+        val expr_str = buildFilterExpression(expr).getOrElse("")
+        Option(s"${expr_str} IS NOT NULL")
         // None // Option("TRUE") // Option(s"${attr.name} IS NOT NULL")
       } else {
         Option("TRUE")
@@ -185,6 +195,8 @@ class PushdownSQL(schema: StructType,
         buildMathOp(left, right, "*")
       case Divide(left, right, failOnError) =>
         buildMathOp(left, right, "/")
+      case Substring(str, pos, len) =>
+        buildSubstring(str, pos, len)
       case other@_ => logger.info("unknown filter:" + other) ; None
     }
   }
@@ -290,6 +302,8 @@ object PushdownSQL {
         false
       case Divide(left, right, failOnError) =>
         true
+      case Substring(str, pos, len) =>
+        true
       case other@_ => logger.warn("unknown checkHandle filter:" + other)
         true
     }
@@ -352,6 +366,8 @@ object PushdownSQL {
       case InSet(child, hset) =>
         true
       case Divide(left, right, failOnError) =>
+        true
+      case Substring(str, pos, len) =>
         true
       case other@_ => logger.warn("unknown filter:" + other)
         /* Reached an unknown node, return validation failed. */

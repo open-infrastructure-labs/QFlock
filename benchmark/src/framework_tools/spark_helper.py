@@ -258,7 +258,9 @@ class SparkHelper:
             print(f"input_file {input_file}")
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
         print(f"database {input_file} has {df.count()} rows")
-
+        block_size = 1024 * 1024 * 128
+        # self._spark.sparkContext.hadoopConfiguration.setInt("dfs.blocksize", block_size)
+        # self._spark.sparkContext.hadoopConfiguration.setInt("parquet.block.size", block_size)
         #df.repartition(1) \
         df.repartition(1).fillna(0).fillna("") \
             .write \

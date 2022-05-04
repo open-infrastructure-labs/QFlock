@@ -62,23 +62,19 @@ case class QflockJdbcScan(schema: StructType,
   private def createPartitions(): Array[InputPartition] = {
     var a = new ArrayBuffer[InputPartition](0)
     val path = options.get("path")
-    // val numRows: Array[String] = options.get("numRows").split(" ")
-    val partitions = 1 // numRows.length
+//    val partitions = options.get("numRowGroups").toInt
+    val partitions = 1
     logger.info(s"partitions ${partitions}")
     // Generate one partition per row Group.
     for (i <- 0 until partitions) {
-//      a += new QflockJdbcPartition(index = i,
-//        offset = i * numRows(i).toLong,
-//        length = numRows(i).toLong,
-//        name = path,
-//        rows = numRows(i).toLong,
-//        0)
       a += new QflockJdbcPartition(index = i,
-        offset = 0,
-        length = 0,
-        name = path,
-        rows = 0,
-        0)
+        offset = i,
+        length = 1,
+        name = path)
+//      a += new QflockJdbcPartition(index = i,
+//        offset = 0,
+//        length = 0,
+//        name = path)
     }
     logger.info("Partitions: " + a.mkString(", "))
     a.toArray
