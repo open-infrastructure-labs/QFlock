@@ -48,8 +48,10 @@ class QflockJdbcServer:
                             help="config .yaml file to use")
         parser.add_argument("--mode", default="spark-submit",
                             help="mode to launch in (spark-submit, local)")
-        parser.add_argument("--debug", action="store_true",
-                            help="allow debug of server")
+        parser.add_argument("--debug_spark", action="store_true",
+                            help="allow debug of spark server")
+        parser.add_argument("--debug_pyspark", action="store_true",
+                            help="allow debug of pyspark")
         self._args = parser.parse_args()
 
     def _init_config(self):
@@ -66,7 +68,7 @@ class QflockJdbcServer:
                 exit(1)
 
     def get_jdbc_ip(self):
-        if self._args.mode == "local" or self._args.debug:
+        if self._args.mode == "local" or self._args.debug_spark:
             return self._config['server-name']
 
         # The below gets the IP for debugging.
@@ -101,7 +103,8 @@ class QflockJdbcServer:
         logging.info(f"Starting JDBC Server ip: {jdbc_ip}:{jdbc_port}")
         handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'],
                                           metastore_ip=self._config['spark']['hive-metastore'],
-                                          metastore_port=self._config['spark']['hive-metastore-port'])
+                                          metastore_port=self._config['spark']['hive-metastore-port'],
+                                          debug_pyspark=self._args.debug_pyspark)
         processor = QflockJdbcService.Processor(handler)
         transport = TSocket.TServerSocket(host=jdbc_ip, port=jdbc_port)
         tfactory = TTransport.TBufferedTransportFactory()
@@ -117,7 +120,7 @@ class QflockJdbcServer:
             pass
 
     def filter_config(self, conf):
-        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
+        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug_spark):
             return False
         else:
             return True

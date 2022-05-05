@@ -62,8 +62,8 @@ case class QflockJdbcScan(schema: StructType,
   private def createPartitions(): Array[InputPartition] = {
     var a = new ArrayBuffer[InputPartition](0)
     val path = options.get("path")
-//    val partitions = options.get("numRowGroups").toInt
-    val partitions = 1
+    val partitions = options.get("numRowGroups").toInt
+//    val partitions = 1
     logger.info(s"partitions ${partitions}")
     // Generate one partition per row Group.
     for (i <- 0 until partitions) {

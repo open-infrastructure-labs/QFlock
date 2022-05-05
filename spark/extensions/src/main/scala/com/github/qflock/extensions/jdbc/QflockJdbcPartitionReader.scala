@@ -58,6 +58,9 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
       val properties = new Properties
       properties.setProperty("compression", "true")
       properties.setProperty("bufferSize", "42")
+      properties.setProperty("rowGroupOffset", partition.offset.toString)
+      properties.setProperty("rowGroupCount", partition.length.toString)
+      properties.setProperty("tableName", options.get("tableName"))
       properties.setProperty("queryStats", options.get("queryStats"))
       val con = DriverManager.getConnection(url, properties)
       logger.info(s"connected to ${url}")

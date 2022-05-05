@@ -16,8 +16,6 @@
  */
 package com.github.qflock.datasource.hdfs
 
-import com.github.qflock.datasource.common.PushdownPartition
-
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition
 
@@ -37,7 +35,7 @@ class HdfsPartition(var index: Int,
                     var rows: Long = 0,
                     var modifiedTime: Long = 0,
                     var last: Boolean = false)
-  extends Partition with InputPartition with PushdownPartition {
+  extends Partition with InputPartition {
 
   override def toString() : String = {
     s"""HdfsPartition index ${index} offset: ${offset} length: ${length} """ +
@@ -46,15 +44,5 @@ class HdfsPartition(var index: Int,
 
   override def preferredLocations(): Array[String] = {
     Array("localhost")
-  }
-  /** Returns the query clause needed to target this specific partition.
-   *
-   *  @param partition the S3Partition that is being targeted.
-   *
-   *  @return String the query clause for use on this partition.
-   */
-  override def getObjectClause(partition: PushdownPartition): String = {
-    val part = partition.asInstanceOf[HdfsPartition]
-    "S3Object"
   }
 }

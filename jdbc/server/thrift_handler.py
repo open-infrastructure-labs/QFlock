@@ -15,7 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-import sys
+import os
 import threading
 import inspect
 import logging
@@ -34,16 +34,23 @@ from metastore_client import HiveMetastoreClient
 
 class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
-                 metastore_ip="", metastore_port=""):
+                 metastore_ip="", metastore_port="", debug_pyspark=False):
         self._lock = threading.Lock()
         self._connections = {}
         self._pstatements = {}
         self._connection_id = 0
         self._pstatement_id = 0
         self._query_id = 0
-        # .enableHiveSupport()\
-        # We do not use hive since we create
-        # our own temp views with names of the table.
+        if debug_pyspark:
+            self._create_debug_spark()
+        else:
+            self._create_spark()
+        self._spark.sparkContext.setLogLevel(spark_log_level)
+        self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
+        self._get_tables()
+        self._create_views()
+
+    def _create_debug_spark(self):
         self._spark = pyspark.sql.SparkSession \
             .builder \
             .appName("qflock-jdbc")\
@@ -54,11 +61,17 @@ class QflockThriftJdbcHandler:
             .config("spark.sql.catalogImplementation", "hive")\
             .config("spark.sql.warehouse.dir", "hdfs://qflock-storage-dc1:9000/user/hive/warehouse3")\
             .config("spark.hadoop.hive.metastore.uris", "thrift://qflock-storage-dc1:9084")\
+            .config("spark.jars", "../../spark/extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar")\
             .getOrCreate()
-        self._spark.sparkContext.setLogLevel(spark_log_level)
-        self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
-        self._get_tables()
-        self._create_views()
+
+    def _create_spark(self):
+        # .enableHiveSupport()\
+        # We do not use hive since we create
+        # our own temp views with names of the table.
+        self._spark = pyspark.sql.SparkSession \
+            .builder \
+            .appName("qflock-jdbc")\
+            .getOrCreate()
 
     def _get_tables(self):
         client = self._metastore_client.client
@@ -73,14 +86,25 @@ class QflockThriftJdbcHandler:
 
     def _create_views(self):
         for table in self._tables:
-            logging.info(f"Create view for table: {table.tableName}")
-            df = self._spark.read \
-                .format("qflockDs") \
-                .option("format", "parquet") \
-                .option("tableName", table.tableName) \
-                .option("dbName", table.dbName) \
-                .load()
-            df.createOrReplaceTempView(table.tableName)
+            fs, path = pyarrow.fs.FileSystem.from_uri(table.sd.location)
+            file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+            files = [f.path for f in file_info if f.is_file and f.size > 0]
+            file_path = os.path.split(os.path.split(table.sd.location)[0])[0] + files[0]
+            logging.info(f"found file: {file_path}")
+            f = fs.open_input_file(file_path)
+            reader = pyarrow.parquet.ParquetFile(f)
+            for rg_offset in range(0, reader.num_row_groups):
+                logging.info(f"Create view for table: {table.tableName} rowGroup: {rg_offset}")
+                df = self._spark.read \
+                    .format("qflockDs") \
+                    .option("format", "parquet") \
+                    .option("tableName", table.tableName) \
+                    .option("dbName", table.dbName) \
+                    .option("rowGroupOffset", str(rg_offset))\
+                    .option("rowGroupCount", "1")\
+                    .load()
+                df.createOrReplaceTempView(f"{table.tableName}_{rg_offset}")
+            f.close()
 
     def get_connection_id(self):
         current_id = self._connection_id
@@ -408,7 +432,9 @@ class QflockThriftJdbcHandler:
         query_id = self.get_query_id()
         query = sql.replace('\"', "") #+ " LIMIT 10"
         queryStats = connection['properties']['queryStats']
-        table_name = connection['properties']['table']
+        row_group_offset = connection['properties']['rowGroupOffset']
+        table_name = connection['properties']['tableName']
+        query = query.replace(f" {table_name} ", f" {table_name}_{row_group_offset} ")
         logging.info(f"qid: {query_id} table:{table_name} stats:[{queryStats}] query: {query} ")
         df = self._spark.sql(query)
         df_pandas = df.toPandas()

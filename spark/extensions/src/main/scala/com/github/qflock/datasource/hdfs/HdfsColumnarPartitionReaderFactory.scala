@@ -99,8 +99,7 @@ class HdfsColumnarPartitionReaderFactory(pushdown: Pushdown,
     val datetimeRebaseSpec = DataSourceUtils.datetimeRebaseSpec(
       footerFileMetaData.getKeyValueMetaData.get,
       datetimeRebaseModeInRead)
-    val pushed = if (!(options.get("path").contains("ndphdfs") &&
-                      pushdown.isPushdownNeeded) &&
+    val pushed = if (pushdown.isPushdownNeeded &&
                      enableParquetFilterPushDown) {
       val parquetSchema = footerFileMetaData.getSchema
       // logger.info("parquet file schema: " + parquetSchema.toString)

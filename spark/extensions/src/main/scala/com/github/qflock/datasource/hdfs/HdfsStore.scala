@@ -37,32 +37,24 @@ import org.apache.spark.sql.SparkSession
 object HdfsStoreFactory {
   /** Returns the store object.
    *
-   * @param pushdown object handling filter, project and aggregate pushdown
    * @param options the parameters including those to construct the store
    * @return a new HdfsStore object constructed with above parameters.
    */
-  def getStore(pushdown: Pushdown,
-               options: java.util.Map[String, String],
-               sparkSession: SparkSession,
+  def getStore(options: java.util.Map[String, String],
                sharedConf: Configuration):
       HdfsStore = {
-    new HdfsStore(pushdown, options, sparkSession, sharedConf)
+    new HdfsStore(options, sharedConf)
   }
 }
 /** A hdfs store object which can connect
  *  to a file on hdfs filesystem, specified by options("path"),
- *  And which can read a partition with any of various pushdowns.
  *
- * @param pushdown object handling filter, project and aggregate pushdown
  * @param options the parameters including those to construct the store
  */
-class HdfsStore(pushdown: Pushdown,
-                options: java.util.Map[String, String],
-                sparkSession: SparkSession,
+class HdfsStore(options: java.util.Map[String, String],
                 sharedConf: Configuration) {
-  override def toString() : String = "HdfsStore" + options + pushdown.filters.mkString(", ")
+  override def toString() : String = "HdfsStore" + options
   protected val path = options.get("path")
-  protected val isPushdownNeeded: Boolean = pushdown.isPushdownNeeded
   protected val endpoint = {
     val server = path.split("/")(2)
     if (path.contains("webhdfs://")) {
@@ -193,38 +185,6 @@ class HdfsStore(pushdown: Pushdown,
     }
     (startOffset, partitionLength)
   }
-  /** The kind of header we should use.
-   *  In our case we only ever use None or Ignore, since
-   *  we use casts and column numbers, so the header is not needed.
-   * @return NONE or IGNORE
-   */
-  def headerType(): String = {
-    /* If we do not push down, then we will read from hdfs directly,
-     * and therefor need to skip the header ourselves.
-     * When we use ndp, it skips the header for us since we tell it about the header.
-     */
-    if (options.containsKey("header") && (options.get("header") == "true")) {
-      "IGNORE"
-    } else {
-      "NONE"
-    }
-  }
-  /** Returns true if we should skip the header.
-   *
-   * @param partition the partition to read
-   * @return true to skip the header and false otherwise.
-   */
-  def skipHeader(partition: HdfsPartition): Boolean = {
-    /* If we do not push down, then we will read from hdfs directly,
-     * and therefor need to skip the header ourselves.
-     * When we use ndp, it skips the header for us since we tell it about the header.
-     */
-    if (options.containsKey("header") && (options.get("header") == "true")) {
-      (partition.index == 0 && !isPushdownNeeded)
-    } else {
-      false
-    }
-  }
 }
 
 /** Related routines for the HDFS connector.
@@ -237,41 +197,6 @@ object HdfsStore {
       .builder()
       .getOrCreate()
 
-  /** Returns true if pushdown is supported by this flavor of
-   *  filesystem represented by a string of "filesystem://filename".
-   *
-   * @param options map containing "path".
-   * @return true if pushdown supported, false otherwise.
-   */
-  def pushdownSupported(options: util.Map[String, String]): Boolean = {
-    if (options.get("format").contains("parquet")) {
-      // Regular hdfs does pushdown in the datasource.
-      true
-    } else {
-      // Other filesystems like hdfs and webhdfs do not support pushdown.
-      false
-    }
-  }
-
-  /** Returns true if a filter can be fully pushed down.  This occurs when
-   *  the entity we pushdown to guarantees that the filter does not need
-   *  to be re-evaluated on the results returned.
-   *  It is worth noting that if we cannot fully pushdown filters, then
-   *  Spark will not consider pushing down aggregates.
-   *
-   * @param options map containing "path".
-   * @return true if pushdown supported, false otherwise.
-   */
-  def filterPushdownFullySupported(options: util.Map[String, String]): Boolean = {
-    if (options.get("path").startsWith("hdfs://") &&
-        options.get("format").contains("parquet")) {
-      // With parquet, the filters need to be re-evaluated.
-      false
-    } else {
-      // everything else supports full pushdown
-      true
-    }
-  }
   /** returns a string with the pathname of the hdfs object,
    *  including the server port.  The user might not include the port,
    *  and if it is missing, we will add it.

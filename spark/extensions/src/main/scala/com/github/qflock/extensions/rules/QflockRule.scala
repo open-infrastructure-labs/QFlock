@@ -352,19 +352,11 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val catalogTable = relationArgs.catalogTable.get
     var tableName = catalogTable.identifier.table
     var dbName = catalogTable.identifier.database.getOrElse("")
-//    val table = ExtHiveUtils.getTable(dbName, tableName)
-//    val numRows = {
-//      var rowStr = ""
-//      val rows = table.getParameters.get("spark.sql.statistics.numRows").toInt
-//      if (rows >= 8) {
-//        for (i <- 0 until 7) {
-//          rowStr += s"${rows / 8} "
-//        }
-//        rowStr += s"${(rows / 8) + (rows % 8)}"
-//      }
-//      rowStr
-//    }
-//    opt.put("numRows", numRows)
+    val table = ExtHiveUtils.getTable(dbName, tableName)
+    val rgParamName = s"spark.qflock.statistics.tableStats.${tableName}.row_groups"
+    opt.put("numRowGroups",
+            table.getParameters.get(rgParamName))
+    opt.put("tableName", table.getTableName())
 
     val filterCondition = filters.reduceLeftOption(And)
     val relationForStats = QflockLogicalRelation.apply(project, filterCondition,
