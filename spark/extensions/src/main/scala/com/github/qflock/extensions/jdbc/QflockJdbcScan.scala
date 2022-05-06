@@ -62,21 +62,24 @@ case class QflockJdbcScan(schema: StructType,
   private def createPartitions(): Array[InputPartition] = {
     var a = new ArrayBuffer[InputPartition](0)
     val path = options.get("path")
-    val partitions = options.get("numRowGroups").toInt
-//    val partitions = 1
-    logger.info(s"partitions ${partitions}")
-    // Generate one partition per row Group.
-    for (i <- 0 until partitions) {
-      a += new QflockJdbcPartition(index = i,
-        offset = i,
-        length = 1,
+    var partitions = options.get("numRowGroups").toInt
+    // Set below to true to do a 1 partition test.
+    if (false) {
+      partitions = 1
+      a += new QflockJdbcPartition(index = 0,
+        offset = 0,
+        length = options.get("numRowGroups").toInt,
         name = path)
-//      a += new QflockJdbcPartition(index = i,
-//        offset = 0,
-//        length = 0,
-//        name = path)
+    } else {
+      // Generate one partition per row Group.
+      for (i <- 0 until partitions) {
+        a += new QflockJdbcPartition(index = i,
+          offset = i,
+          length = 1,
+          name = path)
+      }
     }
-    logger.info("Partitions: " + a.mkString(", "))
+    logger.info(s"Num partitions: ${partitions}" + a.mkString(", "))
     a.toArray
   }
   private val sparkSession: SparkSession = SparkSession
