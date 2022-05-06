@@ -222,9 +222,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val table = ExtHiveUtils.getTable(dbName, tableName)
 
     // We only continue with the rule if this table is stored remotely.
-//    if (!table.getSd.getLocation.contains("-dc2")) {
-//      return false
-//    }
+    if (!table.getSd.getLocation.contains("-dc2")) {
+      return false
+    }
     //    if (relationArgs.dataSchema == relationArgs.readSchema) {
     //      logger.warn("Plan not modified. No Project Necessary. " +
     //        relationArgs.options.get("currenttest"))

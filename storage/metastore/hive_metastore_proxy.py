@@ -67,6 +67,8 @@ class ThriftHiveMetastoreHandler:
             table.parameters[param_key] = str(bytes_per_row)
             log(col, param_key, bytes_per_row)
 
+        param_key = f'spark.qflock.statistics.tableStats.{table.tableName}.row_groups'
+        table.parameters[param_key] = str(reader.metadata.num_row_groups)
         f.close()
 
     def _decorator(self, f, attr):
