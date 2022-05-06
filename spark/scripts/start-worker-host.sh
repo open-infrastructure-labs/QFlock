@@ -1,5 +1,6 @@
 #!/bin/bash
-source docker/spark_version
+ROOT_DIR=$(git rev-parse --show-toplevel)
+source $ROOT_DIR/scripts/spark/spark_version
 source docker/setup.sh
 
 mkdir -p "${ROOT_DIR}/volume/logs"

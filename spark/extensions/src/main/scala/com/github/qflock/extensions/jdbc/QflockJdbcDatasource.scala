@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.generic
+package com.github.qflock.extensions.jdbc
 
 import java.net.URI
 import java.util
@@ -23,16 +23,11 @@ import java.util.HashMap
 import scala.collection.JavaConverters._
 
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.BlockLocation
-import org.apache.hadoop.fs.FileStatus
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.fs.FSDataInputStream
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.connector.catalog.{SessionConfigSupport, SupportsRead,
-  Table, TableCapability, TableProvider}
+import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils
@@ -40,11 +35,12 @@ import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
+
 /** Creates a data source object for Spark that
  *  supports pushdown of predicates such as Filter, Project and Aggregate.
  *
  */
-class GenericPushdownDatasource extends TableProvider
+class QflockJdbcDatasource extends TableProvider
   with SessionConfigSupport with DataSourceRegister {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -81,12 +77,6 @@ class GenericPushdownDatasource extends TableProvider
   }
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
     if (options.get("format") == "parquet") {
-      /* With parquet, we infer the schema from the metadata.
-       */
-//      val file = NdpApi.extractFilename(options.get("path"))
-//      val server = NdpApi.extractServer(options.get("path"))
-//      logger.info(s"getting schema for: ${server}/${file}")
-//      NdpApi.getSchema(file, server)
         val path = options.get("path")
         // logger.info(s"inferSchema path: ${path}")
         val fileStatusArray = getFileStatusList(path)
@@ -102,16 +92,16 @@ class GenericPushdownDatasource extends TableProvider
                         transforms: Array[Transform],
                         options: util.Map[String, String]): Table = {
     logger.trace("getTable: Options " + options)
-    new GenericPushdownBatchTable(schema, options)
+    new QflockJdbcBatchTable(schema, options)
   }
 
   override def keyPrefix(): String = {
-    "genericPushdown"
+    "qflockJdbc"
   }
-  override def shortName(): String = "genericPushdown"
+  override def shortName(): String = "qflockJdbc"
 }
 
-object GenericPushdownDatasource {
+object QflockJdbcDatasource {
   private val logger = LoggerFactory.getLogger(getClass)
   var initialized = false
   private val sparkSession: SparkSession = SparkSession
@@ -135,7 +125,7 @@ object GenericPushdownDatasource {
  *                "accessKey" and "secretKey" are the credentials for above server.
  *                 "path" is the full path to the s3 file.
  */
-class GenericPushdownBatchTable(schema: StructType,
+class QflockJdbcBatchTable(schema: StructType,
                            options: util.Map[String, String])
   extends Table with SupportsRead {
 
@@ -149,7 +139,7 @@ class GenericPushdownBatchTable(schema: StructType,
     Set(TableCapability.BATCH_READ).asJava
 
   override def newScanBuilder(params: CaseInsensitiveStringMap): ScanBuilder =
-    new GenericPushdownScanBuilder(schema, options)
+    new QflockJdbcScanBuilder(schema, options)
 }
 
 /** Creates a builder for scan objects.
@@ -158,8 +148,8 @@ class GenericPushdownBatchTable(schema: StructType,
  * @param schema the format of the columns
  * @param options the options (see PushdownBatchTable for full list.)
  */
-class GenericPushdownScanBuilder(schema: StructType,
-                                 options: util.Map[String, String])
+class QflockJdbcScanBuilder(schema: StructType,
+                            options: util.Map[String, String])
   extends ScanBuilder {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -177,6 +167,6 @@ class GenericPushdownScanBuilder(schema: StructType,
     if (!options.get("path").contains("hdfs")) {
       throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
     }
-    new GenericPushdownScan(schema, opt)
+    new QflockJdbcScan(schema, opt)
   }
 }

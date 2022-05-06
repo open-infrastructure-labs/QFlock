@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.hdfs
-
-import com.github.qflock.extensions.common.PushdownPartition
+package com.github.qflock.datasource.hdfs
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition
+
 /** Represents a partition on an hdfs file system
  *
  * @param index the position in order of partitions.
@@ -27,14 +26,16 @@ import org.apache.spark.sql.connector.read.InputPartition
  * @param length the total bytes in the file
  * @param name the full path of the file
  * @param modifiedTime the last modification time of the file.
+ * @param last true if it is the last partition.
  */
 class HdfsPartition(var index: Int,
                     var offset: Long = 0,
                     var length: Long = 0,
                     var name: String = "",
                     var rows: Long = 0,
-                    var modifiedTime: Long = 0)
-  extends Partition with InputPartition with PushdownPartition {
+                    var modifiedTime: Long = 0,
+                    var last: Boolean = false)
+  extends Partition with InputPartition {
 
   override def toString() : String = {
     s"""HdfsPartition index ${index} offset: ${offset} length: ${length} """ +
@@ -43,15 +44,5 @@ class HdfsPartition(var index: Int,
 
   override def preferredLocations(): Array[String] = {
     Array("localhost")
-  }
-  /** Returns the query clause needed to target this specific partition.
-   *
-   *  @param partition the S3Partition that is being targeted.
-   *
-   *  @return String the query clause for use on this partition.
-   */
-  override def getObjectClause(partition: PushdownPartition): String = {
-    val part = partition.asInstanceOf[HdfsPartition]
-    "S3Object"
   }
 }

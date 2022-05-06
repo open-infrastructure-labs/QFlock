@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Include the setup for our cached local directories. (.m2, .ivy2, etc)
-source docker/spark_version
+ROOT_DIR=$(git rev-parse --show-toplevel)
+source $ROOT_DIR/scripts/spark/spark_version
 source docker/setup.sh
 
 mkdir -p "${ROOT_DIR}/volume/logs"

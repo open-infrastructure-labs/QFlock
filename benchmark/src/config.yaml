@@ -18,10 +18,13 @@
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
 #    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
     jdbc-path: "jdbc:qflock://qflock-jdbc-dc2:1433/tpcds"
-    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth1,\
-                   qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
+    docker-stats: ""
+#    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth0,\
+#                   qflock-storage-dc2:tx_bytes:eth1,\
+#                   qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
+#                   qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
   spark:
-    master: local
+    master: local[1]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-ports: "default:9084"
     conf:
@@ -35,14 +38,14 @@
 #    - spark.sql.hive.metastore.jars.path=jars/*.jar
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3
 #    - spark.sql.extensions=com.github.qflock.FederationExtensions,
-    - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
+#    - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
     - spark.sql.cbo.enabled=true
     - spark.sql.statistics.histogram.enabled=true
 #    - spark.sql.statistics.histogram.numBins=4096
 #    - spark.sql.cbo.planStats.enabled=true
 #    - spark.sql.cbo.joinReorder.enabled=true
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder
-    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.20.0.5:5006'
+    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.23.0.3:5006'
 #    packages:
 #    - org.apache.spark:spark-hive_2.12:3.2.1
     jars:

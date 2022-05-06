@@ -36,12 +36,13 @@ public class QflockDriver implements Driver {
         if (!acceptsURL(url))
             return null;
 
-        logger.debug("Call to connect {} {}", url, info);
+        logger.info("Call to connect {} {}", url, info);
         try 
         {
             URI r = new URI("thrift:" + url.trim().substring(URL_PREFIX.length()));
             TSocket transport = new TSocket(r.getHost(), r.getPort());
             transport.open();
+            logger.info("connect, open complete {}", url);
             
             TBinaryProtocol protocol = new TBinaryProtocol(transport);
             
@@ -51,7 +52,9 @@ public class QflockDriver implements Driver {
             {
                 props.put((String) keyEtr.getKey(), (String) keyEtr.getValue());
             }
+            logger.info("createConnection {}", url);
             QFConnection conn = client.createConnection(r.getPath(), props);
+            logger.info("createConnection complete {}", url);
             return new QflockConnection(transport, client, conn, url, info);
         } catch (TException e) {
             throw new SQLException(e);

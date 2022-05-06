@@ -26,21 +26,15 @@ package com.github.qflock.extensions.common
 
 import java.io.StringWriter
 import java.sql.{Date, Timestamp}
-import java.util
-import java.util.{HashMap, Locale, StringTokenizer}
 import javax.json.Json
 import javax.json.JsonArrayBuilder
-import javax.json.JsonObject
-import javax.json.JsonObjectBuilder
-import javax.json.JsonWriter
-
-import scala.collection.mutable.ArrayBuilder
 
 import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Count, Max, Min, Sum}
+import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.types._
 
 
@@ -94,9 +88,9 @@ class PushdownSQL(schema: StructType,
     def buildLiteral(value: Any, dataType: DataType): Option[String] = {
       val sqlValue: String = dataType match {
         case StringType => s"""'${value.toString.replace("'", "\\'\\'")}'"""
-        case DateType => s""""${value.asInstanceOf[Date]}""""
+        case DateType => s"""'${DateFormatter().format(value.asInstanceOf[Int])}'"""
         case TimestampType => s""""${value.asInstanceOf[Timestamp]}""""
-        case _ => value.toString
+        case _ => s"""'${value.toString}'"""
       }
       Option(sqlValue)
     }
@@ -115,6 +109,33 @@ class PushdownSQL(schema: StructType,
       Option(s"""NOT ( $f )""")
     }
     def buildAttributeReference(attr: String): Option[String] = Option(attr)
+    def buildInExpression(value: Expression, list: Seq[Expression]): Option[String] = {
+      val arg1 = buildFilterExpression(value).getOrElse("")
+      val inStr = s"$arg1 IN ${list.mkString("('", "', '", "')")}"
+      Option(inStr)
+    }
+    def buildInSetExpression(child: Expression, hset: Set[Any]): Option[String] = {
+      val arg1 = buildFilterExpression(child).getOrElse("")
+      val inStr = s"$arg1 IN ${hset.mkString("(", ",", ")")}"
+      Option(inStr)
+    }
+    def buildMathOp(expr1: Expression,
+                    expr2: Expression,
+                    mathOp: String): Option[String] = {
+      val expr1_str = buildFilterExpression(expr1).getOrElse("")
+      val expr2_str = buildFilterExpression(expr2).getOrElse("")
+      Option(s"(${expr1_str}" + s" $mathOp ${expr2_str})")
+    }
+
+    def buildSubstring(str: Expression,
+                       pos: Expression,
+                       len: Expression): Option[String] = {
+      val str_expr = buildFilterExpression(str).getOrElse("")
+      val pos_expr = buildFilterExpression(pos).getOrElse("")
+      val len_expr = buildFilterExpression(len).getOrElse("")
+      Option(s"substr(${str_expr},${pos_expr},${len_expr})")
+    }
+
     filter match {
       case Or(left, right) => buildOr(buildFilterExpression(left),
         buildFilterExpression(right))
@@ -131,7 +152,8 @@ class PushdownSQL(schema: StructType,
       // to help evaluate pushdown.  For production consider to reject
       // the pushdown completely.
       case IsNull(attr) => if (true) {
-        None // Option("TRUE") // Option(s"${attr.name} IS NULL")
+        Option(s"${attr.asInstanceOf[AttributeReference].name} IS NULL")
+        // None // Option("TRUE") // Option(s"${attr.name} IS NULL")
       } else {
         Option("TRUE")
       }
@@ -139,23 +161,42 @@ class PushdownSQL(schema: StructType,
       // Allow the pushdown to continue without IS NULL,
       // to help evaluate pushdown.  For production consider to reject
       // the pushdown completely.
-      case IsNotNull(attr) => if (true) {
-        None // Option("TRUE") // Option(s"${attr.name} IS NOT NULL")
+      case IsNotNull(expr) => if (true) {
+        val expr_str = buildFilterExpression(expr).getOrElse("")
+        Option(s"${expr_str} IS NOT NULL")
+        // None // Option("TRUE") // Option(s"${attr.name} IS NOT NULL")
       } else {
         Option("TRUE")
       }
-      /* case StringStartsWith(attr, value) =>
-        Option(s"${attr} LIKE '${value}%'")
-      case StringEndsWith(attr, value) =>
-        Option(s"${attr} LIKE '%${value}'")
-      case StringContains(attr, value) =>
-        Option(s"${attr} LIKE '%${value}%'") */
-      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+      case StartsWith(attr, value) =>
+        val attrStr = buildFilterExpression(attr).getOrElse("")
+        Option(s"${attrStr} LIKE '${value}%'")
+      case EndsWith(attr, value) =>
+        val attrStr = buildFilterExpression(attr).getOrElse("")
+        Option(s"${attrStr} LIKE '%${value}'")
+      case Contains(attr, value) =>
+        val attrStr = buildFilterExpression(attr).getOrElse("")
+        Option(s"${attrStr} LIKE '%${value}%'")
+      case AttributeReference(name, dataType, nullable, meta) =>
         buildAttributeReference(name)
       case Literal(value, dataType) =>
         buildLiteral(value, dataType)
-      /* case Cast(expression, dataType, timeZoneId, _) =>
-        buildFiltersJson(expression) */
+      case Cast(expression, dataType, timeZoneId, _) =>
+        buildFilterExpression(expression)
+      case in@In(value, list) =>
+        buildInExpression(value, list)
+      case in@InSet(child: Expression, hset: Set[Any]) =>
+        buildInSetExpression(child, hset)
+      case Add(left, right, failOnError) =>
+        buildMathOp(left, right, "+")
+      case Subtract(left, right, failOnError) =>
+        buildMathOp(left, right, "-")
+      case Multiply(left, right, failOnError) =>
+        buildMathOp(left, right, "*")
+      case Divide(left, right, failOnError) =>
+        buildMathOp(left, right, "/")
+      case Substring(str, pos, len) =>
+        buildSubstring(str, pos, len)
       case other@_ => logger.info("unknown filter:" + other) ; None
     }
   }
@@ -165,7 +206,14 @@ class PushdownSQL(schema: StructType,
    * @return String representing the query to send to the endpoint.
    */
   def query: String = {
-    var columnList = schema.fields.map(x => s"" + s"${x.name}").mkString(",")
+    var columnList = {
+      if (schema.length != 0) {
+        schema.fields.map(x => s"" + s"${x.name}").mkString(",")
+      } else {
+        // There is no schema, just return all columns.
+        "*"
+      }
+    }
     val whereClause = buildWhereClause()
     val objectClause = "TABLE_TAG"
     var retVal = ""
@@ -210,6 +258,73 @@ object PushdownSQL {
 
   private val filterMaxDepth = 100
 
+  def checkHandleFilterExpression(expr: Expression, depth: Int = 0): Boolean = {
+    if (depth > filterMaxDepth) {
+      /* Reached depth unsupported by NDP server. */
+      return false
+    }
+    /* Traverse the tree and validate the nodes are supported. */
+    expr match {
+      case Or(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+        checkHandleFilterExpression(right, depth + 1)
+      case And(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+                              checkHandleFilterExpression(right, depth + 1)
+      case Not(filter) => checkHandleFilterExpression(filter, depth + 1)
+      case EqualTo(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+        checkHandleFilterExpression(right, depth + 1)
+      case LessThan(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+        checkHandleFilterExpression(right, depth + 1)
+      case GreaterThan(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+        checkHandleFilterExpression(right, depth + 1)
+      case LessThanOrEqual(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+        checkHandleFilterExpression(right, depth + 1)
+      case GreaterThanOrEqual(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+        checkHandleFilterExpression(right, depth + 1)
+      case IsNull(attr) => checkHandleFilterExpression(attr, depth + 1)
+      case IsNotNull(attr) => checkHandleFilterExpression(attr, depth + 1)
+      case StartsWith(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+                                    checkHandleFilterExpression(right, depth + 1)
+      case EndsWith(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+                                    checkHandleFilterExpression(right, depth + 1)
+      case Contains(left, right) => checkHandleFilterExpression(left, depth + 1) &&
+                                    checkHandleFilterExpression(right, depth + 1)
+      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+        true
+      case Literal(value, dataType) =>
+        true
+      case Cast(expression, dataType, timeZoneId, _) =>
+        true
+      case In(value, list) =>
+        true
+      case InSet(child, hset) =>
+        true
+      case ScalarSubquery(plan, outerAttrs, exprId, joinCond) =>
+        false
+      case Divide(left, right, failOnError) =>
+        true
+      case Substring(str, pos, len) =>
+        true
+      case other@_ => logger.warn("unknown checkHandle filter:" + other)
+        true
+    }
+  }
+  def canHandleFilters(filters: Seq[Expression]): Boolean = {
+    var status: Boolean = true
+    var invalidCount = 0
+    var validCount = 0
+    for (f <- filters) {
+      if (checkHandleFilterExpression(f)) {
+        validCount += 1
+      } else {
+        invalidCount += 1
+      }
+    }
+    if (invalidCount > 0) {
+      false
+    } else {
+      true
+    }
+  }
   def validateFilterExpression(expr: Expression, depth: Int = 0): Boolean = {
     if (depth > filterMaxDepth) {
       /* Reached depth unsupported by NDP server. */
@@ -219,9 +334,9 @@ object PushdownSQL {
     expr match {
       case Or(left, right) => validateFilterExpression(left, depth + 1) &&
         validateFilterExpression(right, depth + 1)
-      /* case And(left, right) => validateFilterExpression(left, depth + 1) &&
+      case And(left, right) => validateFilterExpression(left, depth + 1) &&
                               validateFilterExpression(right, depth + 1)
-      case Not(filter) => validateFilterExpression(filter, depth + 1) */
+      case Not(filter) => validateFilterExpression(filter, depth + 1)
       case EqualTo(left, right) => validateFilterExpression(left, depth + 1) &&
         validateFilterExpression(right, depth + 1)
       case LessThan(left, right) => validateFilterExpression(left, depth + 1) &&
@@ -234,17 +349,25 @@ object PushdownSQL {
         validateFilterExpression(right, depth + 1)
       case IsNull(attr) => validateFilterExpression(attr, depth + 1)
       case IsNotNull(attr) => validateFilterExpression(attr, depth + 1)
-      /* case StartsWith(left, right) => validateFilterExpression(left, depth + 1) &&
+      case StartsWith(left, right) => validateFilterExpression(left, depth + 1) &&
                                     validateFilterExpression(right, depth + 1)
       case EndsWith(left, right) => validateFilterExpression(left, depth + 1) &&
                                     validateFilterExpression(right, depth + 1)
       case Contains(left, right) => validateFilterExpression(left, depth + 1) &&
-                                    validateFilterExpression(right, depth + 1) */
+                                    validateFilterExpression(right, depth + 1)
       case attrib @ AttributeReference(name, dataType, nullable, meta) =>
         true
       case Literal(value, dataType) =>
         true
       case Cast(expression, dataType, timeZoneId, _) =>
+        true
+      case In(value, list) =>
+        true
+      case InSet(child, hset) =>
+        true
+      case Divide(left, right, failOnError) =>
+        true
+      case Substring(str, pos, len) =>
         true
       case other@_ => logger.warn("unknown filter:" + other)
         /* Reached an unknown node, return validation failed. */

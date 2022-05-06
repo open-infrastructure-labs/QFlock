@@ -24,10 +24,7 @@ class SparkLauncher:
         self._metastore_ports = Config.get_metadata_ports(self._config)
 
     def filter_config(self, conf):
-        if "spark.sql.extensions" in conf and\
-                ("extensions" not in self._args or not self._args.extensions):
-            return False
-        elif "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
+        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug):
             return False
         else:
             return True

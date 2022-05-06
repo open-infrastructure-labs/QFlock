@@ -47,7 +47,11 @@ class QflockJdbcServer:
         parser.add_argument("--file", "-f", default="config.yaml",
                             help="config .yaml file to use")
         parser.add_argument("--mode", default="spark-submit",
-                            help="mode to launch in (spark-submit, local, debug)")
+                            help="mode to launch in (spark-submit, local)")
+        parser.add_argument("--debug_spark", action="store_true",
+                            help="allow debug of spark server")
+        parser.add_argument("--debug_pyspark", action="store_true",
+                            help="allow debug of pyspark")
         self._args = parser.parse_args()
 
     def _init_config(self):
@@ -64,7 +68,7 @@ class QflockJdbcServer:
                 exit(1)
 
     def get_jdbc_ip(self):
-        if self._args.mode == "local":
+        if self._args.mode == "local" or self._args.debug_spark:
             return self._config['server-name']
 
         # The below gets the IP for debugging.
@@ -90,27 +94,61 @@ class QflockJdbcServer:
         root = logging.getLogger()
         hdlr = root.handlers[0]
         hdlr.setFormatter(formatter)
+        logging.info("Logger Configured")
 
     def serve(self):
         self.setup_logger()
         jdbc_port = self._config['server-port']
         jdbc_ip = self.get_jdbc_ip()
-        handler = QflockThriftJdbcHandler()
+        logging.info(f"Starting JDBC Server ip: {jdbc_ip}:{jdbc_port}")
+        handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'],
+                                          metastore_ip=self._config['spark']['hive-metastore'],
+                                          metastore_port=self._config['spark']['hive-metastore-port'],
+                                          debug_pyspark=self._args.debug_pyspark)
         processor = QflockJdbcService.Processor(handler)
         transport = TSocket.TServerSocket(host=jdbc_ip, port=jdbc_port)
         tfactory = TTransport.TBufferedTransportFactory()
         pfactory = TBinaryProtocol.TBinaryProtocolFactory()
 
-        jdbc_server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
+        # jdbc_server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
+        jdbc_server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
         logger = logging.getLogger("qflock")
-        logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port}')
+        logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port} spark log-level:{self._config["log-level"]}')
         try:
             jdbc_server.serve()
         except BaseException as ex:
             pass
 
+    def filter_config(self, conf):
+        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug_spark):
+            return False
+        else:
+            return True
+
+    def get_spark_cmd(self, cmd):
+        spark_conf = self._config['spark']
+        spark_cmd = f'spark-submit --master {spark_conf["master"]} '
+        workers = spark_conf.get("workers")
+        if workers is not None and int(workers) > 0:
+            spark_cmd += f"--total-executor-cores {workers} "
+
+        # Filter out any conf items that are not enabled by arguments.
+        conf = list(filter(self.filter_config, spark_conf["conf"]))
+        spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in conf])
+        if "packages" in spark_conf and spark_conf["packages"]:
+            spark_cmd += " --packages " + ",".join([arg for arg in spark_conf["packages"]])
+        if "jars" in spark_conf and len(spark_conf["jars"]):
+            spark_cmd += " --jars " + ",".join([arg for arg in spark_conf["jars"]])
+        spark_cmd += f" --conf spark.hadoop.hive.metastore.uris=thrift://{spark_conf['hive-metastore']}" +\
+                     f":{spark_conf['hive-metastore-port']}"
+        spark_cmd += f" {cmd}"
+        return spark_cmd
+
     def spark_submit(self):
-        spark_cmd = f"spark-submit --master {self._config['spark']['master']} {sys.argv[0]} --mode local"
+        spark_cmd = self.get_spark_cmd(f"{sys.argv[0]} --mode local")
+        print(80*"*")
+        print(spark_cmd)
+        print(80*"*")
         subprocess.call(spark_cmd, shell=True)
 
     def run(self):

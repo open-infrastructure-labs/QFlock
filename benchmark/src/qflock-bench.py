@@ -120,8 +120,8 @@ class QflockBench:
                             help="enable debugger")
         parser.add_argument("--terse", "-t", action="store_true",
                             help="Limited output.")
-        parser.add_argument("--extensions", "-ext", action="store_true",
-                            help="enable extensions")
+        parser.add_argument("--extensions", "-ext", default=None,
+                            help="enable extensions (explain, jdbc, ds)")
         parser.add_argument("--log_level", "-ll", default="OFF",
                             help="log level set to input arg.\n"
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
@@ -223,6 +223,14 @@ class QflockBench:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)} ' + \
                       f'--test_num {idx} '
+                if self._args.extensions == "explain":
+                    # Auto enable explain on this query if we are using explain extension.
+                    cmd += '--explain '
+                if self._args.extensions == "jdbc":
+                    cmd += '--ext jdbc '
+                if self._args.extensions == "ds":
+                    # Auto enable qflock_ds if we are using qflock_ds extension.
+                    cmd += '--qflock_ds '
                 if self._args.output_path:
                     cmd += f'--output_path {self._args.output_path} '
                 rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
@@ -247,6 +255,14 @@ class QflockBench:
             cmd += f'--query_text "{self._args.query_text}" '
         if self._args.view_columns:
             cmd += f'--view_columns "{self._args.view_columns}" '
+        if self._args.extensions == "explain":
+            # Auto enable explain on this query if we are using explain extension.
+            cmd += '--explain --ext explain '
+        if self._args.extensions == "jdbc":
+            cmd += '--ext jdbc '
+        if self._args.extensions == "ds":
+            # Auto enable qflock_ds if we are using qflock_ds extension.
+            cmd += '--qflock_ds '
         cmd += " ".join(self._remaining_args)
         cmd += self._extra_args
 
@@ -270,6 +286,7 @@ class QflockBench:
     def run(self):
         if not self._parse_args():
             return
+        print(f"extensions: {self._args.extensions}")
         self._config = Config(self._args.file)
         self._parse_test_list()
         self._spark_launcher = SparkLauncher(self._config['spark'], self._args)

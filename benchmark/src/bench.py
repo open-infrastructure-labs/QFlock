@@ -75,6 +75,8 @@ class BenchmarkApp:
                                      "(.csv and/or .parquet is added to folder name)")
             parser.add_argument("--test_num", default=0, type=int,
                                 help="The index of the test")
+            parser.add_argument("--qflock_ds", action="store_true",
+                                help="Use qflock parquet datasource")
         parser.add_argument("--init_all", action="store_true",
                             help="Equivalent to --gen_data, --gen_parquet, \n"
                                  "--create_catalog, --compute_stats, --view_catalog")
@@ -104,6 +106,8 @@ class BenchmarkApp:
                             help="log level to capture to file.")
         parser.add_argument("--continue_on_error", action="store_true",
                             help="continue with remaining queries if query encounters an error.")
+        parser.add_argument("--ext", default=None,
+                            help="Extension to load")
         return parser
 
     def _parse_args(self):
@@ -122,6 +126,7 @@ class BenchmarkApp:
                                               self._args.verbose,
                                               not self._args.no_catalog,
                                               self._args.jdbc,
+                                              self._args.qflock_ds,
                                               self._args.test_num)
 
     def _get_query_config(self):
@@ -163,10 +168,15 @@ class BenchmarkApp:
         if not self._parse_args():
             return
         self._load_config()
-        sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc,
+        jdbc_config = None
+        if self._args.jdbc or self._args.ext == "jdbc":
+            jdbc_config = self._config['benchmark']['jdbc-path']
+        sh = SparkHelper(verbose=self._args.verbose, jdbc=jdbc_config,
+                         qflock_ds=self._args.qflock_ds,
                          output_path=self._args.output_path)
         if self._args.jdbc:
             sh.load_extension()
+        sh.load_rule(self._args.ext)
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
@@ -213,7 +223,7 @@ class BenchmarkApp:
             sh.get_catalog_columns(self._args.view_columns)
         if self._args.delete_catalog:
             benchmark.delete_catalog()
-        if self._args.no_catalog or self._args.jdbc:
+        if self._args.no_catalog or self._args.jdbc or self._args.qflock_ds:
             if self._args.jdbc:
                 print(f"set database {self._config['benchmark']['db-name']}")
                 sh.set_db(self._config['benchmark']['db-name'])
