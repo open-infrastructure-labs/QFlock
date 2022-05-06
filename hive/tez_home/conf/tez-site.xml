@@ -577,6 +577,7 @@
 
   <property>
     <name>tez.staging-dir</name>
+    <value>/tmp/tez/staging/</value>
     <description>String value. Specifies a directory where Tez can create temporary job artifacts.</description>
     <type>string</type>
   </property>
@@ -1007,6 +1008,7 @@
 
   <property>
     <name>tez.lib.uris</name>
+    <value>${fs.defaultFS}/app/tez-0.10.2-SNAPSHOT/tez-0.10.2-SNAPSHOT.tar.gz</value>
     <description>String value to a file path.
  The location of the Tez libraries which will be localized for DAGs.
  This follows the following semantics
@@ -1026,16 +1028,6 @@
  uncompressed during runtime). &lt;/li&gt;
  &lt;/ul&gt;
  &lt;/ol&gt;</description>
-    <type>string</type>
-  </property>
-
-  <property>
-    <name>tez.lib.uris.classpath</name>
-    <description>Specify additional user classpath information to be used for Tez AM and all containers.
- This will be appended to the classpath after PWD
-
- &apos;tez.lib.uris.classpath&apos; defines the relative classpath into the archives
- that are set in &apos;tez.lib.uris&apos;</description>
     <type>string</type>
   </property>
 

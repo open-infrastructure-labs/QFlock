@@ -41,8 +41,8 @@ RUN rm ${HIVE_HOME}/lib/guava-19.0.jar \
     && cp ${HADOOP_HOME}/share/hadoop/hdfs/lib/guava-27.0-jre.jar $HIVE_HOME/lib/
 
 # Install tez 
-RUN mkdir -p /opt/tez
-ADD /apache-tez-0.10.1-bin.tar.gz /opt/tez
+# RUN mkdir -p /opt/tez
+# ADD /apache-tez-0.10.1-bin.tar.gz /opt/tez
 
 RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
@@ -53,7 +53,17 @@ RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
         python3-pip python3-venv python3-wheel
 
-RUN pip3 install pandas sqlparse duckdb fastparquet pyarrow thrift
+RUN pip3 install pandas sqlparse fastparquet pyarrow thrift
+
+# install build essential for compiling within docker
+RUN apt-get -q update \
+    && apt-get -q install -y build-essential
+
+# Install protobuf 2.5.0 for tez
+ADD /protobuf-2.5.0.tar.gz /tmp
+RUN cd /tmp/protobuf-2.5.0 \
+    && ./configure --prefix=/usr --disable-shared \
+    && make && make install
 
 COPY entry.sh /usr/local/bin/entry.sh
 RUN chmod a+x /usr/local/bin/entry.sh
