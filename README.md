@@ -49,6 +49,9 @@ Use these commands to stop services, remove all artifacts and rebuild the repo.
 - Run all benchmark queries
 benchmark/src/docker-bench.py --queries "*"
 
+- Run all benchmark queries against jdbc server
+benchmark/src/docker-bench.py --queries "*" --ext jdbc
+
 - Get help on available switches
 benchmark/src/docker-bench.py --help
 ```
