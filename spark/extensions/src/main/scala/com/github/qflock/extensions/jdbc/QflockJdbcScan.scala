@@ -79,7 +79,9 @@ case class QflockJdbcScan(schema: StructType,
           name = path)
       }
     }
-    logger.info(s"Num partitions: ${partitions}" + a.mkString(", "))
+    val query = options.get("query")
+    val appId = options.get("appId")
+    logger.info(s"Num partitions: ${partitions} app-id:${appId} query:${query}" + a.mkString(", "))
     a.toArray
   }
   private val sparkSession: SparkSession = SparkSession

@@ -48,6 +48,7 @@ import org.apache.spark.sql.types._
 
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId = spark.sparkContext.applicationId
+  protected var generationId = 0
   private def mapAttribute(origExpression: Any,
                            newProject: Seq[NamedExpression]) : Any = {
     origExpression match {
@@ -281,6 +282,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                filters: Seq[Expression],
                                child: LogicalPlan)
   : LogicalPlan = {
+    generationId += 1
     val relationArgs = RelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
 
@@ -342,7 +344,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     val opt = new util.HashMap[String, String](relationArgs.options)
     val path = opt.get("path") // .replaceFirst("hdfs://.*:9000/", "hdfs://dikehdfs:9860/")
-    opt.put("app-id", appId)
+    opt.put("appId", s"${appId}-${generationId}")
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
     opt.put("format", "parquet")
@@ -356,7 +358,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rgParamName = s"spark.qflock.statistics.tableStats.${tableName}.row_groups"
     opt.put("numRowGroups",
             table.getParameters.get(rgParamName))
-    opt.put("tableName", table.getTableName())
+    opt.put("tableName", tableName)
 
     val filterCondition = filters.reduceLeftOption(And)
     val relationForStats = QflockLogicalRelation.apply(project, filterCondition,
