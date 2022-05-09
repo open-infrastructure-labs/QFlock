@@ -20,6 +20,7 @@ import java.util
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.github.qflock.datasource.QflockTableDescriptor
 import com.github.qflock.datasource.common.Pushdown
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.BlockLocation
@@ -82,15 +83,20 @@ class HdfsScan(schema: StructType,
       // We do not handle it yet.
       throw new Exception(s"More than one file not yet handled. ${blockMap.size} files found")
     }
-    val rowGroupOffset = options.get("rowGroupOffset").toInt
-    val rowGroupCount = options.get("rowGroupCount").toInt
+    val tableName = options.get("tableName")
+    val tableDesc = QflockTableDescriptor.getTableDescriptor(tableName)
+    val requestId = options.get("requestId").toInt
+    val requestInfo = tableDesc.getRequestInfo(requestId)
+    logger.info(s"found table: $tableName requestId: $requestId " +
+                s"offset: ${requestInfo.offset} count: ${requestInfo.count}")
     // Generate one partition per file, per hdfs block
     for ((fName, _) <- blockMap) {
       val reader = ParquetFileReader.open(HadoopInputFile.fromPath(new Path(fName),
         conf), readOptions)
       val parquetBlocks = reader.getFooter.getBlocks
-      // Generate one partition per row Group.
-      for (i <- rowGroupOffset until (rowGroupOffset + rowGroupCount)) {
+
+      // Generate one partition per row group in the range
+      for (i <- requestInfo.offset until (requestInfo.offset + requestInfo.count)) {
         val parquetBlock = parquetBlocks.get(i)
         a += new HdfsPartition(index = i, offset = parquetBlock.getStartingPos,
           length = parquetBlock.getCompressedSize,

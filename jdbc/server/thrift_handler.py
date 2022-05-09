@@ -30,11 +30,14 @@ from com.github.qflock.jdbc.api import QflockJdbcService
 from com.github.qflock.jdbc.api import ttypes
 
 from metastore_client import HiveMetastoreClient
+from py4j.java_gateway import java_import
 
 
 class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
-                 metastore_ip="", metastore_port="", debug_pyspark=False):
+                 metastore_ip="", metastore_port="", debug_pyspark=False,
+                 max_views=4):
+        self._max_views = max_views
         self._lock = threading.Lock()
         self._connections = {}
         self._pstatements = {}
@@ -49,6 +52,9 @@ class QflockThriftJdbcHandler:
         self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
         self._get_tables()
         self._cached_views = {}
+        self._ds_table_desc = {}
+        self._gw = self._spark.sparkContext._gateway
+        java_import(self._gw.jvm, "com.github.qflock.datasource.QflockTableDescriptor")
         self._create_views()
 
     def _create_debug_spark(self):
@@ -85,19 +91,22 @@ class QflockThriftJdbcHandler:
         self._tables = tables
         logging.info(f"Fetching tables from metastore...Complete")
 
-    def _create_view(self, table, rg_idx):
-        logging.info(f"Create view for table: {table.tableName} rowGroup: {rg_idx}")
+    def _create_view(self, table, request_id):
+        # Each table view has a request_id to identify it.
+        # The request ID will chosen by a call to
+        # the table descriptor's fillRequestInfo the by the client
+        #
+        logging.info(f"Create view for table: {table.tableName} request_id: {request_id}")
         df = self._spark.read \
             .format("qflockDs") \
             .option("format", "parquet") \
             .option("tableName", table.tableName) \
             .option("dbName", table.dbName) \
-            .option("rowGroupOffset", str(rg_idx)) \
-            .option("rowGroupCount", "1") \
+            .option("requestId", request_id) \
             .load()
-        view_name = f"{table.tableName}_{rg_idx}"
+        view_name = f"{table.tableName}_{request_id}"
         df.createOrReplaceTempView(view_name)
-        self._cached_views[view_name] = {'name': table.tableName, 'row_group_index': rg_idx,
+        self._cached_views[view_name] = {'name': table.tableName, 'request_id': request_id,
                                          'dataframe': df}
 
     def _create_table_views(self, table):
@@ -105,11 +114,23 @@ class QflockThriftJdbcHandler:
         file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
         files = [f.path for f in file_info if f.is_file and f.size > 0]
         file_path = os.path.split(os.path.split(table.sd.location)[0])[0] + files[0]
-        logging.info(f"found file: {file_path}")
         f = fs.open_input_file(file_path)
         reader = pyarrow.parquet.ParquetFile(f)
-        for rg_idx in range(0, reader.num_row_groups):
-            self._create_view(table, rg_idx)
+        # Even when the number of row groups is small, a query can generate multiple
+        # queries to the same table.  So we must limit to at least the number of
+        # requests that will be arriving to us, which is at least the level of parallelism
+        # aka, the number of Spark workers.
+        view_count = self._max_views
+        logging.info(f"found file: {file_path} row_groups:{reader.num_row_groups} views:{view_count}")
+        for request_id in range(0, view_count):
+            self._create_view(table, request_id)
+
+        # Tell the datasource about our table and the number of views it has.
+        # This table descriptor will be used later to fetch a request id
+        # via fillRequestInfo()
+        self._gw.jvm.com.github.qflock.datasource.QflockTableDescriptor.addTable(table.tableName, view_count)
+        desc = self._gw.jvm.com.github.qflock.datasource.QflockTableDescriptor.getTableDescriptor(table.tableName)
+        self._ds_table_desc[table.tableName] = desc
         f.close()
 
     def _create_views(self):
@@ -128,10 +149,19 @@ class QflockThriftJdbcHandler:
         self._lock.release()
         query = sql.replace('\"', "")
         query_stats = connection['properties']['queryStats']
-        row_group_offset = connection['properties']['rowGroupOffset']
+        rg_offset = connection['properties']['rowGroupOffset']
+        rg_count = connection['properties']['rowGroupCount']
         table_name = connection['properties']['tableName']
-        query = query.replace(f" {table_name} ", f" {table_name}_{row_group_offset} ")
-        logging.info(f"qid: {query_id} table:{table_name} stats:[{query_stats}] query: {query} ")
+
+        # get a request_id from the datasource.
+        # This will allow us to pass parameters of rg_offset and count
+        # down to the datasource, while still querying using an SQL string.
+        # Choose the view which represents this request_id
+        req_id = self._ds_table_desc[table_name].fillRequestInfo(int(rg_offset), int(rg_count))
+
+        query = query.replace(f" {table_name} ", f" {table_name}_{req_id} ")
+        logging.info(f"query_id: {query_id} req_id: {req_id} table:{table_name} "
+                     f"query: {query} ")
         df = self._spark.sql(query)
         df_pandas = df.toPandas()
         num_rows = len(df_pandas.index)
@@ -165,6 +195,7 @@ class QflockThriftJdbcHandler:
                      f"estBytes:{currentBytes} " +
                      f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
                      f"query: {query}")
+        self._ds_table_desc[table_name].freeRequest(req_id)
         # logging.info(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnSize=col_size)
@@ -604,8 +635,10 @@ class QflockThriftJdbcHandler:
         """
         connection_id = self._pstatements[statement.id]['connection'].id
         connection = self._connections[connection_id]
-        logging.info(f"preparedStatement_executeQuery:: statement id: {statement.id} conn id: {connection_id} sql: {sql}" +\
-                     f" db {connection['dbname']}")
+        logging.info(f"preparedStatement_executeQuery:: statement id: {statement.id} conn id: {connection_id} " +\
+                     f" offset:{connection['properties']['rowGroupOffset']} " +\
+                     f" count:{connection['properties']['rowGroupCount']} " +\
+                     f" tableName:{connection['properties']['tableName']} sql: {sql}")
         # row = ttypes.QFRow([ttypes.QFValue(isnull=False, val=ttypes.RawVal(integer_val=42))])
         # rows = [row]
         # # 4 = java.sql.Types.INTEGER (JdbcUtil.getSchema
