@@ -254,7 +254,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
   }
   private def getNdpRelation(path: String,
-                             options: util.HashMap[String, String]):
+                             options: util.HashMap[String, String],
+                             schema: String):
                              Option[DataSourceV2Relation] = {
     val url = spark.conf.get("qflockJdbcUrl")
     val df = spark.read
@@ -262,6 +263,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       .option("driver", "com.github.qflock.jdbc.QflockDriver")
       .option("format", "parquet")
       .option("url", url)
+      .option("schema", schema)
       .load(path)
     val logicalPlan = df.queryExecution.optimizedPlan
     logicalPlan match {
@@ -359,6 +361,15 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("numRowGroups",
             table.getParameters.get(rgParamName))
     opt.put("tableName", tableName)
+    val schemaStr = catalogTable.schema.fields.map(s =>
+      s.dataType match {
+        case StringType => s"${s.name}:string:${s.nullable}"
+        case IntegerType => s"${s.name}:integer:${s.nullable}"
+        case LongType => s"${s.name}:long:${s.nullable}"
+        case DoubleType => s"${s.name}:double:${s.nullable}"
+        case _ => s""
+      }).mkString(",")
+    opt.put("schema", schemaStr)
 
     val filterCondition = filters.reduceLeftOption(And)
     val relationForStats = QflockLogicalRelation.apply(project, filterCondition,
@@ -370,7 +381,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // with the actual file (for all the files we need to process).
     // val projectJson = PushdownJson.getProjectJson(cols.split(","), test)
     val hdfsScanObject = new QflockJdbcScan(references.toStructType, opt)
-    val ndpRel = getNdpRelation(path, opt)
+    val ndpRel = getNdpRelation(path, opt, schemaStr)
     val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
@@ -634,7 +645,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // @todo can we stash ndp relation in the options??
     //       this would allow us to only generate the relation once.
     val processorId = opt.get("processorid")
-    val ndpRel = getNdpRelation(path, opt)
+    val ndpRel = getNdpRelation(path, opt, "")
 
     // If the filters are valid then they will be available for pushdown.
     val filtersStatus = PushdownJson.validateFilters(filtersTop)

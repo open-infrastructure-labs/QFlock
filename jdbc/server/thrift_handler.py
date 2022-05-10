@@ -25,6 +25,7 @@ import numpy as np
 
 import pyarrow
 import pyarrow.parquet
+import zstandard as zstd
 
 from com.github.qflock.jdbc.api import QflockJdbcService
 from com.github.qflock.jdbc.api import ttypes
@@ -36,8 +37,9 @@ from py4j.java_gateway import java_import
 class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
                  metastore_ip="", metastore_port="", debug_pyspark=False,
-                 max_views=4):
+                 max_views=4, compression=True):
         self._max_views = max_views
+        self._compression = compression
         self._lock = threading.Lock()
         self._connections = {}
         self._pstatements = {}
@@ -152,7 +154,7 @@ class QflockThriftJdbcHandler:
         rg_offset = connection['properties']['rowGroupOffset']
         rg_count = connection['properties']['rowGroupCount']
         table_name = connection['properties']['tableName']
-
+        
         # get a request_id from the datasource.
         # This will allow us to pass parameters of rg_offset and count
         # down to the datasource, while still querying using an SQL string.
@@ -165,27 +167,52 @@ class QflockThriftJdbcHandler:
         df = self._spark.sql(query)
         df_pandas = df.toPandas()
         num_rows = len(df_pandas.index)
-        logging.info(f"query toPandas() done rows:{num_rows}")
+        logging.debug(f"query toPandas() done rows:{num_rows}")
         df_schema = df.schema
         binary_rows = []
-        col_size = []
+        col_type_bytes = []
+        col_bytes = []
+        comp_rows = []
+        col_comp_bytes = []
         if num_rows > 0:
             columns = df.columns
             for col_idx in range(0, len(columns)):
                 # data = np_array[:,col_idx]
                 data = df_pandas[columns[col_idx]].to_numpy()
+                col_name = df_schema.fields[col_idx].name
                 data_type = df_schema.fields[col_idx].dataType
                 if isinstance(data_type, StringType):
                     new_data1 = data.astype(str)
                     new_data = np.char.encode(new_data1, encoding='utf-8')
-                    logging.debug(f"item size for col idx: {col_idx} is: {new_data.dtype.itemsize}")
-                    raw_bytes = new_data.tobytes()
-                    binary_rows.append(raw_bytes)
-                    col_size.append(new_data.dtype.itemsize)
+                    item_size = new_data.dtype.itemsize
+                    num_bytes = len(new_data) * item_size
+                    col_bytes.append(num_bytes)
+                    if self._compression is True:
+                        logging.info(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
+                        new_data = zstd.ZstdCompressor().compress(new_data)
+                        col_comp_bytes.append(len(new_data))
+                        logging.info(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
+                        raw_bytes = new_data
+                    else:
+                        col_comp_bytes.append(len(new_data))
+                        raw_bytes = new_data.tobytes()
+                    comp_rows.append(raw_bytes)
+                    col_type_bytes.append(item_size)
                 else:
                     new_data = data.byteswap().newbyteorder().tobytes()
-                    binary_rows.append(new_data)
-                    col_size.append(QflockThriftJdbcHandler.data_type_size(data_type))
+                    # new_data = data.tobytes()
+                    num_bytes = len(new_data)
+                    col_bytes.append(num_bytes)
+                    if self._compression is True:
+                        logging.info(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
+                        # new_data = zstd.compress(data)
+                        new_data = zstd.ZstdCompressor().compress(new_data)
+                        col_comp_bytes.append(len(new_data))
+                        logging.info(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
+                    else:
+                        col_comp_bytes.append(len(new_data))
+                    comp_rows.append(new_data)
+                    col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
         stats = query_stats.split(" ")
         prevBytes = stats[1].split(":")[1]
         prevRows = stats[2].split(":")[1]
@@ -198,7 +225,9 @@ class QflockThriftJdbcHandler:
         self._ds_table_desc[table_name].freeRequest(req_id)
         # logging.info(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
-                                  numRows=num_rows, binaryRows=binary_rows, columnSize=col_size)
+                                  numRows=num_rows, binaryRows=binary_rows, columnTypeBytes=col_type_bytes,
+                                  columnBytes=col_bytes, compressedColumnBytes=col_comp_bytes,
+                                  compressedRows=comp_rows)
 
     def get_connection_id(self):
         current_id = self._connection_id
