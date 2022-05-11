@@ -86,7 +86,10 @@ struct QFResultSet
   2: QFResultSetMetaData metadata,
   3: i32 numRows,
   4: list<binary> binaryRows,
-  5: list<i32> columnSize
+  5: list<i32> columnTypeBytes,
+  6: list<i32> columnBytes,
+  7: list<binary> compressedRows,
+  8: list<i32> compressedColumnBytes,
 }
 
 struct QFStaticMetaData

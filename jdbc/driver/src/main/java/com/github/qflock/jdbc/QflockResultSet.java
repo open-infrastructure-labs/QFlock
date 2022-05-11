@@ -4,6 +4,7 @@ import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
@@ -22,6 +23,7 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.Calendar;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
@@ -29,6 +31,7 @@ import java.util.Queue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.github.luben.zstd.Zstd;
 import com.github.qflock.jdbc.api.QFResultSet;
 
 public class QflockResultSet implements ResultSet {
@@ -51,12 +54,51 @@ public class QflockResultSet implements ResultSet {
 
     private boolean isClosed;
 
-    public QflockResultSet(QFResultSet resultset) {
+    public QflockResultSet(QFResultSet resultset) throws SQLException {
         this.resultset = resultset;
         this.metadata = new QflockResultSetMetaData(resultset.metadata);
         this.rowIndex = 0;
-        
-        
+
+        int numColumns = this.metadata.getColumnCount();
+        Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
+        Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
+        Iterator<ByteBuffer> compRowsIterator = this.resultset.getCompressedRowsIterator();
+        Integer columnIndex = 0;
+        while (compRowsIterator.hasNext()) {
+            int colBytes = colBytesIterator.next();
+            int compColBytes = compColBytesIterator.next();
+            ByteBuffer compRow = compRowsIterator.next();
+            if (colBytes != compColBytes) {
+                // decompress requires a direct buffer for both source and destination.
+                ByteBuffer decompressedBuffer = ByteBuffer.allocateDirect(colBytes);
+                ByteBuffer compressedBuffer = ByteBuffer.allocateDirect(compColBytes);
+                compressedBuffer.put(compRow);
+                compressedBuffer.position(0);
+                int decompressedSize = Zstd.decompress(decompressedBuffer, compressedBuffer);
+                if (decompressedSize != colBytes) {
+                    logger.info(String.format("colBytes: %d decompressedSize: %d",
+                            colBytes, decompressedSize));
+                    throw new SQLException("decompressed bytes do not match");
+                }
+                int type = this.metadata.getColumnType(columnIndex + 1);
+                if (type == Types.VARCHAR) {
+                    // Strings require access to the array() operator so we can copy
+                    // a range for each individual string.
+                    // Direct buffer does not allow it, so allocate a new buffer
+                    // that is not a direct buffer.
+                    decompressedBuffer.position(0);
+                    ByteBuffer nonDirectBuffer = ByteBuffer.allocate(colBytes);
+                    nonDirectBuffer.put(decompressedBuffer);
+                    nonDirectBuffer.position(0);
+                    this.resultset.binaryRows.add(nonDirectBuffer);
+                } else {
+                    this.resultset.binaryRows.add(decompressedBuffer);
+                }
+                columnIndex += 1;
+            } else {
+                this.resultset.binaryRows.add(compRow);
+            }
+        }
 
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
@@ -511,7 +553,7 @@ public class QflockResultSet implements ResultSet {
     @Override
     public String getString(int columnIndex) throws SQLException {
         try {
-            Integer stringLen = this.resultset.columnSize.get(columnIndex - 1);
+            Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
             byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
                                            .array();
             String rString = new String(buffer, (rowIndex - 1) * stringLen,
@@ -520,7 +562,7 @@ public class QflockResultSet implements ResultSet {
             return rString;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to string: " + e.toString(),
                     e);
         }
     }
