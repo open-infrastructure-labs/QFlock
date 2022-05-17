@@ -106,9 +106,12 @@ class TpcBenchmark(Benchmark):
             s.end()
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
-        if self._test_num == 0:
-            print(f"qflock:: ,{result.header()},{stat_header}")
-        print(f"qflock:: ,{result.brief_result()},{stat_result}")
+        if result is None:
+            print(f"qflock:: ,failed {query_file},{stat_header}")
+        else:
+            if self._test_num == 0:
+                print(f"qflock:: ,{result.header()},{stat_header}")
+            print(f"qflock:: ,{result.brief_result()},{stat_result}")
         return result
 
     def query_range(self, query_config, explain=False):

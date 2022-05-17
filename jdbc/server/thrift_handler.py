@@ -37,7 +37,7 @@ from py4j.java_gateway import java_import
 class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
                  metastore_ip="", metastore_port="", debug_pyspark=False,
-                 max_views=4, compression=False):
+                 max_views=4, compression=True):
         self._max_views = max_views
         self._compression = compression
         self._lock = threading.Lock()
@@ -218,8 +218,8 @@ class QflockThriftJdbcHandler:
                     else:
                         raw_bytes = new_data.tobytes()
                         col_comp_bytes.append(len(raw_bytes))
-                        binary_rows.append(raw_bytes)
-                    #comp_rows.append(raw_bytes)
+                        #binary_rows.append(raw_bytes)
+                    comp_rows.append(raw_bytes)
                     col_type_bytes.append(item_size)
                 else:
                     new_data = data.byteswap().newbyteorder().tobytes()
@@ -234,8 +234,8 @@ class QflockThriftJdbcHandler:
                         # logging.info(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
                     else:
                         col_comp_bytes.append(len(new_data))
-                        binary_rows.append(new_data)
-                    #comp_rows.append(new_data)
+                        #binary_rows.append(new_data)
+                    comp_rows.append(new_data)
                     col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
         stats = query_stats.split(" ")
         prevBytes = stats[1].split(":")[1]
