@@ -63,6 +63,8 @@ case class QflockJdbcScan(schema: StructType,
     var a = new ArrayBuffer[InputPartition](0)
     val path = options.get("path")
     var partitions = options.get("numRowGroups").toInt
+    val numRows = options.get("numRows").toInt
+    val rowsPerPartition = numRows / partitions
     // Set below to true to do a 1 partition test.
     if (false) {
       partitions = 1
@@ -76,7 +78,8 @@ case class QflockJdbcScan(schema: StructType,
         a += new QflockJdbcPartition(index = i,
           offset = i,
           length = 1,
-          name = path)
+          name = path,
+          rows = rowsPerPartition)
       }
     }
     val query = options.get("query")
@@ -100,24 +103,6 @@ case class QflockJdbcScan(schema: StructType,
   }
   override def createReaderFactory(): PartitionReaderFactory = {
       new QflockPartitionReaderFactory(options, broadcastedHadoopConf)
-  }
-}
-
-/** Creates a factory for creating QflockPartitionReaderFactory objects
- *
- * @param options the options including "path"
- */
-class QflockPartitionReaderFactory(options: util.Map[String, String],
-      sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration])
-  extends PartitionReaderFactory {
-  private val logger = LoggerFactory.getLogger(getClass)
-  private val sparkSession: SparkSession = SparkSession
-    .builder()
-    .getOrCreate()
-  logger.trace("Created")
-  override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
-    new QflockJdbcPartitionReader(options, partition.asInstanceOf[QflockJdbcPartition],
-      sparkSession, sharedConf)
   }
 }
 

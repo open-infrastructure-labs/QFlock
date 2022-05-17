@@ -40,7 +40,7 @@ RUN apt-get update \
  && ln -s /usr/bin/python3 /usr/bin/python \
  && apt install -y python3-pip \
  && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml hive-metastore-client \
-                          docker zstd \
+                          docker zstandard \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 

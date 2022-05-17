@@ -86,10 +86,6 @@ class TpcBenchmark(Benchmark):
             s.end()
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
-        print("qflock::process result::")
-        if result is not None:
-            result.process_result()
-            print("qflock::process result done::")
         if self._test_num == 0:
             print(f"qflock:: ,{result.header()},{stat_header}")
         print(f"qflock:: ,{result.brief_result()},{stat_result}")
@@ -110,10 +106,6 @@ class TpcBenchmark(Benchmark):
             s.end()
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
-        print("qflock::process result::")
-        if result is not None:
-            result.process_result()
-            print("qflock::process result done::")
         if self._test_num == 0:
             print(f"qflock:: ,{result.header()},{stat_header}")
         print(f"qflock:: ,{result.brief_result()},{stat_result}")

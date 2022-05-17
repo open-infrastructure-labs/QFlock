@@ -37,7 +37,7 @@ from py4j.java_gateway import java_import
 class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
                  metastore_ip="", metastore_port="", debug_pyspark=False,
-                 max_views=4, compression=True):
+                 max_views=4, compression=False):
         self._max_views = max_views
         self._compression = compression
         self._lock = threading.Lock()
@@ -54,6 +54,7 @@ class QflockThriftJdbcHandler:
         self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
         self._get_tables()
         self._cached_views = {}
+        self._table_paths = {}
         self._ds_table_desc = {}
         self._gw = self._spark.sparkContext._gateway
         java_import(self._gw.jvm, "com.github.qflock.datasource.QflockTableDescriptor")
@@ -93,16 +94,20 @@ class QflockThriftJdbcHandler:
         self._tables = tables
         logging.info(f"Fetching tables from metastore...Complete")
 
-    def _create_view(self, table, request_id):
+    def _create_view(self, table, request_id, schema, file_path):
         # Each table view has a request_id to identify it.
         # The request ID will chosen by a call to
         # the table descriptor's fillRequestInfo the by the client
         #
         logging.info(f"Create view for table: {table.tableName} request_id: {request_id}")
+        # .option("schema", schema)\
+        # .option("path", file_path)\
         df = self._spark.read \
             .format("qflockDs") \
             .option("format", "parquet") \
+            .option("schema", schema)\
             .option("tableName", table.tableName) \
+            .option("path", file_path)\
             .option("dbName", table.dbName) \
             .option("requestId", request_id) \
             .load()
@@ -111,11 +116,28 @@ class QflockThriftJdbcHandler:
         self._cached_views[view_name] = {'name': table.tableName, 'request_id': request_id,
                                          'dataframe': df}
 
+    def _get_schema(self, table):
+        def convert_col(type):
+            if type == "bigint":
+                return "long"
+            elif type == "double":
+                return "double"
+            elif type == "string":
+                return "string"
+            else:
+                logging.error(f"unexpected type: {type}")
+
+        # each field in the schema has name:type:nullable
+        schema = list(map(lambda col: f"{col.name}:{convert_col(col.type)}:true", table.sd.cols))
+        return ",".join(schema)
+
     def _create_table_views(self, table):
         fs, path = pyarrow.fs.FileSystem.from_uri(table.sd.location)
         file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
         files = [f.path for f in file_info if f.is_file and f.size > 0]
         file_path = os.path.split(os.path.split(table.sd.location)[0])[0] + files[0]
+        self._table_paths[table.tableName] = file_path
+        schema = self._get_schema(table)
         f = fs.open_input_file(file_path)
         reader = pyarrow.parquet.ParquetFile(f)
         # Even when the number of row groups is small, a query can generate multiple
@@ -125,7 +147,7 @@ class QflockThriftJdbcHandler:
         view_count = self._max_views
         logging.info(f"found file: {file_path} row_groups:{reader.num_row_groups} views:{view_count}")
         for request_id in range(0, view_count):
-            self._create_view(table, request_id)
+            self._create_view(table, request_id, schema, file_path)
 
         # Tell the datasource about our table and the number of views it has.
         # This table descriptor will be used later to fetch a request id
@@ -188,15 +210,16 @@ class QflockThriftJdbcHandler:
                     num_bytes = len(new_data) * item_size
                     col_bytes.append(num_bytes)
                     if self._compression is True:
-                        logging.info(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
+                        # logging.info(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
                         new_data = zstd.ZstdCompressor().compress(new_data)
                         col_comp_bytes.append(len(new_data))
-                        logging.info(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
+                        # logging.info(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
                         raw_bytes = new_data
                     else:
-                        col_comp_bytes.append(len(new_data))
                         raw_bytes = new_data.tobytes()
-                    comp_rows.append(raw_bytes)
+                        col_comp_bytes.append(len(raw_bytes))
+                        binary_rows.append(raw_bytes)
+                    #comp_rows.append(raw_bytes)
                     col_type_bytes.append(item_size)
                 else:
                     new_data = data.byteswap().newbyteorder().tobytes()
@@ -204,14 +227,15 @@ class QflockThriftJdbcHandler:
                     num_bytes = len(new_data)
                     col_bytes.append(num_bytes)
                     if self._compression is True:
-                        logging.info(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
-                        # new_data = zstd.compress(data)
+                        # logging.info(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
+
                         new_data = zstd.ZstdCompressor().compress(new_data)
                         col_comp_bytes.append(len(new_data))
-                        logging.info(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
+                        # logging.info(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
                     else:
                         col_comp_bytes.append(len(new_data))
-                    comp_rows.append(new_data)
+                        binary_rows.append(new_data)
+                    #comp_rows.append(new_data)
                     col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
         stats = query_stats.split(" ")
         prevBytes = stats[1].split(":")[1]

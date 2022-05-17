@@ -225,7 +225,7 @@ class QflockBench:
                       f'--test_num {idx} '
                 if self._args.extensions == "explain":
                     # Auto enable explain on this query if we are using explain extension.
-                    cmd += '--explain '
+                    cmd += '--explain --ext explain'
                 if self._args.extensions == "jdbc":
                     cmd += '--ext jdbc '
                 if self._args.extensions == "ds":

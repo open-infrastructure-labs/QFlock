@@ -222,6 +222,10 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     var dbName = catalogTable.identifier.database.getOrElse("")
     val table = ExtHiveUtils.getTable(dbName, tableName)
 
+//    if (table.getTableName != "store_sales" &&
+//        table.getTableName != "inventory") {
+//      return false
+//    }
     // We only continue with the rule if this table is stored remotely.
     if (!table.getSd.getLocation.contains("-dc2")) {
       return false
@@ -358,6 +362,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     var dbName = catalogTable.identifier.database.getOrElse("")
     val table = ExtHiveUtils.getTable(dbName, tableName)
     val rgParamName = s"spark.qflock.statistics.tableStats.${tableName}.row_groups"
+    opt.put("numRows",
+      table.getParameters.get("spark.sql.statistics.numRows"))
     opt.put("numRowGroups",
             table.getParameters.get(rgParamName))
     opt.put("tableName", tableName)
@@ -380,7 +386,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // Once we know what the file is, we will replace the FILE_TAG
     // with the actual file (for all the files we need to process).
     // val projectJson = PushdownJson.getProjectJson(cols.split(","), test)
-    val hdfsScanObject = new QflockJdbcScan(references.toStructType, opt)
+    val hdfsScanObject = new QflockJdbcScan(references.toStructType, opt,
+      relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, opt, schemaStr)
     val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {

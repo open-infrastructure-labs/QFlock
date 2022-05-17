@@ -59,6 +59,15 @@ public class QflockResultSet implements ResultSet {
         this.metadata = new QflockResultSetMetaData(resultset.metadata);
         this.rowIndex = 0;
 
+        getColumnResults();
+
+        this.warnings.offer(new SQLWarning("Test!"));
+        this.warnings.offer(new SQLWarning("Test!"));
+        this.warnings.offer(new SQLWarning("Test!"));
+        this.warnings.offer(new SQLWarning("Test!"));
+    }
+
+    private void getColumnResults() throws SQLException {
         int numColumns = this.metadata.getColumnCount();
         Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
         Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
@@ -99,11 +108,6 @@ public class QflockResultSet implements ResultSet {
                 this.resultset.binaryRows.add(compRow);
             }
         }
-
-        this.warnings.offer(new SQLWarning("Test!"));
-        this.warnings.offer(new SQLWarning("Test!"));
-        this.warnings.offer(new SQLWarning("Test!"));
-        this.warnings.offer(new SQLWarning("Test!"));
     }
 
     @Override
@@ -249,6 +253,9 @@ public class QflockResultSet implements ResultSet {
     public byte getByte(int arg0) throws SQLException {
         throw new SQLException("Method not supported");
     }
+    public byte getByte(int colIdx, int rIndex) throws SQLException {
+        throw new SQLException("Method not supported");
+    }
 
     @Override
     public byte getByte(String arg0) throws SQLException {
@@ -319,13 +326,24 @@ public class QflockResultSet implements ResultSet {
     public double getDouble(int columnIndex) throws SQLException {
         try {
             double value = this.resultset.getBinaryRows().get(columnIndex - 1)
-                              .getDouble((rowIndex - 1) * 8);
+                    .getDouble((rowIndex - 1) * 8);
             return value;
-          } catch (Exception e) {
+        } catch (Exception e) {
             throw new SQLException(
-                "Cannot convert column " + columnIndex + " to double: " + e.toString(),
-                e);
-          }
+                    "Cannot convert column " + columnIndex + " to double: " + e.toString(),
+                    e);
+        }
+    }
+    public double getDouble(int columnIndex, int rIndex) throws SQLException {
+        try {
+            double value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .getDouble((rIndex - 1) * 8);
+            return value;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to double: " + e.toString(),
+                    e);
+        }
     }
 
     @Override
@@ -347,13 +365,24 @@ public class QflockResultSet implements ResultSet {
     public float getFloat(int columnIndex) throws SQLException {
         try {
             float value = this.resultset.getBinaryRows().get(columnIndex - 1)
-                                        .getFloat((rowIndex - 1) * 8);
+                    .getFloat((rowIndex - 1) * 8);
             return value;
-          } catch (Exception e) {
+        } catch (Exception e) {
             throw new SQLException(
-                "Cannot convert column " + columnIndex + " to float: " + e.toString(),
-                e);
-          }
+                    "Cannot convert column " + columnIndex + " to float: " + e.toString(),
+                    e);
+        }
+    }
+    public float getFloat(int columnIndex, int rIndex) throws SQLException {
+        try {
+            float value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .getFloat((rIndex - 1) * 8);
+            return value;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to float: " + e.toString(),
+                    e);
+        }
     }
 
     @Override
@@ -370,13 +399,24 @@ public class QflockResultSet implements ResultSet {
     public int getInt(int columnIndex) throws SQLException {
         try {
             int value = this.resultset.getBinaryRows().get(columnIndex - 1)
-                            .getInt((rowIndex - 1) * 4);
+                    .getInt((rowIndex - 1) * 4);
             return value;
-          } catch (Exception e) {
+        } catch (Exception e) {
             throw new SQLException(
-                "Cannot convert column " + columnIndex + " to int: " + e.toString(),
-                e);
-          }
+                    "Cannot convert column " + columnIndex + " to int: " + e.toString(),
+                    e);
+        }
+    }
+    public int getInt(int columnIndex, int rIndex) throws SQLException {
+        try {
+            int value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .getInt((rIndex - 1) * 4);
+            return value;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to int: " + e.toString(),
+                    e);
+        }
     }
 
     @Override
@@ -389,6 +429,17 @@ public class QflockResultSet implements ResultSet {
         try {
             long l = this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getLong((rowIndex - 1) * 8);
+            return l;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    e);
+        }
+    }
+    public long getLong(int columnIndex, int rIndex) throws SQLException {
+        try {
+            long l = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .getLong((rIndex - 1) * 8);
             return l;
         } catch (Exception e) {
             throw new SQLException(
@@ -437,6 +488,9 @@ public class QflockResultSet implements ResultSet {
         return getString(findColumn(columnLabel));
     }
 
+    public int getNumRows() throws SQLException {
+        return this.resultset.getNumRows();
+    }
     @Override
     public Object getObject(int columnIndex) throws SQLException {
         int type = this.metadata.getColumnType(columnIndex);
@@ -531,13 +585,24 @@ public class QflockResultSet implements ResultSet {
     public short getShort(int columnIndex) throws SQLException {
         try {
             short value = this.resultset.getBinaryRows().get(columnIndex - 1)
-                              .getShort((rowIndex - 1) * 2);
+                    .getShort((rowIndex - 1) * 2);
             return value;
-          } catch (Exception e) {
+        } catch (Exception e) {
             throw new SQLException(
-                "Cannot convert column " + columnIndex + " to long: " + e.toString(),
-                e);
-          }
+                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    e);
+        }
+    }
+    public short getShort(int columnIndex, int rIndex) throws SQLException {
+        try {
+            short value = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .getShort((rIndex - 1) * 2);
+            return value;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    e);
+        }
     }
 
     @Override
@@ -555,10 +620,25 @@ public class QflockResultSet implements ResultSet {
         try {
             Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
             byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
-                                           .array();
+                    .array();
             String rString = new String(buffer, (rowIndex - 1) * stringLen,
-                                        stringLen,
-                                        StandardCharsets.UTF_8);
+                    stringLen,
+                    StandardCharsets.UTF_8);
+            return rString;
+        } catch (Exception e) {
+            throw new SQLException(
+                    "Cannot convert column " + columnIndex + " to string: " + e.toString(),
+                    e);
+        }
+    }
+    public String getString(int columnIndex, int rIndex) throws SQLException {
+        try {
+            Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
+            byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
+                    .array();
+            String rString = new String(buffer, (rIndex - 1) * stringLen,
+                    stringLen,
+                    StandardCharsets.UTF_8);
             return rString;
         } catch (Exception e) {
             throw new SQLException(

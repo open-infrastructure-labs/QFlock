@@ -77,30 +77,7 @@ class QflockJdbcDatasource extends TableProvider
   }
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
     if (options.get("format") == "parquet") {
-      if (options.getOrDefault("schema", "") != "") {
-        StructType(options.get("schema").split(",").map(x => {
-          val items = x.split(":")
-          val dataType = items(1) match {
-            case "string" => StringType
-            case "integer" => IntegerType
-            case "double" => DoubleType
-            case "long" => LongType
-          }
-          val nullable = items(2) match {
-            case "false" => false
-            case _ => true
-          }
-          StructField(items(0), dataType, nullable)
-        }))
-      } else {
-        new StructType()
-      }
-      // logger.info(s"inferSchema path: ${path}")
-//        val fileStatusArray = getFileStatusList(path)
-//        logger.info("getting schema for: " + path)
-//        val schema = ParquetUtils.inferSchema(sparkSession,
-      //        options.asScala.toMap, fileStatusArray)
-//        schema.get
+      QflockJdbcDatasource.getSchema(options)
     } else {
       /* Other types like CSV require a user-supplied schema */
       throw new IllegalArgumentException("requires a user-supplied schema")
@@ -130,6 +107,27 @@ object QflockJdbcDatasource {
       initialized = true
       // logger.info("Adding new GenericPushdowntimization Rule")
       // sparkSession.experimental.extraOptimizations ++= Seq(GenericPushdownOptimizationRule)
+    }
+  }
+
+  def getSchema(options: util.Map[String, String]): StructType = {
+    if (options.getOrDefault("schema", "") != "") {
+      StructType(options.get("schema").split(",").map(x => {
+        val items = x.split(":")
+        val dataType = items(1) match {
+          case "string" => StringType
+          case "integer" => IntegerType
+          case "double" => DoubleType
+          case "long" => LongType
+        }
+        val nullable = items(2) match {
+          case "false" => false
+          case _ => true
+        }
+        StructField(items(0), dataType, nullable)
+      }))
+    } else {
+      new StructType()
     }
   }
   checkInitialized()
