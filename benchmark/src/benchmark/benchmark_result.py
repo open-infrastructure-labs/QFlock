@@ -53,7 +53,9 @@ class BenchmarkResult:
             self._output = ["csv"]
         if not output_path:
             self._output_path = os.path.join(BenchmarkResult.log_dir, "output")
+            self._save_data = False
         else:
+            self._save_data = True
             self._output_path = output_path
         if query_name:
             qname = os.path.split(query_name)[1]
@@ -95,6 +97,7 @@ class BenchmarkResult:
             output_path = self._output_path + ".csv"
             print(f"csv output path is {output_path}")
             if self._save_data:
+                print(f"saving formatted output")
                 self.formatted_df() \
                     .repartition(1) \
                     .write.mode("overwrite") \
@@ -103,12 +106,14 @@ class BenchmarkResult:
                     .option("partitions", "1") \
                     .save(output_path)
             elif True:
+                print(f"saving unformatted output")
                 self.df \
                     .write.mode("overwrite") \
                     .format("csv") \
                     .option("header", "true") \
                     .save(output_path)
             else:
+                print(f"not saving output")
                 rows = self.df.collect()
                 self.num_rows = len(rows)
             if self.num_rows is None:
