@@ -2450,12 +2450,12 @@
   </property>
   <property>
     <name>hive.tez.container.size</name>
-    <value>-1</value>
+    <value/>
     <description>By default Tez will spawn containers of the size of a mapper. This can be used to overwrite.</description>
   </property>
   <property>
     <name>hive.tez.cpu.vcores</name>
-    <value>-1</value>
+    <value/>
     <description>
       By default Tez will ask for however many cpus map-reduce is configured to use per container.
       This can be used to overwrite.

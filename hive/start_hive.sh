@@ -17,13 +17,13 @@ USER_NAME=${SUDO_USER:=$USER}
 
 # Set the home directory in the Docker container.
 JAVA_HOME=/usr/lib/jvm/java-1.8.0-openjdk-amd64
-HADOOP_HOME=/opt/hadoop/hadoop-3.3.0
+HADOOP_HOME=/opt/hadoop/hadoop-3.1.3
 HIVE_HOME=/opt/hive/apache-hive-3.1.2-bin
-TEZ_HOME=/opt/tez
+TEZ_HOME=/opt/tez/apache-tez-0.10.1-bin
 TEZ_CONF_DIR=${TEZ_HOME}/conf
 TEZ_JARS=${TEZ_HOME}
-#HADOOP_CLASSPATH=${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*:${HADOOP_HOME}/etc/hadoop/:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/lib/*:${HADOOP_HOME}/share/hadoop/yarn/*:${HADOOP_HOME}/share/hadoop/yarn/lib/*
-HADOOP_CLASSPATH=${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*
+HADOOP_CLASSPATH=${HIVE_HOME}/lib/*:${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*:${HADOOP_HOME}/etc/hadoop/:${HADOOP_HOME}/share/hadoop/common/*:${HADOOP_HOME}/share/hadoop/common/lib/*:${HADOOP_HOME}/share/hadoop/hdfs/*:${HADOOP_HOME}/share/hadoop/lib/*:${HADOOP_HOME}/share/hadoop/yarn/*:${HADOOP_HOME}/share/hadoop/yarn/lib/*:
+#HADOOP_CLASSPATH=${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*
 
 # Create NameNode and DataNode mount points
 # mkdir -p ${ROOT_DIR}/volume/namenode
@@ -52,9 +52,12 @@ if [ "$RUNNING_MODE" = "interactive" ]; then
 fi
 
 # Check if hive network exists
-if ! docker network ls | grep qflock-net; then
-  docker network create qflock-net
-fi
+# if ! docker network ls | grep qflock-net; then
+#  docker network create qflock-net
+#fi
+
+# Work around hadoop 3.1.3 bug for flooding stdout with info log
+HADOOP_ROOT_LOGGER=WARN,DRFA
 
 DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/data:/data \
@@ -66,11 +69,9 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/core-site.xml:${HADOOP_HOME}/etc/hadoop/core-site.xml \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/hdfs-site.xml:${HADOOP_HOME}/etc/hadoop/hdfs-site.xml \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/yarn-site.xml:${HADOOP_HOME}/etc/hadoop/yarn-site.xml \
-  -v ${ROOT_DIR}/hadoop_home/hadoop-3.3.0.tar.gz:${HADOOP_HOME}/hadoop-3.3.0.tar.gz \
   -v ${ROOT_DIR}/hive_home/conf/hive-site.xml:${HIVE_HOME}/conf/hive-site.xml \
   -v ${ROOT_DIR}/hadoop_home/etc/hadoop/mapred-site.xml:${HADOOP_HOME}/etc/hadoop/mapred-site.xml \
   -v ${ROOT_DIR}/tez_home/conf/tez-site.xml:${TEZ_HOME}/conf/tez-site.xml \
-  -v ${ROOT_DIR}/tez_home:${TEZ_HOME} \
   -v ${ROOT_DIR}/jar:${TEZ_HOME}/jar \
   -v ${ROOT_DIR}/docker/run_services.sh:${HADOOP_HOME}/bin/run_services.sh \
   -w ${HADOOP_HOME} \
@@ -83,6 +84,7 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -e PATH=${HADOOP_HOME}/bin:${TEZ_HOME}/bin:${HIVE_HOME}/bin:${PATH} \
   -e HADOOP_CLASSPATH=${HADOOP_CLASSPATH} \
   -e RUNNING_MODE=${RUNNING_MODE} \
+  -e HADOOP_ROOT_LOGGER=${HADOOP_ROOT_LOGGER} \
   --network qflock-net-${DC} \
   --name qflock-hive  --hostname qflock-hive \
   qflock-hive-${USER_NAME} ${CMD}"

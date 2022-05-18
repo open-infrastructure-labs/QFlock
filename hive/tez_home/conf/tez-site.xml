@@ -93,7 +93,7 @@
 
   <property>
     <name>tez.am.client.heartbeat.timeout.secs</name>
-    <defaultValue>-1</defaultValue>
+    <defaultValue>3</defaultValue>
     <description>Int value. Time interval (in seconds). If the Tez AM does not receive a heartbeat from the
  client within this time interval, it will kill any running DAG and shut down. Required to
  re-cycle orphaned Tez applications where the client is no longer alive. A negative value
@@ -502,7 +502,7 @@
 
   <property>
     <name>tez.am.resource.memory.mb</name>
-    <defaultValue>1024</defaultValue>
+    <defaultValue>512</defaultValue>
     <description>Int value. The amount of memory in MB to be used by the AppMaster</description>
     <type>integer</type>
   </property>
@@ -657,7 +657,7 @@
 
   <property>
     <name>tez.am.vertex.max-task-concurrency</name>
-    <defaultValue>-1</defaultValue>
+    <defaultValue>0</defaultValue>
     <description>Int value. The maximum number of attempts that can run concurrently for a given vertex.
  Setting &lt;=0 implies no limit</description>
     <type>integer</type>
@@ -1008,7 +1008,7 @@
 
   <property>
     <name>tez.lib.uris</name>
-    <value>${fs.defaultFS}/app/tez-0.10.2-SNAPSHOT/tez-0.10.2-SNAPSHOT.tar.gz</value>
+    <value>${fs.defaultFS}/app/tez-0.10.1/tez-0.10.1.tar.gz</value>
     <description>String value to a file path.
  The location of the Tez libraries which will be localized for DAGs.
  This follows the following semantics
@@ -1237,7 +1237,7 @@
 
   <property>
     <name>tez.task.progress.stuck.interval-ms</name>
-    <defaultValue>-1</defaultValue>
+    <defaultValue>0</defaultValue>
     <description>Long value. Interval, in milliseconds, within which any of the tasks Input/Processor/Output
  components need to make successive progress notifications. If the progress is not notified
  for this interval then the task will be considered hung and terminated.
@@ -1256,7 +1256,7 @@
 
   <property>
     <name>tez.task.resource.cpu.vcores</name>
-    <defaultValue>1</defaultValue>
+    <defaultValue>4</defaultValue>
     <description>Int value. The number of virtual cores to be used by tasks.</description>
     <type>integer</type>
   </property>
@@ -1404,7 +1404,7 @@
 
   <property>
     <name>tez.yarn.ats.event.flush.timeout.millis</name>
-    <defaultValue>-1</defaultValue>
+    <defaultValue>500</defaultValue>
     <description>Int value. Time, in milliseconds, to wait while flushing YARN ATS data during shutdown.
  Expert level setting.</description>
     <type>long</type>

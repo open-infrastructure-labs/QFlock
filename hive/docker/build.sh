@@ -10,25 +10,12 @@ DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 DOCKER_NAME=qflock-hive
 
 # Download Hadoop
-ENV_HADOOP_VERSION=3.3.0
+ENV_HADOOP_VERSION=3.1.3
 if [ ! -f ${DOCKER_DIR}/hadoop-${ENV_HADOOP_VERSION}.tar.gz ]
 then
   echo "Downloading hadoop-${ENV_HADOOP_VERSION}.tar.gz"
   curl -L https://archive.apache.org/dist/hadoop/common/hadoop-${ENV_HADOOP_VERSION}/hadoop-${ENV_HADOOP_VERSION}.tar.gz  --output ${DOCKER_DIR}/hadoop-${ENV_HADOOP_VERSION}.tar.gz
 fi
-
-if [ ! -f ${DOCKER_DIR}/apache-hive-3.1.2-bin.tar.gz ]
-then
-  echo "Downloading apache-hive-3.1.2-bin.tar.gz"
-  curl -L https://downloads.apache.org/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz --output ${DOCKER_DIR}/apache-hive-3.1.2-bin.tar.gz
-fi
-
-if [ ! -f ${DOCKER_DIR}/apache-tez-0.10.1-bin.tar.gz ]
-then
-  echo "Downloading apache-tez-0.10.1-bin.tar.gz"
-  curl -L https://downloads.apache.org/tez/0.10.1/apache-tez-0.10.1-bin.tar.gz --output ${DOCKER_DIR}/apache-tez-0.10.1-bin.tar.gz
-fi
-
 
 DOCKER_CMD="docker build -t ${DOCKER_NAME} --build-arg HADOOP_VERSION -f $DOCKER_FILE $DOCKER_DIR"
 eval "$DOCKER_CMD"

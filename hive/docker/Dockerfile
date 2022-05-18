@@ -21,7 +21,7 @@ RUN apt-get -q update \
     curl \
     netcat
 
-ENV ENV_HADOOP_VERSION=3.3.0
+ENV ENV_HADOOP_VERSION=3.1.3
 ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
 RUN mkdir -p /opt/hadoop
@@ -30,19 +30,19 @@ ADD /hadoop-${ENV_HADOOP_VERSION}.tar.gz /opt/hadoop
 
 # https://dlcdn.apache.org/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz
 # https://downloads.apache.org/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz
+# install hive 3.1.2 compiled from source - resolve guava version issue
 RUN mkdir -p /opt/hive
-# RUN curl -L https://downloads.apache.org/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz | tar -xz -C /opt/hive
 ADD /apache-hive-3.1.2-bin.tar.gz /opt/hive
 
-# Fix guava incompatibility issue
-ENV HADOOP_HOME=/opt/hadoop/hadoop-3.3.0
-ENV HIVE_HOME=/opt/hive/apache-hive-3.1.2-bin
-RUN rm ${HIVE_HOME}/lib/guava-19.0.jar \
-    && cp ${HADOOP_HOME}/share/hadoop/hdfs/lib/guava-27.0-jre.jar $HIVE_HOME/lib/
+# Install tez-0.10.1 compiled from source
+RUN mkdir -p /opt/tez/apache-tez-0.10.1-bin
+ADD /tez-0.10.1.tar.gz /opt/tez/apache-tez-0.10.1-bin
 
-# Install tez 
-# RUN mkdir -p /opt/tez
-# ADD /apache-tez-0.10.1-bin.tar.gz /opt/tez
+# Fix multiple SLF4J binding conflict.
+ENV TEZ_HOME=/opt/tez/apache-tez-0.10.1-bin
+ENV HIVE_HOME=/opt/hive/apache-hive-3.1.2-bin
+RUN rm ${TEZ_HOME}/lib/slf4j-log4j12-1.7.30.jar
+RUN rm ${HIVE_HOME}/lib/log4j-slf4j-impl-2.10.0.jar
 
 RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
