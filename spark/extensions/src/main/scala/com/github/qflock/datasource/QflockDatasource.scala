@@ -22,6 +22,7 @@ import scala.collection.JavaConverters._
 
 import com.github.qflock.datasource.common.Pushdown
 import com.github.qflock.datasource.hdfs.{HdfsScan, HdfsStore}
+import com.github.qflock.extensions.jdbc.QflockJdbcDatasource
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient
 import org.slf4j.LoggerFactory

@@ -59,6 +59,7 @@ class QflockThriftJdbcHandler:
         self._gw = self._spark.sparkContext._gateway
         java_import(self._gw.jvm, "com.github.qflock.datasource.QflockTableDescriptor")
         self._create_views()
+        logging.info(f"initialized compression: {compression}")
 
     def _create_debug_spark(self):
         self._spark = pyspark.sql.SparkSession \
@@ -100,8 +101,6 @@ class QflockThriftJdbcHandler:
         # the table descriptor's fillRequestInfo the by the client
         #
         logging.info(f"Create view for table: {table.tableName} request_id: {request_id}")
-        # .option("schema", schema)\
-        # .option("path", file_path)\
         df = self._spark.read \
             .format("qflockDs") \
             .option("format", "parquet") \
@@ -210,16 +209,16 @@ class QflockThriftJdbcHandler:
                     num_bytes = len(new_data) * item_size
                     col_bytes.append(num_bytes)
                     if self._compression is True:
-                        # logging.info(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
+                        logging.debug(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
                         new_data = zstd.ZstdCompressor().compress(new_data)
                         col_comp_bytes.append(len(new_data))
-                        # logging.info(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
+                        logging.debug(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
                         raw_bytes = new_data
+                        comp_rows.append(raw_bytes)
                     else:
                         raw_bytes = new_data.tobytes()
                         col_comp_bytes.append(len(raw_bytes))
-                        #binary_rows.append(raw_bytes)
-                    comp_rows.append(raw_bytes)
+                        binary_rows.append(raw_bytes)
                     col_type_bytes.append(item_size)
                 else:
                     new_data = data.byteswap().newbyteorder().tobytes()
@@ -227,15 +226,15 @@ class QflockThriftJdbcHandler:
                     num_bytes = len(new_data)
                     col_bytes.append(num_bytes)
                     if self._compression is True:
-                        # logging.info(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
+                        logging.debug(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
 
                         new_data = zstd.ZstdCompressor().compress(new_data)
                         col_comp_bytes.append(len(new_data))
-                        # logging.info(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
+                        comp_rows.append(new_data)
+                        logging.debug(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
                     else:
                         col_comp_bytes.append(len(new_data))
-                        #binary_rows.append(new_data)
-                    comp_rows.append(new_data)
+                        binary_rows.append(new_data)
                     col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
         stats = query_stats.split(" ")
         prevBytes = stats[1].split(":")[1]
