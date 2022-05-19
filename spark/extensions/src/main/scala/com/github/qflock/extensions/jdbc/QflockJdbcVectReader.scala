@@ -75,7 +75,7 @@ class QflockJdbcVectReader(schema: StructType,
     for (i <- 0 until numCols) {
       val currentRows = colVectors(i).setupColumn(i, part, results.get)
       if (rows == 0) {
-        logger.info(s"readNextBatch found rows: $currentRows")
+        // logger.info(s"readNextBatch found rows: $currentRows")
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {
         // We expect all rows in the batch to be the same size.
@@ -97,7 +97,7 @@ class QflockJdbcVectReader(schema: StructType,
       case e: Exception =>
         logger.warn("Failed to load JDBC driver." + e.toString)
     }
-    logger.info(s"connecting to $url")
+    logger.debug(s"connecting to $url")
     val properties = new Properties
     properties.setProperty("compression", "true")
     properties.setProperty("bufferSize", "42")
@@ -106,11 +106,11 @@ class QflockJdbcVectReader(schema: StructType,
     properties.setProperty("tableName", options.get("tableName"))
     properties.setProperty("queryStats", options.get("queryStats"))
     connection = Some(DriverManager.getConnection(url, properties))
-    logger.info(s"connected to $url")
+    logger.debug(s"connected to $url")
     val select = connection.get.prepareStatement(query)
-    logger.info(s"Starting query $query")
+    logger.debug(s"Starting query $query")
     val result = select.executeQuery(query)
-    logger.info(s"Query complete $query")
+    logger.debug(s"Query complete $query")
     // return the result and the connection so we can close it later.
     result
   }
@@ -122,7 +122,7 @@ class QflockJdbcVectReader(schema: StructType,
     columnarBatch.setNumRows(0)
     val rows = readNextBatch()
     if (rows == 0) {
-      logger.info(s"nextBatch Done rows: $rows total: $rowsReturned")
+      // logger.info(s"nextBatch Done rows: $rows total: $rowsReturned")
     }
     rowsReturned += rows
     columnarBatch.setNumRows(rows.toInt)

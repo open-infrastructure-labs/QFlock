@@ -48,9 +48,9 @@ public class QflockResultSet implements ResultSet {
     
     private int rowIndex;
     
-    private int type = ResultSet.TYPE_SCROLL_INSENSITIVE;
+    private final int type = ResultSet.TYPE_SCROLL_INSENSITIVE;
 
-    private boolean wasNull = false;
+    private final boolean wasNull = false;
 
     private boolean isClosed;
 
@@ -68,7 +68,6 @@ public class QflockResultSet implements ResultSet {
     }
 
     private void getColumnResults() throws SQLException {
-        int numColumns = this.metadata.getColumnCount();
         Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
         Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
         Iterator<ByteBuffer> compRowsIterator = this.resultset.getCompressedRowsIterator();
@@ -91,7 +90,7 @@ public class QflockResultSet implements ResultSet {
                 }
                 int type = this.metadata.getColumnType(columnIndex + 1);
                 if (type == Types.VARCHAR) {
-                    // Strings require access to the array() operator so we can copy
+                    // Strings require access to the array() operator, so we can copy
                     // a range for each individual string.
                     // Direct buffer does not allow it, so allocate a new buffer
                     // that is not a direct buffer.
@@ -111,7 +110,7 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public boolean isWrapperFor(Class<?> arg0) throws SQLException {
+    public boolean isWrapperFor(Class<?> arg0) {
         // TODO Auto-generated method stub
         return false;
     }
@@ -122,31 +121,31 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public boolean absolute(int arg0) throws SQLException {
+    public boolean absolute(int arg0) {
         // TODO Auto-generated method stub
         return false;
     }
 
     @Override
-    public void afterLast() throws SQLException {
+    public void afterLast() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void beforeFirst() throws SQLException {
+    public void beforeFirst() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void cancelRowUpdates() throws SQLException {
+    public void cancelRowUpdates() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void clearWarnings() throws SQLException {
+    public void clearWarnings() {
         // TODO Provide warnings in ResultSet
     }
 
@@ -158,7 +157,7 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public void deleteRow() throws SQLException {
+    public void deleteRow() {
         // TODO Auto-generated method stub
 
     }
@@ -325,23 +324,21 @@ public class QflockResultSet implements ResultSet {
     @Override
     public double getDouble(int columnIndex) throws SQLException {
         try {
-            double value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getDouble((rowIndex - 1) * 8);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to double: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to double: " + e,
                     e);
         }
     }
     public double getDouble(int columnIndex, int rIndex) throws SQLException {
         try {
-            double value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getDouble((rIndex - 1) * 8);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to double: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to double: " + e,
                     e);
         }
     }
@@ -364,23 +361,21 @@ public class QflockResultSet implements ResultSet {
     @Override
     public float getFloat(int columnIndex) throws SQLException {
         try {
-            float value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getFloat((rowIndex - 1) * 8);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to float: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to float: " + e,
                     e);
         }
     }
     public float getFloat(int columnIndex, int rIndex) throws SQLException {
         try {
-            float value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getFloat((rIndex - 1) * 8);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to float: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to float: " + e,
                     e);
         }
     }
@@ -398,23 +393,21 @@ public class QflockResultSet implements ResultSet {
     @Override
     public int getInt(int columnIndex) throws SQLException {
         try {
-            int value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getInt((rowIndex - 1) * 4);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to int: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to int: " + e,
                     e);
         }
     }
     public int getInt(int columnIndex, int rIndex) throws SQLException {
         try {
-            int value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getInt((rIndex - 1) * 4);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to int: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to int: " + e,
                     e);
         }
     }
@@ -427,23 +420,21 @@ public class QflockResultSet implements ResultSet {
     @Override
     public long getLong(int columnIndex) throws SQLException {
         try {
-            long l = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getLong((rowIndex - 1) * 8);
-            return l;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to long: " + e,
                     e);
         }
     }
     public long getLong(int columnIndex, int rIndex) throws SQLException {
         try {
-            long l = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getLong((rIndex - 1) * 8);
-            return l;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to long: " + e,
                     e);
         }
     }
@@ -454,7 +445,7 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public ResultSetMetaData getMetaData() throws SQLException {
+    public ResultSetMetaData getMetaData() {
         return this.metadata;
     }
 
@@ -488,7 +479,7 @@ public class QflockResultSet implements ResultSet {
         return getString(findColumn(columnLabel));
     }
 
-    public int getNumRows() throws SQLException {
+    public int getNumRows() {
         return this.resultset.getNumRows();
     }
     @Override
@@ -557,7 +548,7 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public int getRow() throws SQLException {
+    public int getRow() {
         return this.rowIndex;
     }
 
@@ -584,23 +575,21 @@ public class QflockResultSet implements ResultSet {
     @Override
     public short getShort(int columnIndex) throws SQLException {
         try {
-            short value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getShort((rowIndex - 1) * 2);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to long: " + e,
                     e);
         }
     }
     public short getShort(int columnIndex, int rIndex) throws SQLException {
         try {
-            short value = this.resultset.getBinaryRows().get(columnIndex - 1)
+            return this.resultset.getBinaryRows().get(columnIndex - 1)
                     .getShort((rIndex - 1) * 2);
-            return value;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to long: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to long: " + e,
                     e);
         }
     }
@@ -621,13 +610,12 @@ public class QflockResultSet implements ResultSet {
             Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
             byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
                     .array();
-            String rString = new String(buffer, (rowIndex - 1) * stringLen,
+            return new String(buffer, (rowIndex - 1) * stringLen,
                     stringLen,
                     StandardCharsets.UTF_8);
-            return rString;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to string: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to string: " + e,
                     e);
         }
     }
@@ -636,13 +624,12 @@ public class QflockResultSet implements ResultSet {
             Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
             byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
                     .array();
-            String rString = new String(buffer, (rIndex - 1) * stringLen,
+            return new String(buffer, (rIndex - 1) * stringLen,
                     stringLen,
                     StandardCharsets.UTF_8);
-            return rString;
         } catch (Exception e) {
             throw new SQLException(
-                    "Cannot convert column " + columnIndex + " to string: " + e.toString(),
+                    "Cannot convert column " + columnIndex + " to string: " + e,
                     e);
         }
     }
@@ -719,38 +706,38 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public SQLWarning getWarnings() throws SQLException {
+    public SQLWarning getWarnings() {
         return this.warnings.poll();
     }
 
     @Override
-    public void insertRow() throws SQLException {
+    public void insertRow() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public boolean isAfterLast() throws SQLException {
+    public boolean isAfterLast() {
         return (getRow()>this.resultset.getNumRows());
     }
 
     @Override
-    public boolean isBeforeFirst() throws SQLException {
+    public boolean isBeforeFirst() {
         return (getRow()==0);
     }
 
     @Override
-    public boolean isClosed() throws SQLException {
+    public boolean isClosed() {
         return this.isClosed;
     }
 
     @Override
-    public boolean isFirst() throws SQLException {
+    public boolean isFirst() {
         return (getRow()==1);
     }
 
     @Override
-    public boolean isLast() throws SQLException {
+    public boolean isLast() {
         return (getRow()==this.resultset.getNumRows());
     }
 
@@ -761,36 +748,32 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public void moveToCurrentRow() throws SQLException {
+    public void moveToCurrentRow() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void moveToInsertRow() throws SQLException {
+    public void moveToInsertRow() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public boolean next() throws SQLException {
+    public boolean next() {
         this.rowIndex += 1;
         // was .getRows().size()
-        if (this.rowIndex > this.resultset.numRows)
-            return false;
-        return true;
+        return this.rowIndex <= this.resultset.numRows;
     }
 
     @Override
-    public boolean previous() throws SQLException {
+    public boolean previous() {
         this.rowIndex -= 1;
-        if (this.rowIndex == 0)
-            return false;
-        return true;
+        return this.rowIndex != 0;
     }
 
     @Override
-    public void refreshRow() throws SQLException {
+    public void refreshRow() {
         // TODO Auto-generated method stub
 
     }
@@ -802,7 +785,7 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public boolean rowDeleted() throws SQLException {
+    public boolean rowDeleted() {
         // TODO Auto-generated method stub
         return false;
     }
@@ -814,555 +797,530 @@ public class QflockResultSet implements ResultSet {
     }
 
     @Override
-    public boolean rowUpdated() throws SQLException {
+    public boolean rowUpdated() {
         // TODO Auto-generated method stub
         return false;
     }
 
     @Override
-    public void setFetchDirection(int arg0) throws SQLException {
+    public void setFetchDirection(int arg0) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void setFetchSize(int arg0) throws SQLException {
+    public void setFetchSize(int arg0) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateArray(int arg0, Array arg1) throws SQLException {
+    public void updateArray(int arg0, Array arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateArray(String arg0, Array arg1) throws SQLException {
+    public void updateArray(String arg0, Array arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateAsciiStream(int arg0, InputStream arg1)
-            throws SQLException {
+    public void updateAsciiStream(int arg0, InputStream arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateAsciiStream(String arg0, InputStream arg1)
-            throws SQLException {
+    public void updateAsciiStream(String arg0, InputStream arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateAsciiStream(int arg0, InputStream arg1, int arg2)
-            throws SQLException {
+    public void updateAsciiStream(int arg0, InputStream arg1, int arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateAsciiStream(String arg0, InputStream arg1, int arg2)
-            throws SQLException {
+    public void updateAsciiStream(String arg0, InputStream arg1, int arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateAsciiStream(int arg0, InputStream arg1, long arg2)
-            throws SQLException {
+    public void updateAsciiStream(int arg0, InputStream arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateAsciiStream(String arg0, InputStream arg1, long arg2)
-            throws SQLException {
+    public void updateAsciiStream(String arg0, InputStream arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBigDecimal(int arg0, BigDecimal arg1) throws SQLException {
+    public void updateBigDecimal(int arg0, BigDecimal arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBigDecimal(String arg0, BigDecimal arg1)
-            throws SQLException {
+    public void updateBigDecimal(String arg0, BigDecimal arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBinaryStream(int arg0, InputStream arg1)
-            throws SQLException {
+    public void updateBinaryStream(int arg0, InputStream arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBinaryStream(String arg0, InputStream arg1)
-            throws SQLException {
+    public void updateBinaryStream(String arg0, InputStream arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBinaryStream(int arg0, InputStream arg1, int arg2)
-            throws SQLException {
+    public void updateBinaryStream(int arg0, InputStream arg1, int arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBinaryStream(String arg0, InputStream arg1, int arg2)
-            throws SQLException {
+    public void updateBinaryStream(String arg0, InputStream arg1, int arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBinaryStream(int arg0, InputStream arg1, long arg2)
-            throws SQLException {
+    public void updateBinaryStream(int arg0, InputStream arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBinaryStream(String arg0, InputStream arg1, long arg2)
-            throws SQLException {
+    public void updateBinaryStream(String arg0, InputStream arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBlob(int arg0, Blob arg1) throws SQLException {
+    public void updateBlob(int arg0, Blob arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBlob(String arg0, Blob arg1) throws SQLException {
+    public void updateBlob(String arg0, Blob arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBlob(int arg0, InputStream arg1) throws SQLException {
+    public void updateBlob(int arg0, InputStream arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBlob(String arg0, InputStream arg1) throws SQLException {
+    public void updateBlob(String arg0, InputStream arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBlob(int arg0, InputStream arg1, long arg2)
-            throws SQLException {
+    public void updateBlob(int arg0, InputStream arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBlob(String arg0, InputStream arg1, long arg2)
-            throws SQLException {
+    public void updateBlob(String arg0, InputStream arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBoolean(int arg0, boolean arg1) throws SQLException {
+    public void updateBoolean(int arg0, boolean arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBoolean(String arg0, boolean arg1) throws SQLException {
+    public void updateBoolean(String arg0, boolean arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateByte(int arg0, byte arg1) throws SQLException {
+    public void updateByte(int arg0, byte arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateByte(String arg0, byte arg1) throws SQLException {
+    public void updateByte(String arg0, byte arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBytes(int arg0, byte[] arg1) throws SQLException {
+    public void updateBytes(int arg0, byte[] arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateBytes(String arg0, byte[] arg1) throws SQLException {
+    public void updateBytes(String arg0, byte[] arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateCharacterStream(int arg0, Reader arg1)
-            throws SQLException {
+    public void updateCharacterStream(int arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateCharacterStream(String arg0, Reader arg1)
-            throws SQLException {
+    public void updateCharacterStream(String arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateCharacterStream(int arg0, Reader arg1, int arg2)
-            throws SQLException {
+    public void updateCharacterStream(int arg0, Reader arg1, int arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateCharacterStream(String arg0, Reader arg1, int arg2)
-            throws SQLException {
+    public void updateCharacterStream(String arg0, Reader arg1, int arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateCharacterStream(int arg0, Reader arg1, long arg2)
-            throws SQLException {
+    public void updateCharacterStream(int arg0, Reader arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateCharacterStream(String arg0, Reader arg1, long arg2)
-            throws SQLException {
+    public void updateCharacterStream(String arg0, Reader arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateClob(int arg0, Clob arg1) throws SQLException {
+    public void updateClob(int arg0, Clob arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateClob(String arg0, Clob arg1) throws SQLException {
+    public void updateClob(String arg0, Clob arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateClob(int arg0, Reader arg1) throws SQLException {
+    public void updateClob(int arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateClob(String arg0, Reader arg1) throws SQLException {
+    public void updateClob(String arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateClob(int arg0, Reader arg1, long arg2)
-            throws SQLException {
+    public void updateClob(int arg0, Reader arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateClob(String arg0, Reader arg1, long arg2)
-            throws SQLException {
+    public void updateClob(String arg0, Reader arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateDate(int arg0, Date arg1) throws SQLException {
+    public void updateDate(int arg0, Date arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateDate(String arg0, Date arg1) throws SQLException {
+    public void updateDate(String arg0, Date arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateDouble(int arg0, double arg1) throws SQLException {
+    public void updateDouble(int arg0, double arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateDouble(String arg0, double arg1) throws SQLException {
+    public void updateDouble(String arg0, double arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateFloat(int arg0, float arg1) throws SQLException {
+    public void updateFloat(int arg0, float arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateFloat(String arg0, float arg1) throws SQLException {
+    public void updateFloat(String arg0, float arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateInt(int arg0, int arg1) throws SQLException {
+    public void updateInt(int arg0, int arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateInt(String arg0, int arg1) throws SQLException {
+    public void updateInt(String arg0, int arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateLong(int arg0, long arg1) throws SQLException {
+    public void updateLong(int arg0, long arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateLong(String arg0, long arg1) throws SQLException {
+    public void updateLong(String arg0, long arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNCharacterStream(int arg0, Reader arg1)
-            throws SQLException {
+    public void updateNCharacterStream(int arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateNCharacterStream(String arg0, Reader arg1)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNCharacterStream(int arg0, Reader arg1, long arg2)
-            throws SQLException {
+    public void updateNCharacterStream(int arg0, Reader arg1, long arg2) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateNCharacterStream(String arg0, Reader arg1, long arg2)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNClob(int arg0, NClob arg1) throws SQLException {
+    public void updateNClob(int arg0, NClob arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNClob(String arg0, NClob arg1) throws SQLException {
+    public void updateNClob(String arg0, NClob arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNClob(int arg0, Reader arg1) throws SQLException {
+    public void updateNClob(int arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNClob(String arg0, Reader arg1) throws SQLException {
+    public void updateNClob(String arg0, Reader arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateNClob(int arg0, Reader arg1, long arg2)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateNClob(String arg0, Reader arg1, long arg2)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNString(int arg0, String arg1) throws SQLException {
+    public void updateNString(int arg0, String arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNString(String arg0, String arg1) throws SQLException {
+    public void updateNString(String arg0, String arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNull(int arg0) throws SQLException {
+    public void updateNull(int arg0) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateNull(String arg0) throws SQLException {
+    public void updateNull(String arg0) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateObject(int arg0, Object arg1) throws SQLException {
+    public void updateObject(int arg0, Object arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateObject(String arg0, Object arg1) throws SQLException {
+    public void updateObject(String arg0, Object arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateObject(int arg0, Object arg1, int arg2)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateObject(String arg0, Object arg1, int arg2)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateRef(int arg0, Ref arg1) throws SQLException {
+    public void updateRef(int arg0, Ref arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateRef(String arg0, Ref arg1) throws SQLException {
+    public void updateRef(String arg0, Ref arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateRow() throws SQLException {
+    public void updateRow() {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateRowId(int arg0, RowId arg1) throws SQLException {
+    public void updateRowId(int arg0, RowId arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateRowId(String arg0, RowId arg1) throws SQLException {
+    public void updateRowId(String arg0, RowId arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateSQLXML(int arg0, SQLXML arg1) throws SQLException {
+    public void updateSQLXML(int arg0, SQLXML arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateSQLXML(String arg0, SQLXML arg1) throws SQLException {
+    public void updateSQLXML(String arg0, SQLXML arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateShort(int arg0, short arg1) throws SQLException {
+    public void updateShort(int arg0, short arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateShort(String arg0, short arg1) throws SQLException {
+    public void updateShort(String arg0, short arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateString(int arg0, String arg1) throws SQLException {
+    public void updateString(int arg0, String arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateString(String arg0, String arg1) throws SQLException {
+    public void updateString(String arg0, String arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateTime(int arg0, Time arg1) throws SQLException {
+    public void updateTime(int arg0, Time arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateTime(String arg0, Time arg1) throws SQLException {
+    public void updateTime(String arg0, Time arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public void updateTimestamp(int arg0, Timestamp arg1) throws SQLException {
+    public void updateTimestamp(int arg0, Timestamp arg1) {
         // TODO Auto-generated method stub
 
     }
 
     @Override
     public void updateTimestamp(String arg0, Timestamp arg1)
-            throws SQLException {
+            {
         // TODO Auto-generated method stub
 
     }
 
     @Override
-    public boolean wasNull() throws SQLException {
+    public boolean wasNull() {
         return this.wasNull;
     }
 

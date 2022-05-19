@@ -30,7 +30,6 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -46,7 +45,6 @@ class QflockJdbcDatasource extends TableProvider
   private val logger = LoggerFactory.getLogger(getClass)
   override def toString: String = s"GenericPushdownDataSource()"
   override def supportsExternalMetadata(): Boolean = true
-  // GenericPushdownDatasource.checkInitialized
 
   private val sparkSession: SparkSession = SparkSession
     .builder()
@@ -102,13 +100,6 @@ object QflockJdbcDatasource {
   private val sparkSession: SparkSession = SparkSession
     .builder()
     .getOrCreate()
-  def checkInitialized(): Unit = {
-    if (!initialized) {
-      initialized = true
-      // logger.info("Adding new GenericPushdowntimization Rule")
-      // sparkSession.experimental.extraOptimizations ++= Seq(GenericPushdownOptimizationRule)
-    }
-  }
 
   def getSchema(options: util.Map[String, String]): StructType = {
     if (options.getOrDefault("schema", "") != "") {
@@ -130,7 +121,6 @@ object QflockJdbcDatasource {
       new StructType()
     }
   }
-  checkInitialized()
 }
 /** Creates a Table object that supports pushdown predicates
  *   such as Filter, Project, and Aggregate.
@@ -146,7 +136,6 @@ class QflockJdbcBatchTable(schema: StructType,
   extends Table with SupportsRead {
 
   private val logger = LoggerFactory.getLogger(getClass)
-  logger.trace("Created")
   override def name(): String = this.getClass.toString
 
   override def schema(): StructType = schema

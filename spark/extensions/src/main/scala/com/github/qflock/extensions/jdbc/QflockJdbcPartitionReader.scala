@@ -27,8 +27,8 @@ import org.apache.spark.sql.{QflockJdbcUtil, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 
-
 /** PartitionReader of JDBC
+ *  This iterator returns an internal row.
  *
  * @param options the options including "path"
  * @param partition the QflockJdbcPartition to read from
@@ -41,11 +41,11 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
 
   private val logger = LoggerFactory.getLogger(getClass)
   private var (rowIterator: Iterator[InternalRow], connection: Option[Connection]) = {
-    var query = options.get("query")
-    var driver = options.get("driver")
-    var url = options.get("url")
+    val query = options.get("query")
+    val driver = options.get("driver")
+    val url = options.get("url")
     try {
-      logger.info("Loading " + driver)
+      logger.debug("Loading " + driver)
       // scalastyle:off classforname
       Class.forName(driver).newInstance
       // scalastyle:on classforname
@@ -54,7 +54,7 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
         logger.warn("Failed to load JDBC driver.")
     }
     val (resultSet: ResultSet, con: Option[Connection]) = {
-      logger.info(s"connecting to ${url}")
+      logger.debug(s"connecting to ${url}")
       val properties = new Properties
       properties.setProperty("compression", "true")
       properties.setProperty("bufferSize", "42")
@@ -63,11 +63,11 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
       properties.setProperty("tableName", options.get("tableName"))
       properties.setProperty("queryStats", options.get("queryStats"))
       val con = DriverManager.getConnection(url, properties)
-      logger.info(s"connected to ${url}")
+      logger.debug(s"connected to ${url}")
       val select = con.prepareStatement(query)
-      logger.info(s"Starting query ${query}")
+      logger.debug(s"Starting query ${query}")
       val result = select.executeQuery(query)
-      logger.info(s"Query complete ${query}")
+      logger.debug(s"Query complete ${query}")
       // return the result and the connection so we can close it later.
       (result, Some(con))
     }

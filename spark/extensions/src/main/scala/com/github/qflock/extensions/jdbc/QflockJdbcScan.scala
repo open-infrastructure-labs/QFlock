@@ -23,11 +23,9 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
-import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReader, PartitionReaderFactory, Scan, Statistics => ReadStats, SupportsReportStatistics}
+import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan, Statistics => ReadStats, SupportsReportStatistics}
 import org.apache.spark.sql.types._
 import org.apache.spark.util.SerializableConfiguration
 
@@ -42,14 +40,12 @@ case class QflockJdbcScan(schema: StructType,
   extends Scan with Batch with SupportsReportStatistics {
 
   private val logger = LoggerFactory.getLogger(getClass)
-  logger.trace("Created")
   override def toBatch: Batch = this
   override def readSchema(): StructType = schema
 
-  private val maxPartSize: Long = (1024 * 1024 * 128)
   private var partitions: Array[InputPartition] = Array[InputPartition]()
-  private var sizeInBytes: OptionalLong = OptionalLong.of(stats.sizeInBytes.longValue())
-  private var rowCount: OptionalLong =
+  private val sizeInBytes: OptionalLong = OptionalLong.of(stats.sizeInBytes.longValue())
+  private val rowCount: OptionalLong =
     OptionalLong.of(stats.rowCount.getOrElse(BigInt(0)).longValue())
 
   case class GenericPushdownStats(sizeInBytes: OptionalLong,
@@ -60,22 +56,22 @@ case class QflockJdbcScan(schema: StructType,
     GenericPushdownStats(numRows = rowCount, sizeInBytes = sizeInBytes)
   }
   private def createPartitions(): Array[InputPartition] = {
-    var a = new ArrayBuffer[InputPartition](0)
     val path = options.get("path")
     var partitions = options.get("numRowGroups").toInt
     val numRows = options.get("numRows").toInt
     val rowsPerPartition = numRows / partitions
     // Set below to true to do a 1 partition test.
+    val partitionArray = new ArrayBuffer[InputPartition](0)
     if (false) {
       partitions = 1
-      a += new QflockJdbcPartition(index = 0,
+      partitionArray += new QflockJdbcPartition(index = 0,
         offset = 0,
         length = options.get("numRowGroups").toInt,
         name = path)
     } else {
       // Generate one partition per row Group.
       for (i <- 0 until partitions) {
-        a += new QflockJdbcPartition(index = i,
+        partitionArray += new QflockJdbcPartition(index = i,
           offset = i,
           length = 1,
           name = path,
@@ -84,8 +80,9 @@ case class QflockJdbcScan(schema: StructType,
     }
     val query = options.get("query")
     val appId = options.get("appId")
-    logger.info(s"Num partitions: ${partitions} app-id:${appId} query:${query}" + a.mkString(", "))
-    a.toArray
+    logger.info(s"Num partitions:$partitions app-id:$appId query:$query")
+    logger.debug(partitionArray.mkString(", "))
+    partitionArray.toArray
   }
   private val sparkSession: SparkSession = SparkSession
     .builder()
@@ -93,7 +90,6 @@ case class QflockJdbcScan(schema: StructType,
   private val broadcastedHadoopConf =
     sparkSession.sparkContext.broadcast(new SerializableConfiguration(
       sparkSession.sessionState.newHadoopConf()))
-  private val sqlConf = sparkSession.sessionState.conf
 
   override def planInputPartitions(): Array[InputPartition] = {
     if (partitions.length == 0) {

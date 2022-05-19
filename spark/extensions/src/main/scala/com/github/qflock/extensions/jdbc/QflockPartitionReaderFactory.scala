@@ -45,10 +45,8 @@ class QflockPartitionReaderFactory(options: util.Map[String, String],
     .getOrCreate()
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
-        new QflockJdbcPartitionReader(options, partition.asInstanceOf[QflockJdbcPartition],
-          sparkSession, sharedConf)
-//    new QflockJdbcFakeRowPartitionReader(options, partition.asInstanceOf[QflockJdbcPartition],
-//      sparkSession, sharedConf)
+    new QflockJdbcPartitionReader(options, partition.asInstanceOf[QflockJdbcPartition],
+      sparkSession, sharedConf)
   }
   val batchSize = 1024
 
@@ -58,7 +56,7 @@ class QflockPartitionReaderFactory(options: util.Map[String, String],
     val part = partition.asInstanceOf[QflockJdbcPartition]
     val schema = QflockJdbcDatasource.getSchema(options)
     val reader = new QflockJdbcVectReader(schema, 256 * 1024, part, options)
-    logger.info("HdfsBinColVectReader created row group " + part.index)
+    logger.debug("QflockPartitionReaderFactory created row group " + part.index)
     new QflockJdbcColumnarPartitionReader(reader)
     // This alternate factory below is identical to the above, but
     // provides more verbose progress tracking.
