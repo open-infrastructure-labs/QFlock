@@ -114,8 +114,11 @@ if __name__ == '__main__':
     tables = [client.get_table(db_name, table_name) for table_name in table_names]
     tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
 
+    print("path,data center,bytes,rows")
     for tbl in tables:
-        print(tbl.sd.location, tbl.sd.parameters['qflock.storage_size'])
+        dc = "dc1" if "dc1" in tbl.sd.location else "dc2"
+        print(f"{tbl.sd.location},{dc},{tbl.sd.parameters['qflock.storage_size']},"
+              f"{tbl.parameters['spark.sql.statistics.numRows']}")
 
     get_column_sizes(tables[0].sd.location)
     client_transport.close()
