@@ -37,6 +37,7 @@ class BenchmarkResult:
         self._start_time = start_time
         self._save_data = save_data
         self.num_rows = num_rows
+        self._collect_rows = None
         self._verbose = verbose
         self._explain = explain
         self._explain_plan = None
@@ -80,9 +81,12 @@ class BenchmarkResult:
                                      func.format_number(func.bround(df1[df1.schema.fields[c].name], 3), 2))
         return df1
 
-    def process_result(self):
+    def process_result(self, collect_only):
         # if self._verbose:
         #     self.df.show(100, False)
+        if collect_only:
+            self._collect_rows = self.df.collect()
+            return
         root_path = os.path.split(self._output_path)[0]
         if not os.path.exists(root_path):
             print(f"creating {root_path}")

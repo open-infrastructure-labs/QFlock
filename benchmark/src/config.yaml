@@ -24,7 +24,7 @@
                    qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
                    qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
   spark:
-    master: local[4]
+    master: local[1]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-ports: "default:9084"
     conf:
@@ -39,7 +39,9 @@
 #    - spark.sql.hive.metastore.jars=path
 #    - spark.sql.hive.metastore.jars.path=jars/*.jar
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3
-#    - spark.sql.extensions=com.github.qflock.FederationExtensions,
+    # The below write out with 16 Mb row groups.
+    - spark.hadoop.dfs.blocksize=16777216
+    - spark.hadoop.parquet.block.size=16777216
 #    - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
     - spark.sql.cbo.enabled=true
     - spark.sql.statistics.histogram.enabled=true

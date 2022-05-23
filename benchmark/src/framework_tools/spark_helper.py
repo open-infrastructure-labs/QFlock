@@ -198,7 +198,7 @@ class SparkHelper:
             for t in db[d].keys():
                 self.drop_table(t)
 
-    def query(self, query, explain=False, query_name=""):
+    def query(self, query, explain=False, query_name="", collect_only=False):
         start_time = time.time()
         df = None
         try:
@@ -209,7 +209,7 @@ class SparkHelper:
             result = BenchmarkResult(df, start_time=start_time,
                                      verbose=self._verbose, explain=explain, query_name=query_name,
                                      output_path=self._output_path, spark_helper=self, query=query)
-            result.process_result()
+            result.process_result(collect_only)
         except (ValueError, Exception):
             print(f"caught error executing query for {query}")
             print(traceback.format_exc())
@@ -272,8 +272,3 @@ class SparkHelper:
     def show_db(self, name):
         self._spark.sql(f"DESCRIBE DATABASE EXTENDED {name}")
 
-# spark = SparkSession.\
-#     builder\
-#     .appName("test")\
-#     .config("spark.sql.extensions","com.github.datasource.generic.FederationExtensions")\
-#     .getOrCreate()

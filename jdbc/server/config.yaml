@@ -7,13 +7,13 @@
 #  server-name: <host ip>
   compression: true
   spark:
-    master: local[2]
+    master: local[1]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-port: "9084"
     conf:
     - spark.driver.maxResultSize=2g
-    - spark.driver.memory=12g
-    - spark.executor.memory=12g
+    - spark.driver.memory=2g
+    - spark.executor.memory=2g
     - spark.sql.execution.arrow.pyspark.enabled=true
     - spark.sql.catalogImplementation=hive
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3

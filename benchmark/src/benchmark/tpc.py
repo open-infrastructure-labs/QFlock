@@ -181,7 +181,10 @@ class TpcBenchmark(Benchmark):
     def compute_stats(self):
         for table in self.tables.get_tables():
             print(f"computing stats for table {table}")
-            self._framework.query(f"analyze table {table} COMPUTE STATISTICS FOR ALL COLUMNS")
+            # We do not want to write out the result, so we simply
+            # collect the result in memory.
+            self._framework.query(f"analyze table {table} COMPUTE STATISTICS FOR ALL COLUMNS",
+                                  collect_only=True)
 
 
 class TpchBenchmark(TpcBenchmark):
