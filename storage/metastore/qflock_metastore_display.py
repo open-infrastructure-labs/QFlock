@@ -82,39 +82,6 @@ if __name__ == '__main__':
 
     tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
 
-    dest = "dc1"
-    table_filters = []
-    if len(sys.argv) > 1:
-        dest = sys.argv[1]
-    if len(sys.argv) > 2:
-        table_filters = sys.argv[2].split(",")
-    if dest != "dc2" and dest != "dc1":
-        print("please enter dc2 or dc1 for new location")
-        exit(1)
-    if dest == "dc1":
-        src = "dc2"
-    else:
-        src = "dc1"
-    for i in range(0, len(tables), 1):
-        if len(table_filters):
-            found = False
-            for filter in table_filters:
-                if filter in tables[i].tableName:
-                    found = True
-                    break
-            if found is False:
-                continue
-        if f'hdfs://qflock-storage-{src}:' in tables[i].sd.location:
-            tables[i].sd.location = tables[i].sd.location.replace(
-                 f'hdfs://qflock-storage-{src}:', f'hdfs://qflock-storage-{dest}:')
-            print(f'Alter {tables[i].tableName} location to {dest}')
-            client.alter_table(db_name, tables[i].tableName, tables[i])
-        if 'path' in tables[i].sd.serdeInfo.parameters and \
-           f'hdfs://qflock-storage-{src}:' in tables[i].sd.serdeInfo.parameters['path']:
-            tables[i].sd.serdeInfo.parameters['path'] = \
-                tables[i].sd.serdeInfo.parameters['path'].replace(f'hdfs://qflock-storage-{src}:',
-                                                                  f'hdfs://qflock-storage-{dest}:')
-            client.alter_table(db_name, tables[i].tableName, tables[i])
     for t in tables:
         print(t.sd.location, t.sd.serdeInfo.parameters['path'], t.sd.parameters['qflock.storage_size'])
 

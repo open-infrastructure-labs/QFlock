@@ -16,43 +16,30 @@
  */
 package com.github.qflock.extensions.rules
 
-import java.io.FileWriter
 import java.util
-import java.util.HashMap
 
-import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`map AsScala`
-import scala.collection.mutable
-import scala.sys.process._
+import scala.annotation.tailrec
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
-import com.github.qflock.extensions.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
+import com.github.qflock.extensions.common.PushdownSqlStatus
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
-import org.apache.hadoop.hive.ql.metadata.Hive
-import org.apache.hadoop.hive.ql.session.SessionState
-import org.json._
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
-import org.apache.spark.{Partition, SparkFiles}
-import org.apache.spark.sql.{SparkSession, SparkSessionExtensions}
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.planning.ScanOperation
-import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter, LogicalPlan, Project}
-import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
+import org.apache.spark.sql.catalyst.plans.logical.{Filter => LogicalFilter}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.rules.Rule
-import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
-import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
-import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
-import org.apache.spark.sql.hive.client.HiveClientImpl
-import org.apache.spark.sql.sources.BaseRelation
-import org.apache.spark.sql.types._
-import org.apache.spark.sql.util._
+import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 
 
 case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
-  protected val appId = spark.sparkContext.applicationId
+  protected val appId: String = spark.sparkContext.applicationId
+
+  @tailrec
   private def getAttribute(origExpression: Any) : Either[String, AttributeReference] = {
     origExpression match {
       case Alias(child, name) =>
@@ -128,11 +115,11 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
                         child: Any): Boolean = {
     child match {
       case DataSourceV2ScanRelation(relation, scan, output) =>
-        (!scan.isInstanceOf[QflockJdbcScan])
+        !scan.isInstanceOf[QflockJdbcScan]
       case qlr@QflockLogicalRelation(relation, output, table, _) =>
         relation match {
           // If we injected it just for size estimates, allow it to continue.
-          case q@QflockRelation(_, _, _) if (qlr.isEstimate) => true
+          case q@QflockRelation(_, _, _) if qlr.isEstimate => true
           case q@QflockRelation(_, _, _) => false
           case _ => true
         }
@@ -144,7 +131,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
                     filters: Seq[Expression],
                     child: Any,
                     alwaysInject: Boolean = true): Boolean = {
-    val relationArgsOpt = RelationArgs(child)
+    val relationArgsOpt = QflockRelationArgs(child)
     if (relationArgsOpt == None) {
       return false
     }
@@ -180,7 +167,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                filters: Seq[Expression],
                                child: LogicalPlan)
   : LogicalPlan = {
-    val relationArgs = RelationArgs(child).get
+    val relationArgs = QflockRelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
 
     val attrReferences = attrReferencesEither match {
@@ -198,7 +185,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("format", "parquet")
     opt.put("outputFormat", "binary")
     val filtersStatus = PushdownSqlStatus.FullyValid
-    var references = {
+    val references = {
       filtersStatus match {
         case PushdownSqlStatus.Invalid =>
           (attrReferences ++ filterReferences).distinct
@@ -239,88 +226,19 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
       prop
     }
   }
-  private def getScanRelation(project: Seq[NamedExpression], filters: Seq[Expression],
-                              child: LogicalPlan, relationArgs: RelationArgs,
-                              attrReferences: Seq[AttributeReference],
-                              filterReferences: Seq[AttributeReference],
-                              opt: util.HashMap[String, String],
-                              references: Seq[AttributeReference]) = {
-    val scalaOpts = scala.collection.immutable.HashMap(opt.toSeq: _*)
-    val needsPushdown = canHandlePlan(project, filters, child, alwaysInject = false)
-    val qflockRelation = new QflockRelation(references.toStructType,
-      Array.empty[Partition], scalaOpts)(spark)
-    val filterCondition = filters.reduceLeftOption(And)
-    val (planStats, filterPlan) = {
-      val qLogRel = new QflockLogicalRelationWithStats(
-        relationArgs.relation.asInstanceOf[BaseRelation],
-        relationArgs.output,
-        relationArgs.catalogTable, false)()
-      val filterPlan = filterCondition.map(QflockFilter(_, qLogRel)).getOrElse(qLogRel)
-      val fStats = BasicStatsPlanVisitor.visit(filterPlan)
-      val projPlan = Project(project, filterPlan)
-      (BasicStatsPlanVisitor.visit(projPlan), qLogRel)
-    }
-    val (relationSizeInBytes, relationRows) = {
-      // Just add the size required by the filter to the size required by the project.
-      val (filterRelationBytes, relationRows) = if (filterReferences.length > 0) {
-        val filterRelationV = new QflockLogicalRelationWithStats(
-          qflockRelation.asInstanceOf[BaseRelation],
-          filterReferences.distinct,
-          relationArgs.catalogTable, false)()
-        val relationRowCount = BasicStatsPlanVisitor.visit(filterRelationV).rowCount
-        val filterRelation = new QflockLogicalRelation(
-          qflockRelation.asInstanceOf[BaseRelation],
-          filterReferences.distinct,
-          relationArgs.catalogTable, false)(relationRowCount)
-        //        logger.warn(s"filterRelationRowCount: ${relationRowCount} " +
-        //                    s"filterSize: ${filterRelation.sizeInBytes}")
-        (BigInt(filterRelation.sizeInBytes), relationRowCount.get)
-      } else {
-        // No filter needed, let's just not consider the size of the filter.
-        val relationForVisit = new QflockLogicalRelationWithStats(
-          qflockRelation.asInstanceOf[BaseRelation],
-          attrReferences,
-          relationArgs.catalogTable, false)()
-        val relationRowCount = BasicStatsPlanVisitor.visit(relationForVisit).rowCount
-        (BigInt(0L), relationRowCount.get)
-      }
-      val refs = QflockUtils.distinctReferences(attrReferences, filterReferences)
-      // This is the size required by the project,
-      // but less any columns that are also needed by the filter since
-      // those columns are already included in the filter.
-      val projectRelationBytes = {
-        val qLogRel = new QflockLogicalRelation(
-          qflockRelation.asInstanceOf[BaseRelation],
-          // attrReferences.distinct.filter(x => !filterReferences.contains(x)),
-          refs,
-          relationArgs.catalogTable, false) (Some(relationRows)) // (planStats.rowCount)
-        //      logger.warn(s"projectBytes: ${qLogRel.sizeInBytes} refs: ${refs.length}" +
-        //                  s"projectRows: ${planStats.rowCount}")
-        qLogRel.sizeInBytes
-      }
-      // (projectRelationBytes + filterRelationBytes, relationRows)
-      (projectRelationBytes, relationRows)
-    }
-    val scanRelation = new QflockLogicalRelation(qflockRelation.asInstanceOf[BaseRelation],
-      references, relationArgs.catalogTable,
-      false)(planStats.rowCount,
-      relationSizeInBytes, relationRows, Some(!needsPushdown))
-    (filterCondition, scanRelation)
-  }
-
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
     val newPlan = plan.transform {
       case s@ScanOperation(project,
       filters,
-      child: DataSourceV2ScanRelation) if (needsRule(project, filters, child) &&
-        canHandlePlan(project, filters, child)) =>
+      child: DataSourceV2ScanRelation) if needsRule(project, filters, child) &&
+        canHandlePlan(project, filters, child) =>
         val modified = transformProject(s, project, filters, child)
         logger.info("before pushFilterProject: \n" + project + "\n" + s)
         logger.info("after pushFilterProject: \n" + modified)
         modified
       case s@ScanOperation(project,
-        filters, child: LogicalRelation) if (needsRule(project, filters, child) &&
-        canHandlePlan(project, filters, child)) =>
+        filters, child: LogicalRelation) if needsRule(project, filters, child) &&
+        canHandlePlan(project, filters, child) =>
       val modified = transformProject(s, project, filters, child)
       logger.info("before pushFilterProject: \n" + project + "\n" + s)
       logger.info("after pushFilterProject: \n" + modified)
@@ -334,7 +252,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     newPlan
   }
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
     // val after = pushAggregate(pushFilterProject(inputPlan))
     val after = pushFilterProject(inputPlan)
@@ -352,7 +270,7 @@ object QflockExplainOptimizationRule extends Rule[LogicalPlan] {
 }
 object QflockExplainRuleBuilder {
   var injected: Boolean = false
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def injectExtraOptimization(): Unit = {
     val testSparkSession: SparkSession =
       SparkSession.builder().appName("Extra optimization rules")
@@ -360,6 +278,6 @@ object QflockExplainRuleBuilder {
     import testSparkSession.implicits._
     testSparkSession.experimental.extraOptimizations = Seq(QflockExplainOptimizationRule)
 
-    logger.info(s"added QflockExplainOptimizationRule to session ${testSparkSession}")
+    logger.info(s"added QflockExplainOptimizationRule to session $testSparkSession")
   }
 }

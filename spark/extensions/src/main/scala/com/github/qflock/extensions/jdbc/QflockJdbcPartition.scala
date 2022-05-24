@@ -34,24 +34,14 @@ class QflockJdbcPartition(var index: Int,
                           var name: String = "",
                           var rows: Long = 0,
                           var modifiedTime: Long = 0)
-  extends Partition with InputPartition with PushdownPartition {
+  extends Partition with InputPartition {
 
-  override def toString() : String = {
-    s"""HdfsPartition index ${index} offset: ${offset} length: ${length} """ +
-    s"""name: ${name}"""
+  override def toString: String = {
+    s"""HdfsPartition index $index offset: $offset length: $length """ +
+    s"""name: $name"""
   }
 
   override def preferredLocations(): Array[String] = {
     Array("localhost")
-  }
-  /** Returns the query clause needed to target this specific partition.
-   *
-   *  @param partition the S3Partition that is being targeted.
-   *
-   *  @return String the query clause for use on this partition.
-   */
-  override def getObjectClause(partition: PushdownPartition): String = {
-    val part = partition.asInstanceOf[QflockJdbcPartition]
-    "S3Object"
   }
 }

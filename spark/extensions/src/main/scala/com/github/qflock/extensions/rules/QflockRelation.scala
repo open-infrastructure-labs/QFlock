@@ -21,7 +21,7 @@ import scala.collection.mutable.ListBuffer
 import org.apache.spark.Partition
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{Row, SparkSession, SQLContext}
-import org.apache.spark.sql.sources.{BaseRelation, Filter, InsertableRelation, PrunedFilteredScan, TableScan}
+import org.apache.spark.sql.sources.{BaseRelation, TableScan}
 import org.apache.spark.sql.types.StructType
 
 
@@ -33,7 +33,7 @@ case class QflockRelation(override val schema: StructType,
   override def sqlContext: SQLContext = sparkSession.sqlContext
 
   override def buildScan(): RDD[Row] = {
-    var records = new ListBuffer[Row]
+    val records = new ListBuffer[Row]
     sqlContext.sparkContext.makeRDD(records.toList)
   }
 
@@ -41,6 +41,6 @@ case class QflockRelation(override val schema: StructType,
     // val partitioningInfo = if (parts.nonEmpty) s" [numPartitions=${parts.length}]" else ""
     // credentials should not be included in the plan output, table information is sufficient.
     val cols = schema.fields.map(_.name).mkString(",")
-    s"QFlockRelation(${schema.fields.length} ${cols})"
+    s"QFlockRelation(${schema.fields.length} $cols)"
   }
 }

@@ -17,7 +17,6 @@
 package com.github.qflock.extensions.rules
 
 import scala.collection.JavaConverters._
-import scala.collection.convert.ImplicitConversions.`map AsScala`
 
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
@@ -27,14 +26,29 @@ import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
+/** Contains the details extracted from a relation and its children.
+ *
+ * @param relation typically the base relation
+ * @param scan the scan or base relation
+ * @param output output columns
+ * @param dataSchema full schema
+ * @param readSchema read column schema
+ * @param options options for data source
+ * @param catalogTable catalog table (optional)
+ */
+case class QflockRelationArgs(relation: Any, scan: Any, output: Seq[AttributeReference],
+                              dataSchema: StructType, readSchema: StructType,
+                              options: CaseInsensitiveStringMap,
+                              catalogTable: Option[CatalogTable])
 
-case class RelationArgs(relation: Any, scan: Any, output: Seq[AttributeReference],
-                        dataSchema: StructType, readSchema: StructType,
-                        options: CaseInsensitiveStringMap,
-                        catalogTable: Option[CatalogTable])
-
-object RelationArgs {
-  def apply(child: Any): Option[RelationArgs] = {
+object QflockRelationArgs {
+  /** Parses the input child node and extracts all the relevant fields
+   *  we might need later.
+   *
+   * @param child Child node to parse
+   * @return Option[QflockRelationArgs]
+   */
+  def apply(child: Any): Option[QflockRelationArgs] = {
     val (relation, scan, output, catalogTable) = child match {
       case DataSourceV2ScanRelation(relation, scan, output) =>
         (relation, scan, output, None)
@@ -44,13 +58,12 @@ object RelationArgs {
     val (dataSchema, readSchema, options) = scan match {
       case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _) =>
         (dataSchema, readSchema, opts)
-      /* case GenericPushdownScan(schema, schema, opts, _) =>
-        (schema, opts) */
       case HadoopFsRelation(location, partitionSchema, dataSchema, _, fileFormat, opts) =>
         (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava))
       case QflockRelation(schema, parts, opts) =>
         (schema, schema, new CaseInsensitiveStringMap(opts.asJava))
     }
-    Some(new RelationArgs(relation, scan, output, dataSchema, readSchema, options, catalogTable))
+    Some(new QflockRelationArgs(relation, scan, output, dataSchema,
+                                readSchema, options, catalogTable))
   }
 }

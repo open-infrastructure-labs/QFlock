@@ -13,16 +13,16 @@
     query-path: "queries/tpcds"
 #    limit-rows: "1000"
     query-extension: "sql"
-    query-exceptions: "2,43,59,13,48,24a,24b,75"
+    query-exceptions: "2,5,43,59,13,48,24a,24b,75"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
 #    jdbc-path: "jdbc:qflock://local-docker-host:1433/tpcds"
     jdbc-path: "jdbc:qflock://qflock-jdbc-dc2:1433/tpcds"
-    docker-stats: ""
-#    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth0,\
-#                   qflock-storage-dc2:tx_bytes:eth1,\
-#                   qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
-#                   qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
+#    docker-stats: ""
+    docker-stats: "qflock-storage-dc1:tx_bytes:eth0,qflock-storage-dc1:tx_bytes:eth1,\
+                   qflock-storage-dc2:tx_bytes:eth0,qflock-storage-dc2:tx_bytes:eth1,\
+                   qflock-jdbc-dc2:tx_bytes:eth0,qflock-jdbc-dc2:tx_bytes:eth1,\
+                   qflock-spark-dc1:rx_bytes:eth0,qflock-spark-dc1:rx_bytes:eth1"
   spark:
     master: local[1]
     hive-metastore: "qflock-storage-dc1"
@@ -33,11 +33,15 @@
     - spark.executor.memory=2g
     - spark.sql.execution.arrow.enabled=true
     - spark.sql.catalogImplementation=hive
+#    - spark.sql.parquet.enableVectorizedReader=false
+#    - spark.sql.autoBroadcastJoinThreshold=-1
 #    - spark.sql.hive.metastore.version=3.1.2
 #    - spark.sql.hive.metastore.jars=path
 #    - spark.sql.hive.metastore.jars.path=jars/*.jar
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3
-#    - spark.sql.extensions=com.github.qflock.FederationExtensions,
+    # The below write out with 16 Mb row groups.
+    - spark.hadoop.dfs.blocksize=16777216
+    - spark.hadoop.parquet.block.size=16777216
 #    - spark.sql.extensions=com.github.qflock.extensions.rules.QflockExtensions
     - spark.sql.cbo.enabled=true
     - spark.sql.statistics.histogram.enabled=true

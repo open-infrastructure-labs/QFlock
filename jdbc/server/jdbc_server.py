@@ -104,7 +104,8 @@ class QflockJdbcServer:
         handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'],
                                           metastore_ip=self._config['spark']['hive-metastore'],
                                           metastore_port=self._config['spark']['hive-metastore-port'],
-                                          debug_pyspark=self._args.debug_pyspark)
+                                          debug_pyspark=self._args.debug_pyspark,
+                                          compression=self._config['compression'])
         processor = QflockJdbcService.Processor(handler)
         transport = TSocket.TServerSocket(host=jdbc_ip, port=jdbc_port)
         tfactory = TTransport.TBufferedTransportFactory()
@@ -113,7 +114,8 @@ class QflockJdbcServer:
         # jdbc_server = TServer.TSimpleServer(processor, transport, tfactory, pfactory)
         jdbc_server = TServer.TThreadedServer(processor, transport, tfactory, pfactory)
         logger = logging.getLogger("qflock")
-        logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port} spark log-level:{self._config["log-level"]}')
+        logger.info(f'Starting the Qflock JDBC server...{jdbc_ip}:{jdbc_port} '
+                    f'spark log-level:{self._config["log-level"]} compression:{self._config["compression"]}')
         try:
             jdbc_server.serve()
         except BaseException as ex:
@@ -146,9 +148,9 @@ class QflockJdbcServer:
 
     def spark_submit(self):
         spark_cmd = self.get_spark_cmd(f"{sys.argv[0]} --mode local")
-        print(80*"*")
-        print(spark_cmd)
-        print(80*"*")
+        logging.info(80*"*")
+        logging.info(spark_cmd)
+        logging.info(80*"*")
         subprocess.call(spark_cmd, shell=True)
 
     def run(self):

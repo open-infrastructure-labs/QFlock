@@ -18,7 +18,6 @@ package com.github.qflock.extensions.jdbc
 
 import java.net.URI
 import java.util
-import java.util.HashMap
 
 import scala.collection.JavaConverters._
 
@@ -26,11 +25,9 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -46,11 +43,7 @@ class QflockJdbcDatasource extends TableProvider
   private val logger = LoggerFactory.getLogger(getClass)
   override def toString: String = s"GenericPushdownDataSource()"
   override def supportsExternalMetadata(): Boolean = true
-  // GenericPushdownDatasource.checkInitialized
 
-  private val sparkSession: SparkSession = SparkSession
-    .builder()
-    .getOrCreate()
   /** Fetches a list of FileStatus objects for this directory, or
    *  if the filePath is a file, just a list containing the file's FileStatus.
    *  @param filePath the file or directory path.
@@ -59,7 +52,7 @@ class QflockJdbcDatasource extends TableProvider
   def getFileStatusList(filePath: String): Seq[FileStatus] = {
     val conf = new Configuration()
     val server = filePath.split("/")(2)
-    val endpoint = ("hdfs://" + server + {if (filePath.contains(":9000")) "" else ":9000"})
+    val endpoint = "hdfs://" + server + {if (filePath.contains(":9000")) "" else ":9000"}
     val fs: FileSystem = FileSystem.get(URI.create(endpoint), conf)
     val fileStatusArray = {
       var statusArray = Array[FileStatus]()
@@ -77,12 +70,7 @@ class QflockJdbcDatasource extends TableProvider
   }
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
     if (options.get("format") == "parquet") {
-        val path = options.get("path")
-        // logger.info(s"inferSchema path: ${path}")
-        val fileStatusArray = getFileStatusList(path)
-        logger.info("getting schema for: " + path)
-        val schema = ParquetUtils.inferSchema(sparkSession, options.asScala.toMap, fileStatusArray)
-        schema.get
+      QflockJdbcDatasource.getSchema(options)
     } else {
       /* Other types like CSV require a user-supplied schema */
       throw new IllegalArgumentException("requires a user-supplied schema")
@@ -104,17 +92,27 @@ class QflockJdbcDatasource extends TableProvider
 object QflockJdbcDatasource {
   private val logger = LoggerFactory.getLogger(getClass)
   var initialized = false
-  private val sparkSession: SparkSession = SparkSession
-    .builder()
-    .getOrCreate()
-  def checkInitialized(): Unit = {
-    if (!initialized) {
-      initialized = true
-      // logger.info("Adding new GenericPushdowntimization Rule")
-      // sparkSession.experimental.extraOptimizations ++= Seq(GenericPushdownOptimizationRule)
+
+  def getSchema(options: util.Map[String, String]): StructType = {
+    if (options.getOrDefault("schema", "") != "") {
+      StructType(options.get("schema").split(",").map(x => {
+        val items = x.split(":")
+        val dataType = items(1) match {
+          case "string" => StringType
+          case "integer" => IntegerType
+          case "double" => DoubleType
+          case "long" => LongType
+        }
+        val nullable = items(2) match {
+          case "false" => false
+          case _ => true
+        }
+        StructField(items(0), dataType, nullable)
+      }))
+    } else {
+      new StructType()
     }
   }
-  checkInitialized()
 }
 /** Creates a Table object that supports pushdown predicates
  *   such as Filter, Project, and Aggregate.
@@ -130,7 +128,6 @@ class QflockJdbcBatchTable(schema: StructType,
   extends Table with SupportsRead {
 
   private val logger = LoggerFactory.getLogger(getClass)
-  logger.trace("Created")
   override def name(): String = this.getClass.toString
 
   override def schema(): StructType = schema
@@ -163,10 +160,10 @@ class QflockJdbcScanBuilder(schema: StructType,
     /* Make the map modifiable.
      * The objects below can override defaults.
      */
-    val opt: util.Map[String, String] = new HashMap[String, String](options)
+    val opt: util.Map[String, String] = new util.HashMap[String, String](options)
     if (!options.get("path").contains("hdfs")) {
       throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
     }
-    new QflockJdbcScan(schema, opt)
+    QflockJdbcScan(schema, opt)
   }
 }

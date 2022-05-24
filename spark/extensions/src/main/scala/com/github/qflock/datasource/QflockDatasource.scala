@@ -22,6 +22,7 @@ import scala.collection.JavaConverters._
 
 import com.github.qflock.datasource.common.Pushdown
 import com.github.qflock.datasource.hdfs.{HdfsScan, HdfsStore}
+import com.github.qflock.extensions.jdbc.QflockJdbcDatasource
 import org.apache.hadoop.hive.conf.HiveConf
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient
 import org.slf4j.LoggerFactory
@@ -51,25 +52,9 @@ class QflockDatasource extends TableProvider
   private val sparkSession: SparkSession = SparkSession
       .builder()
       .getOrCreate()
-  private var path: String = ""
-  private def getPath(dbName: String, tableName: String): String = {
-    if (path != "") path
-    else {
-      val table = ExtHiveUtils.getTable(dbName, tableName)
-      val sd = table.getSd()
-      sd.getLocation()
-    }
-  }
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
-
-    val path = getPath(options.get("dbName"), options.get("tableName"))
     if (options.get("format") == "parquet") {
-      /* With parquet, we infer the schema from the metadata.
-       */
-      // logger.info(s"inferSchema path: ${path}")
-      val fileStatusArray = HdfsStore.getFileStatusList(path)
-      val schema = ParquetUtils.inferSchema(sparkSession, options.asScala.toMap, fileStatusArray)
-      schema.get
+      QflockJdbcDatasource.getSchema(options)
     } else {
       /* Other types like CSV require a user-supplied schema */
       throw new IllegalArgumentException("requires a user-supplied schema")
@@ -79,7 +64,7 @@ class QflockDatasource extends TableProvider
   override def getTable(schema: StructType,
                         transforms: Array[Transform],
                         options: util.Map[String, String]): Table = {
-    val path = getPath(options.get("dbName"), options.get("tableName"))
+    val path = options.get("path")
     logger.trace("getTable: Options " + options)
     new QflockBatchTable(schema, options, path)
   }

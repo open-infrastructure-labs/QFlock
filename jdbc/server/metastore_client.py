@@ -29,7 +29,6 @@ from thrift.protocol.THeaderProtocol import THeaderProtocolFactory
 my_path = os.path.dirname(os.path.realpath(__file__))
 #sys.path.append(os.path.realpath("/storage/metastore/pymetastore/"))
 sys.path.append(os.path.realpath(my_path + "/../../storage/metastore/pymetastore/"))
-print(sys.path)
 from hive_metastore import ThriftHiveMetastore
 from hive_metastore import ttypes
 

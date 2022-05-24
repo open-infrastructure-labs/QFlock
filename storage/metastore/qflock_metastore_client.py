@@ -82,6 +82,22 @@ def get_column_sizes(location: str):
 
     f.close()
 
+def get_file_stats(location: str):
+    print(location)
+    # Open parquet file
+    fs, path = pyarrow.fs.FileSystem.from_uri(location)
+    file_info = fs.get_file_info(pyarrow.fs.FileSelector(path))
+    files = [f.path for f in file_info if f.is_file and f.size > 0]
+
+    f = fs.open_input_file(files[0])
+    reader = pyarrow.parquet.ParquetFile(f)
+    # print(f'num_rows: {reader.metadata.num_rows} num_row_groups: {reader.num_row_groups}')
+    num_rows = reader.metadata.num_rows
+    num_row_groups = reader.num_row_groups
+    f.close()
+    return num_rows, num_row_groups
+
+
 
 if __name__ == '__main__':
     datanode_name = 'qflock-storage-dc1'
@@ -114,8 +130,15 @@ if __name__ == '__main__':
     tables = [client.get_table(db_name, table_name) for table_name in table_names]
     tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
 
+    print("path,data center,bytes,rows")
     for tbl in tables:
-        print(tbl.sd.location, tbl.sd.parameters['qflock.storage_size'])
+        dc = "dc1" if "dc1" in tbl.sd.location else "dc2"
+        rows, row_groups = get_file_stats(tbl.sd.location)
+        stat_name = f"spark.qflock.statistics.tableStats.{tbl.tableName}.row_groups"
+        print(f"{tbl.sd.location},{dc},{tbl.sd.parameters['qflock.storage_size']},"
+              f"{tbl.parameters['spark.sql.statistics.numRows']},"
+              f"{tbl.parameters[stat_name]},{rows},{row_groups}")
+
 
     get_column_sizes(tables[0].sd.location)
     client_transport.close()

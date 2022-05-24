@@ -18,16 +18,15 @@ package com.github.qflock.extensions.rules
 
 import java.util
 
-import scala.collection.JavaConverters._
 import scala.collection.convert.ImplicitConversions.`map AsScala`
 
 import org.apache.hadoop.hive.metastore.api.Table
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Expression, NamedExpression}
+import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference, Expression, NamedExpression}
 import org.apache.spark.sql.catalyst.plans.logical.{Project, Statistics}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
 import org.apache.spark.sql.catalyst.util.truncatedString
@@ -45,11 +44,11 @@ class QflockLogicalRelation(override val relation: BaseRelation,
                             val previousRows: BigInt = BigInt(0),
                             val estimate: Option[Boolean] = Some(false))
   extends LogicalRelation(relation, output, catalogTable, isStreaming) {
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def getArgs: Option[(BaseRelation, Seq[AttributeReference], Option[CatalogTable], Boolean)] =
   Some(relation, output, catalogTable, isStreaming)
-  var tableName = catalogTable.get.identifier.table
-  var dbName = catalogTable.get.identifier.database.getOrElse("")
+  var tableName: String = catalogTable.get.identifier.table
+  var dbName: String = catalogTable.get.identifier.database.getOrElse("")
   def isEstimate: Boolean = estimate.getOrElse(false)
   override protected final def otherCopyArgs: Seq[AnyRef] = {
     rowCount :: previousSizeInBytes :: previousRows :: estimate :: Nil
@@ -61,14 +60,14 @@ class QflockLogicalRelation(override val relation: BaseRelation,
     for (x <- output) {
       val size = QflockLogicalRelation.getColSize(table, x.name)
       bytes += size
-      cols += s"${x.name}: ${size} "
+      cols += s"${x.name}: $size "
     }
     (bytes, cols)
   }
-  val sizeInBytes = {
+  val sizeInBytes: Int = {
     val rows = rowCount.getOrElse(BigInt(1)).longValue()
-    output.foldLeft(0)((x, y) => (x +
-          (QflockLogicalRelation.getColSize(table, y.name) * rows).asInstanceOf[Int]))
+    output.foldLeft(0)((x, y) => x +
+          (QflockLogicalRelation.getColSize(table, y.name) * rows).asInstanceOf[Int])
 //     stats.sizeInBytes.longValue().asInstanceOf[Int]
   }
   def toPlanStats(catStat: CatalogStatistics): Statistics = {
@@ -88,9 +87,9 @@ class QflockLogicalRelation(override val relation: BaseRelation,
   override def computeStats(): Statistics = {
     catalogTable
       .flatMap(_.stats.map(x =>
-        toPlanStats(new CatalogStatistics(x.sizeInBytes,
-                                          rowCount,
-                                          x.colStats))))
+        toPlanStats(CatalogStatistics(x.sizeInBytes,
+          rowCount,
+          x.colStats))))
       .getOrElse(Statistics(sizeInBytes = relation.sizeInBytes))
 //    catalogTable
 //      .flatMap(_.stats.map(x =>
@@ -101,9 +100,9 @@ class QflockLogicalRelation(override val relation: BaseRelation,
 //      .getOrElse(Statistics(sizeInBytes = relation.sizeInBytes))
   }
   override def simpleString(maxFields: Int): String =
-    s"QflockLogicalRelation prevSize:${previousSizeInBytes} prevRows:${previousRows} " +
-      s"size:${sizeInBytes} rows:${rowCount.get} colsSize:${colsBytes} " +
-      s"cols:${colsNames} " +
+    s"QflockLogicalRelation prevSize:$previousSizeInBytes prevRows:$previousRows " +
+      s"size:$sizeInBytes rows:${rowCount.get} colsSize:$colsBytes " +
+      s"cols:$colsNames " +
       s"${catalogTable.map(_.identifier.unquotedString).getOrElse("")} " +
       s"[${truncatedString(output, ",", maxFields)}] $relation"
 }
@@ -114,18 +113,18 @@ object QflockLogicalRelation {
     relation.getArgs
   }
   def getColSize(table: Table, colName: String): Double = {
-    table.getParameters.get(s"spark.qflock.statistics.colStats.${colName}.bytes_per_row").toDouble
+    table.getParameters.get(s"spark.qflock.statistics.colStats.$colName.bytes_per_row").toDouble
   }
   def apply(project: Seq[NamedExpression],
             filterCondition: Option[Expression],
-            relationArgs: RelationArgs,
+            relationArgs: QflockRelationArgs,
             attrReferences: Seq[AttributeReference],
             filterReferences: Seq[AttributeReference],
             opt: util.HashMap[String, String],
             references: Seq[AttributeReference],
             spark: SparkSession): QflockLogicalRelation = {
     val scalaOpts = scala.collection.immutable.HashMap(opt.toSeq: _*)
-    val qflockRelation = new QflockRelation(references.toStructType,
+    val qflockRelation = QflockRelation(references.toStructType,
       Array.empty[Partition], scalaOpts)(spark)
     val planStats = {
       val qLogRel = new QflockLogicalRelationWithStats(
@@ -133,7 +132,6 @@ object QflockLogicalRelation {
         relationArgs.output,
         relationArgs.catalogTable, false)()
       val filterPlan = filterCondition.map(QflockFilter(_, qLogRel)).getOrElse(qLogRel)
-      val fStats = BasicStatsPlanVisitor.visit(filterPlan)
       val projPlan = Project(project, filterPlan)
       BasicStatsPlanVisitor.visit(projPlan)
     }

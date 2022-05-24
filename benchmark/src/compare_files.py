@@ -65,9 +65,10 @@ class CompareFiles:
                         print(f"{files_dict1[d][0]}  {files_dict2[d][0]} files match")
                     match_count += 1
             else:
-                missing_count += 1
-                if self._args.debug or self._args.verbose:
-                    print(f"{files_dict1[d][0]} not found in dest")
+                if len(files_dict1[d]):
+                    missing_count += 1
+                    if self._args.debug or self._args.verbose:
+                        print(f"{files_dict1[d][0]} not found in dest")
         print(f"success/failure/missing: {match_count}/{mismatch_count}/{missing_count}")
 
     def run(self):
