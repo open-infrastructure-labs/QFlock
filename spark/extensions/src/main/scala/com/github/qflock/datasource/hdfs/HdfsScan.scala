@@ -87,13 +87,14 @@ class HdfsScan(schema: StructType,
     val tableDesc = QflockTableDescriptor.getTableDescriptor(tableName)
     val requestId = options.get("requestId").toInt
     val requestInfo = tableDesc.getRequestInfo(requestId)
-    logger.info(s"found table: $tableName requestId: $requestId " +
-                s"offset: ${requestInfo.offset} count: ${requestInfo.count}")
     // Generate one partition per file, per hdfs block
     for ((fName, _) <- blockMap) {
       val reader = ParquetFileReader.open(HadoopInputFile.fromPath(new Path(fName),
         conf), readOptions)
       val parquetBlocks = reader.getFooter.getBlocks
+      logger.info(s"found table: $tableName requestId: $requestId " +
+        s"offset: ${requestInfo.offset} count: ${requestInfo.count} " +
+        s"blocks: ${parquetBlocks.size()} file: ${fName}")
 
       // Generate one partition per row group in the range
       for (i <- requestInfo.offset until (requestInfo.offset + requestInfo.count)) {

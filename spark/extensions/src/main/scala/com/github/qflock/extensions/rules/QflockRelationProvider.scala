@@ -18,7 +18,7 @@
 package com.github.qflock.extensions.rules
 
 import org.apache.spark.Partition
-import org.apache.spark.sql.{SQLContext}
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.sources.{BaseRelation, DataSourceRegister, RelationProvider}
 import org.apache.spark.sql.types.StructType
 
@@ -31,7 +31,6 @@ class QflockRelationProvider extends RelationProvider
                               options: Map[String, String]): BaseRelation = {
 
     val schema = new StructType()
-    val parts = Array.empty[Partition]
     createRelation(sqlContext, schema, options)
   }
 

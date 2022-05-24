@@ -16,22 +16,16 @@
  */
 package com.github.qflock.extensions.jdbc
 
-import java.nio.ByteBuffer
-import java.sql.{Connection, DriverManager, ResultSet}
-import java.util
+import java.sql.ResultSet
 
-import scala.collection.JavaConverters._
-
-import com.github.qflock.jdbc.{QflockResultSet}
+import com.github.qflock.jdbc.QflockResultSet
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnVector
 import org.apache.spark.unsafe.types.UTF8String
 
-/** Represents a ColumnVector which can understand
- *  the NDP columnar binary format.
+/** Represents a ColumnVector to wrap a column from a jdbc ResultSet.
  *  @param batchSize the number of items in each row of a batch.
  *  @param dataType the Int representing the NdpDataType.
  *  @param schema the schema returned from the server.
@@ -41,7 +35,7 @@ class QflockJdbcColumnVector(batchSize: Integer, dataType: DataType, schema: Str
   extends ColumnVector(schema: StructType) {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  val typeSize = {
+  val typeSize: Int = {
     dataType match {
       case StringType => 8
       case IntegerType => 4
@@ -75,24 +69,8 @@ class QflockJdbcColumnVector(batchSize: Integer, dataType: DataType, schema: Str
   def getShort(row: Int): Short = { resultSet.get.getShort(columnIndex.get, row) }
   def getUTF8String(row: Int): org.apache.spark.unsafe.types.UTF8String = {
     UTF8String.fromString(resultSet.get.getString(columnIndex.get + 1, row + 1))
-    // UTF8String.fromBytes(byteBuffer.array(), bufferRow * 8, 8)
-//    UTF8String.fromString("fakeString")
-//    NdpDataType(dataType) match {
-//      case NdpDataType.LongType => UTF8String.fromString(
-//        byteBuffer.getLong(row * 8).toString)
-//      case NdpDataType.DoubleType => UTF8String.fromString(
-//        byteBuffer.getDouble(row * 8).toString)
-//      case NdpDataType.ByteArrayType =>
-//        if (fixedTextLen > 0) {
-//          UTF8String.fromBytes(byteBuffer.array(), fixedTextLen * row, fixedTextLen)
-//        } else {
-//          val offset = stringIndex(row)
-//          val length = stringLen.get(row)
-//          UTF8String.fromBytes(byteBuffer.array(), offset, length)
-//        }
-//    }
   }
-  def hasNull(): Boolean = { false }
+  def hasNull: Boolean = { false }
   def isNullAt(row: Int): Boolean = { false }
   def numNulls(): Int = { 0 }
 
@@ -100,11 +78,10 @@ class QflockJdbcColumnVector(batchSize: Integer, dataType: DataType, schema: Str
    *
    *  @return Int the number of rows returned.
    */
-  def setupColumn(colIdx: Integer, part: QflockJdbcPartition,
-                 resSet: ResultSet): Int = {
+  def setupColumn(colIdx: Integer, resSet: ResultSet): Int = {
     columnIndex = Some(colIdx)
     resultSet = Some(resSet.asInstanceOf[QflockResultSet])
-    resultSet.get.getNumRows()
+    resultSet.get.getNumRows
   }
 }
 
@@ -121,9 +98,9 @@ object QflockJdbcColumnVector {
    */
   def apply(batchSize: Integer,
             schema: StructType): Array[QflockJdbcColumnVector] = {
-    var vectors = new Array[QflockJdbcColumnVector](schema.fields.length)
-    for (i <- 0 until schema.fields.length) {
-      vectors(i) = new QflockJdbcColumnVector(batchSize, schema.fields(i).dataType, schema);
+    val vectors = new Array[QflockJdbcColumnVector](schema.fields.length)
+    for (i <- schema.fields.indices) {
+      vectors(i) = new QflockJdbcColumnVector(batchSize, schema.fields(i).dataType, schema)
     }
     vectors
   }

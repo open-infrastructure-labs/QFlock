@@ -32,13 +32,13 @@ import org.apache.spark.sql.vectorized.ColumnVector
  *
  *  @param schema description of columns
  *  @param batchSize the number of rows in a batch
- *  @param part the current hdfs partition
+ *  @param part the current jdbc partition
  *  @param options data source options.
  */
-class QflockJdbcVectReader(schema: StructType,
-                           batchSize: Integer,
-                           part: QflockJdbcPartition,
-                           options: util.Map[String, String]) extends QflockColVectReader {
+class QflockJdbcVectorReader(schema: StructType,
+                             batchSize: Integer,
+                             part: QflockJdbcPartition,
+                             options: util.Map[String, String]) extends QflockColumnarVectorReader {
   private val logger = LoggerFactory.getLogger(getClass)
   def next(): Boolean = {
     nextBatch()
@@ -59,23 +59,25 @@ class QflockJdbcVectReader(schema: StructType,
   private val numCols = schema.fields.length
   private val colVectors = QflockJdbcColumnVector.apply(batchSize, schema)
   private val columnarBatch = new ColumnarBatch(colVectors.asInstanceOf[Array[ColumnVector]])
+  private var results: Option[ResultSet] = None
   /** Fetches the next set of columns from the stream, returning the
    *  number of rows that were returned.
    *  We expect all columns to return the same number of rows.
    *
    *  @return Integer, the number of rows returned for the batch.
    */
-  private var results: Option[ResultSet] = None
   private def readNextBatch(): Integer = {
     if (rowsReturned > 0) {
+      // There is only one batch.  So if we have already returned that
+      // batch, then we are done, just return 0 to indicate done.
       return 0
     }
     results = Some(getResults)
     var rows: Integer = 0
     for (i <- 0 until numCols) {
-      val currentRows = colVectors(i).setupColumn(i, part, results.get)
+      val currentRows = colVectors(i).setupColumn(i, results.get)
       if (rows == 0) {
-        // logger.info(s"readNextBatch found rows: $currentRows")
+        logger.trace(s"readNextBatch found rows: $currentRows")
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {
         // We expect all rows in the batch to be the same size.

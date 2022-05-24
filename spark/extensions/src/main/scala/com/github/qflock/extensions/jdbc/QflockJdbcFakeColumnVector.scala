@@ -36,7 +36,7 @@ class QflockJdbcFakeColumnVector(batchSize: Integer, dataType: DataType, schema:
   extends ColumnVector(schema: StructType) {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  val typeSize = {
+  val typeSize: Int = {
     dataType match {
       case StringType => 8
       case IntegerType => 4
@@ -44,12 +44,12 @@ class QflockJdbcFakeColumnVector(batchSize: Integer, dataType: DataType, schema:
       case LongType => 8
     }
   }
-  val numBufferRows = 32 * 1024
+  val numBufferRows: Int = 32 * 1024
   val byteBuffer: ByteBuffer = {
     val bb = ByteBuffer.allocate(typeSize * numBufferRows)
     for (i <- 0 until numBufferRows) {
       dataType match {
-        case StringType => bb.put("fakestr".toByte)
+        case StringType => bb.put("fake string".toByte)
         case IntegerType => bb.putInt(i * 4, 42)
         case DoubleType => bb.putDouble(i * 8, 42.34)
         case LongType => bb.putLong(i * 8, 42000)
@@ -101,7 +101,7 @@ class QflockJdbcFakeColumnVector(batchSize: Integer, dataType: DataType, schema:
 //        }
 //    }
   }
-  def hasNull(): Boolean = { false }
+  def hasNull: Boolean = { false }
   def isNullAt(row: Int): Boolean = { false }
   def numNulls(): Int = { 0 }
 

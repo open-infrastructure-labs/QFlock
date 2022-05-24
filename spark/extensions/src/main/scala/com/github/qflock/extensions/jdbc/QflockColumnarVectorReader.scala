@@ -18,9 +18,9 @@ package com.github.qflock.extensions.jdbc
 
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
-/** Allows for reading batches of columns from NDP.
+/** Allows for reading batches of columns.
  */
-trait QflockColVectReader {
+trait QflockColumnarVectorReader {
   def next(): Boolean
   def get(): ColumnarBatch
   def close(): Unit

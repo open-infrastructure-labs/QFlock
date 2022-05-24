@@ -16,14 +16,10 @@
  */
 package com.github.qflock.extensions.jdbc
 
-import java.sql.{Connection, DriverManager, ResultSet}
 import java.util
-import java.util.Properties
 
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.sql.{QflockJdbcUtil, SparkSession}
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 
@@ -34,9 +30,7 @@ import org.apache.spark.sql.connector.read.PartitionReader
  * @param partition the QflockJdbcPartition to read from
  */
 class QflockJdbcFakeRowPartitionReader(options: util.Map[String, String],
-                                       partition: QflockJdbcPartition,
-                                       sparkSession: SparkSession,
-   sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration])
+                                       partition: QflockJdbcPartition)
   extends PartitionReader[InternalRow] {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -60,7 +54,7 @@ class QflockJdbcFakeRowPartitionReader(options: util.Map[String, String],
   def next: Boolean = {
     if (index >= numRows) {
       logger.info(s"get: partition: ${partition.index} ${partition.offset}" +
-        s" ${partition.length} ${partition.name} index: ${index}")
+        s" ${partition.length} ${partition.name} index: $index")
       false
     } else {
       true
@@ -69,7 +63,7 @@ class QflockJdbcFakeRowPartitionReader(options: util.Map[String, String],
   def get: InternalRow = {
     if ((index % 500000) == 0) {
       logger.info(s"get: partition: ${partition.index} ${partition.offset}" +
-                  s" ${partition.length} ${partition.name} index: ${index}")
+                  s" ${partition.length} ${partition.name} index: $index")
     }
     index = index + 1
     fakeRow

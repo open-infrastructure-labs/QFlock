@@ -22,8 +22,7 @@ import java.util.Properties
 
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.sql.{QflockJdbcUtil, SparkSession}
+import org.apache.spark.sql.QflockJdbcUtil
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.PartitionReader
 
@@ -34,13 +33,11 @@ import org.apache.spark.sql.connector.read.PartitionReader
  * @param partition the QflockJdbcPartition to read from
  */
 class QflockJdbcPartitionReader(options: util.Map[String, String],
-                                partition: QflockJdbcPartition,
-                                sparkSession: SparkSession,
-      sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration])
+                                partition: QflockJdbcPartition)
   extends PartitionReader[InternalRow] {
 
   private val logger = LoggerFactory.getLogger(getClass)
-  private var (rowIterator: Iterator[InternalRow], connection: Option[Connection]) = {
+  private val (rowIterator: Iterator[InternalRow], connection: Option[Connection]) = {
     val query = options.get("query")
     val driver = options.get("driver")
     val url = options.get("url")
@@ -52,9 +49,10 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
     } catch {
       case e: Exception =>
         logger.warn("Failed to load JDBC driver.")
+        logger.warn(e.toString)
     }
     val (resultSet: ResultSet, con: Option[Connection]) = {
-      logger.debug(s"connecting to ${url}")
+      logger.debug(s"connecting to $url")
       val properties = new Properties
       properties.setProperty("compression", "true")
       properties.setProperty("bufferSize", "42")
@@ -63,11 +61,11 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
       properties.setProperty("tableName", options.get("tableName"))
       properties.setProperty("queryStats", options.get("queryStats"))
       val con = DriverManager.getConnection(url, properties)
-      logger.debug(s"connected to ${url}")
+      logger.debug(s"connected to $url")
       val select = con.prepareStatement(query)
-      logger.debug(s"Starting query ${query}")
+      logger.debug(s"Starting query $query")
       val result = select.executeQuery(query)
-      logger.debug(s"Query complete ${query}")
+      logger.debug(s"Query complete $query")
       // return the result and the connection so we can close it later.
       (result, Some(con))
     }
@@ -79,7 +77,7 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
     val n = rowIterator.hasNext
     if (!n) {
       logger.info(s"get: partition: ${partition.index} ${partition.offset}" +
-        s" ${partition.length} ${partition.name} index: ${index}")
+        s" ${partition.length} ${partition.name} index: $index")
     }
     n
   }
@@ -87,7 +85,7 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
     val row = rowIterator.next
     if ((index % 500000) == 0) {
       logger.info(s"get: partition: ${partition.index} ${partition.offset}" +
-                  s" ${partition.length} ${partition.name} index: ${index}")
+                  s" ${partition.length} ${partition.name} index: $index")
     }
     index = index + 1
     row

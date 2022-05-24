@@ -17,20 +17,14 @@
 package com.github.qflock.extensions.jdbc
 
 import java.util
-import java.util.OptionalLong
-
-import scala.collection.mutable.ArrayBuffer
 
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReader, PartitionReaderFactory, Scan, Statistics => ReadStats, SupportsReportStatistics}
-import org.apache.spark.sql.types._
+import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
 import org.apache.spark.sql.vectorized.ColumnarBatch
-import org.apache.spark.sql.vectorized.ColumnVector
-import org.apache.spark.util.SerializableConfiguration
 
 /** Creates a factory for creating QflockPartitionReaderFactory objects
  *
@@ -45,8 +39,7 @@ class QflockPartitionReaderFactory(options: util.Map[String, String],
     .getOrCreate()
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
-    new QflockJdbcPartitionReader(options, partition.asInstanceOf[QflockJdbcPartition],
-      sparkSession, sharedConf)
+    new QflockJdbcPartitionReader(options, partition.asInstanceOf[QflockJdbcPartition])
   }
   val batchSize = 1024
 
@@ -55,7 +48,7 @@ class QflockPartitionReaderFactory(options: util.Map[String, String],
   override def createColumnarReader(partition: InputPartition): PartitionReader[ColumnarBatch] = {
     val part = partition.asInstanceOf[QflockJdbcPartition]
     val schema = QflockJdbcDatasource.getSchema(options)
-    val reader = new QflockJdbcVectReader(schema, 256 * 1024, part, options)
+    val reader = new QflockJdbcVectorReader(schema, 256 * 1024, part, options)
     logger.debug("QflockPartitionReaderFactory created row group " + part.index)
     new QflockJdbcColumnarPartitionReader(reader)
     // This alternate factory below is identical to the above, but

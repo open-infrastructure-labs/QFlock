@@ -16,11 +16,9 @@
  */
 package com.github.qflock.extensions.rules
 
-import org.apache.spark.sql.catalyst.analysis.MultiInstanceRelation
 import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable}
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
-import org.apache.spark.sql.catalyst.plans.QueryPlan
-import org.apache.spark.sql.catalyst.plans.logical.{LeafNode, LogicalPlan, Statistics}
+import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.sources.BaseRelation
 
@@ -41,15 +39,15 @@ class QflockLogicalRelationWithStats(override val relation: BaseRelation,
   override def computeStats(): Statistics = {
     if (rowCount == None) {
       catalogTable
-        .flatMap(_.stats.map(_.toPlanStats(output, true)))
+        .flatMap(_.stats.map(_.toPlanStats(output, planStatsEnabled = true)))
         .getOrElse(Statistics(sizeInBytes = relation.sizeInBytes))
     } else {
       catalogTable
         .flatMap(_.stats.map(x =>
-          new CatalogStatistics(x.sizeInBytes,
+          CatalogStatistics(x.sizeInBytes,
             rowCount,
             x.colStats)
-          .toPlanStats(output, true)))
+          .toPlanStats(output, planStatsEnabled = true)))
         .getOrElse(Statistics(sizeInBytes = relation.sizeInBytes))
     }
   }

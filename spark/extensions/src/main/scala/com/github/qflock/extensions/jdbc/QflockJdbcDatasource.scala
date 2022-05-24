@@ -18,7 +18,6 @@ package com.github.qflock.extensions.jdbc
 
 import java.net.URI
 import java.util
-import java.util.HashMap
 
 import scala.collection.JavaConverters._
 
@@ -26,7 +25,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.connector.read._
@@ -46,9 +44,6 @@ class QflockJdbcDatasource extends TableProvider
   override def toString: String = s"GenericPushdownDataSource()"
   override def supportsExternalMetadata(): Boolean = true
 
-  private val sparkSession: SparkSession = SparkSession
-    .builder()
-    .getOrCreate()
   /** Fetches a list of FileStatus objects for this directory, or
    *  if the filePath is a file, just a list containing the file's FileStatus.
    *  @param filePath the file or directory path.
@@ -57,7 +52,7 @@ class QflockJdbcDatasource extends TableProvider
   def getFileStatusList(filePath: String): Seq[FileStatus] = {
     val conf = new Configuration()
     val server = filePath.split("/")(2)
-    val endpoint = ("hdfs://" + server + {if (filePath.contains(":9000")) "" else ":9000"})
+    val endpoint = "hdfs://" + server + {if (filePath.contains(":9000")) "" else ":9000"}
     val fs: FileSystem = FileSystem.get(URI.create(endpoint), conf)
     val fileStatusArray = {
       var statusArray = Array[FileStatus]()
@@ -97,9 +92,6 @@ class QflockJdbcDatasource extends TableProvider
 object QflockJdbcDatasource {
   private val logger = LoggerFactory.getLogger(getClass)
   var initialized = false
-  private val sparkSession: SparkSession = SparkSession
-    .builder()
-    .getOrCreate()
 
   def getSchema(options: util.Map[String, String]): StructType = {
     if (options.getOrDefault("schema", "") != "") {
@@ -168,10 +160,10 @@ class QflockJdbcScanBuilder(schema: StructType,
     /* Make the map modifiable.
      * The objects below can override defaults.
      */
-    val opt: util.Map[String, String] = new HashMap[String, String](options)
+    val opt: util.Map[String, String] = new util.HashMap[String, String](options)
     if (!options.get("path").contains("hdfs")) {
       throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
     }
-    new QflockJdbcScan(schema, opt)
+    QflockJdbcScan(schema, opt)
   }
 }

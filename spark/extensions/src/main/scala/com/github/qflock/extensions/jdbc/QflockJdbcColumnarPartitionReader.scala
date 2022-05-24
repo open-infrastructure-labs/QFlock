@@ -16,24 +16,21 @@
  */
 package com.github.qflock.extensions.jdbc
 
-import org.slf4j.LoggerFactory
-
-import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReader, PartitionReaderFactory, Scan, Statistics => ReadStats, SupportsReportStatistics}
+import org.apache.spark.sql.connector.read.PartitionReader
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 /** PartitionReader which returns a ColumnarBatch, and
- *  is relying on the HdfsBinColVectReader to
+ *  is relying on the QflockColumnarVectorReader to
  *  fetch the batches.
  *
- * @param vectorizedReader - Already initialized HdfsBinColVectReader
+ * @param vectorizedReader - Already initialized QflockColVectReader
  *                           which provides the data for the PartitionReader.
  */
-class QflockJdbcColumnarPartitionReader(vectorizedReader: QflockColVectReader)
+class QflockJdbcColumnarPartitionReader(vectorizedReader: QflockColumnarVectorReader)
   extends PartitionReader[ColumnarBatch] {
-  private val logger = LoggerFactory.getLogger(getClass)
   override def next(): Boolean = vectorizedReader.next()
   override def get(): ColumnarBatch = {
-    val batch = vectorizedReader.get.asInstanceOf[ColumnarBatch]
+    val batch = vectorizedReader.get()
     batch
   }
   override def close(): Unit = vectorizedReader.close()
