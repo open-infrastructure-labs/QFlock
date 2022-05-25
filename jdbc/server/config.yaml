@@ -1,12 +1,13 @@
 ---
   debug: false
-  log-level: "OFF"
+  log-level: "INFO"
   server-port: 1433
   server-name: qflock-jdbc-dc2
 # Uncomment the below line for debug.  Use args --mode local --debug_pyspark
 #  server-name: <host ip>
   compression: true
   spark:
+    log-level: "OFF"
     master: local[1]
     hive-metastore: "qflock-storage-dc1"
     hive-metastore-port: "9084"

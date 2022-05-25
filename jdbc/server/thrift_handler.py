@@ -183,7 +183,7 @@ class QflockThriftJdbcHandler:
         req_id = self._ds_table_desc[table_name].fillRequestInfo(int(rg_offset), int(rg_count))
 
         query = query.replace(f" {table_name} ", f" {table_name}_{req_id} ")
-        logging.info(f"query_id: {query_id} req_id: {req_id} table:{table_name} "
+        logging.debug(f"query_id: {query_id} req_id: {req_id} table:{table_name} "
                      f"query: {query} ")
         df = self._spark.sql(query)
         df_pandas = df.toPandas()
@@ -209,10 +209,10 @@ class QflockThriftJdbcHandler:
                     num_bytes = len(new_data) * item_size
                     col_bytes.append(num_bytes)
                     if self._compression is True:
-                        logging.debug(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
+                        # logging.debug(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
                         new_data = zstd.ZstdCompressor().compress(new_data)
                         col_comp_bytes.append(len(new_data))
-                        logging.debug(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
+                        # logging.debug(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
                         raw_bytes = new_data
                         comp_rows.append(raw_bytes)
                     else:
@@ -226,25 +226,30 @@ class QflockThriftJdbcHandler:
                     num_bytes = len(new_data)
                     col_bytes.append(num_bytes)
                     if self._compression is True:
-                        logging.debug(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
+                        # logging.debug(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
 
                         new_data = zstd.ZstdCompressor().compress(new_data)
                         col_comp_bytes.append(len(new_data))
                         comp_rows.append(new_data)
-                        logging.debug(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
+                        # logging.debug(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
                     else:
                         col_comp_bytes.append(len(new_data))
                         binary_rows.append(new_data)
                     col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
+
         stats = query_stats.split(" ")
-        prevBytes = stats[1].split(":")[1]
-        prevRows = stats[2].split(":")[1]
-        currentBytes = stats[3].split(":")[1]
-        currentRows = stats[4].split(":")[1]
-        logging.info(f"query-done rows:{num_rows} estRows:{currentRows} " +
-                     f"estBytes:{currentBytes} " +
-                     f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
-                     f"query: {query}")
+        if query_stats != "" and len(stats) > 0:
+            prevBytes = stats[1].split(":")[1]
+            prevRows = stats[2].split(":")[1]
+            currentBytes = stats[3].split(":")[1]
+            currentRows = stats[4].split(":")[1]
+            logging.debug(f"query-done rows:{num_rows} estRows:{currentRows} " +
+                         f"estBytes:{currentBytes} " +
+                         f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
+                         f"query: {query}")
+        else:
+            logging.debug(f"query-done rows:{num_rows} " +
+                         f"query: {query}")
         self._ds_table_desc[table_name].freeRequest(req_id)
         # logging.info(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
@@ -264,11 +269,11 @@ class QflockThriftJdbcHandler:
         self._connections[current_id] = {'url': url, 'properties': properties,
                                          'dbname': dbname}
         self._lock.release()
-        logging.info(f"New connection id {current_id} dbname {dbname} url {url} properties {str(properties)}")
+        logging.debug(f"New connection id {current_id} dbname {dbname} url {url} properties {str(properties)}")
         return ttypes.QFConnection(id=current_id)
 
     def createStatement(self, connection):
-        logging.info(f"createStatement connection id: {connection.id}")
+        logging.debug(f"createStatement connection id: {connection.id}")
         return ttypes.QFStatement(id=42, sql=None, id_connection=connection.id)
 
     def get_prepared_statement_id(self):
@@ -281,7 +286,7 @@ class QflockThriftJdbcHandler:
         current_id = self.get_prepared_statement_id()
         self._pstatements[current_id] = {'connection': connection}
         self._lock.release()
-        logging.info(f"createPreparedStatement id {current_id} connection id: {connection.id}")
+        logging.debug(f"createPreparedStatement id {current_id} connection id: {connection.id}")
         return ttypes.QFStatement(id=current_id, sql=None, id_connection=connection.id)
 
     def connection_getstaticmetadata(self, connection):
@@ -485,7 +490,7 @@ class QflockThriftJdbcHandler:
         """
         if connection.id in self._connections:
             del self._connections[connection.id]
-            logging.info(f"successfully closed connection {connection.id}")
+            logging.debug(f"successfully closed connection {connection.id}")
         else:
             logging.warning(f"connection id {connection.id} not found")
 
@@ -665,7 +670,7 @@ class QflockThriftJdbcHandler:
         """
         if statement.id in self._pstatements:
             del self._pstatements[statement.id]
-            logging.info(f"successfully closed preparedStatement {statement.id}")
+            logging.debug(f"successfully closed preparedStatement {statement.id}")
         else:
             logging.warning(f"preparedStatement id {statement.id} not found")
 
@@ -687,7 +692,7 @@ class QflockThriftJdbcHandler:
         """
         connection_id = self._pstatements[statement.id]['connection'].id
         connection = self._connections[connection_id]
-        logging.info(f"preparedStatement_executeQuery:: statement id: {statement.id} conn id: {connection_id} " +\
+        logging.debug(f"preparedStatement_executeQuery:: statement id: {statement.id} conn id: {connection_id} " +\
                      f" offset:{connection['properties']['rowGroupOffset']} " +\
                      f" count:{connection['properties']['rowGroupCount']} " +\
                      f" tableName:{connection['properties']['tableName']} sql: {sql}")

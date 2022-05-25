@@ -78,17 +78,19 @@ class QflockJdbcServer:
         return d[0]['IPAM']['Config'][0]['Gateway']
 
     def setup_logger(self):
-        # logger = logging.getLogger("qflock")
-        # logger.setLevel(logging.DEBUG)
-        # create console handler and set level to debug
-        # ch = logging.StreamHandler()
-        # ch.setLevel(logging.DEBUG)
-        # logger.addHandler(ch)
+        if self._config['log-level'] == "DEBUG":
+            log_level = logging.DEBUG
+        elif self._config['log-level'] == "WARN":
+            log_level = logging.WARNING
+        elif self._config['log-level'] == "ERROR":
+            log_level = logging.ERROR
+        else:
+            log_level = logging.INFO
 
         formatter = logging.Formatter('%(asctime)s.%(msecs)03d %(levelname)s %(message)s',
                                       '%Y-%m-%d %H:%M:%S')
         # ch.setFormatter(formatter)
-        logging.basicConfig(level=logging.INFO,
+        logging.basicConfig(level=log_level,
                             format='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
         root = logging.getLogger()
@@ -101,7 +103,7 @@ class QflockJdbcServer:
         jdbc_port = self._config['server-port']
         jdbc_ip = self.get_jdbc_ip()
         logging.info(f"Starting JDBC Server ip: {jdbc_ip}:{jdbc_port}")
-        handler = QflockThriftJdbcHandler(spark_log_level=self._config['log-level'],
+        handler = QflockThriftJdbcHandler(spark_log_level=self._config['spark']['log-level'],
                                           metastore_ip=self._config['spark']['hive-metastore'],
                                           metastore_port=self._config['spark']['hive-metastore-port'],
                                           debug_pyspark=self._args.debug_pyspark,
