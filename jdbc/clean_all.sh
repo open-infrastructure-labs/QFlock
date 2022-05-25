@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 pushd "$(dirname "$0")" # connect to root
 WORKING_DIR=$(pwd)
 echo "WORKING_DIR ${WORKING_DIR}"
