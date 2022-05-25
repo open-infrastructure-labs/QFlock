@@ -162,5 +162,5 @@ class BenchmarkResult:
                      f"{self.size_bytes_pq},{self.duration_sec:.3f}"
         else:
             result = f"{self.query_name},{self.num_rows},"\
-                     f"{self.duration_sec:.3f},{self.overall_duration_sec:.3f}"
+                     f"{self.duration_sec:.3f}"
         return result
