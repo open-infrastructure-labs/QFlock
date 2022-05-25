@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 pushd "$(dirname "$0")" # connect to root
 ROOT_DIR=$(pwd)
 echo "ROOT_DIR ${ROOT_DIR}"
@@ -18,7 +19,5 @@ else
 fi
 
 
-if [ -f ${ROOT_DIR}/docker/*.tar.gz ]; then
-    rm ${ROOT_DIR}/docker/*.tar.gz
-fi
+rm ${ROOT_DIR}/docker/*.tar.gz || true
 popd

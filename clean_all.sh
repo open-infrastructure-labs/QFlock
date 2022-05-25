@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 pushd storage
 ./clean_all.sh

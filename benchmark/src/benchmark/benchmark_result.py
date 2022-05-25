@@ -17,7 +17,9 @@
 import os
 import glob
 import time
+import logging
 import traceback
+
 from pathlib import Path
 from pyspark.sql import functions as func
 from pyspark.sql.types import DoubleType
@@ -26,15 +28,16 @@ from pyspark.sql.types import DoubleType
 class BenchmarkResult:
     log_dir = "logs"
 
-    def __init__(self, df, status=0, start_time=0,
+    def __init__(self, df, status=0, query_start_time=0,
                  verbose=False, explain=False, query_name=None, output_path=None,
                  num_rows=None, spark_helper=None, query=None,
-                 save_data=False):
+                 save_data=False, overall_start_time=None):
         self.df = df
         self.explain_text = ""
         self.status = status
         self.duration_sec = 0
-        self._start_time = start_time
+        self._query_start_time = query_start_time
+        self._overall_start_time = overall_start_time
         self._save_data = save_data
         self.num_rows = num_rows
         self._collect_rows = None
@@ -47,6 +50,7 @@ class BenchmarkResult:
         self.size_bytes_csv = 0
         self.size_bytes_pq = 0
         self.duration_sec = 0
+        self.overall_duration_sec = 0
         if self._verbose:
             self._output = ["csv"]
             # self._output = ["parquet", "csv"]
@@ -61,7 +65,7 @@ class BenchmarkResult:
         if query_name:
             qname = os.path.split(query_name)[1]
             self._output_path = os.path.join(self._output_path, qname)
-            print(f"output path: {self._output_path} ")
+            logging.info(f"output path: {self._output_path} ")
 
     def filtered_explain(self):
         new_explain_text = ""
@@ -86,63 +90,64 @@ class BenchmarkResult:
         #     self.df.show(100, False)
         if collect_only:
             self._collect_rows = self.df.collect()
-            return
-        root_path = os.path.split(self._output_path)[0]
-        if not os.path.exists(root_path):
-            print(f"creating {root_path}")
+        else:
+            root_path = os.path.split(self._output_path)[0]
+            if not os.path.exists(root_path):
+                logging.info(f"creating {root_path}")
             Path(root_path).mkdir(parents=True, exist_ok=True)
-        if self._explain:
-            self.explain_text = self.df.collect()[0]['plan']
-            with open("logs/explain.txt", "a") as fd:
-                if self.query_name:
-                    print(f"query: {self.query_name}", file=fd)
-                print(self.filtered_explain(), file=fd)
-        if "csv" in self._output:
-            output_path = self._output_path + ".csv"
-            print(f"csv output path is {output_path}")
-            if self._save_data:
-                print(f"saving formatted output")
-                self.formatted_df() \
-                    .repartition(1) \
+            if self._explain:
+                self.explain_text = self.df.collect()[0]['plan']
+                with open("logs/explain.txt", "a") as fd:
+                    if self.query_name:
+                        print(f"query: {self.query_name}", file=fd)
+                    print(self.filtered_explain(), file=fd)
+            elif "csv" in self._output:
+                output_path = self._output_path + ".csv"
+                logging.info(f"csv output path is {output_path}")
+                if self._save_data:
+                    logging.info(f"saving formatted output")
+                    self.formatted_df() \
+                        .repartition(1) \
+                        .write.mode("overwrite") \
+                        .format("csv") \
+                        .option("header", "true") \
+                        .option("partitions", "1") \
+                        .save(output_path)
+                elif True:
+                    logging.info(f"saving unformatted output")
+                    self.df \
+                        .write.mode("overwrite") \
+                        .format("csv") \
+                        .option("header", "true") \
+                        .save(output_path)
+                else:
+                    logging.info(f"not saving output")
+                    rows = self.df.collect()
+                    self.num_rows = len(rows)
+                if self.num_rows is None:
+                    output_files = glob.glob(os.path.join(output_path, 'part-*'))
+                    if len(output_files) > 0:
+                        self.size_bytes_csv = os.path.getsize(output_files[0])
+                    else:
+                        self.size_bytes_csv = os.path.getsize(output_path)
+                    with open(output_files[0], 'r') as fp:
+                        self.num_rows = len(fp.readlines())
+
+            elif "parquet" in self._output:
+                output_path = self._output_path + ".parquet"
+                self.df.repartition(1) \
                     .write.mode("overwrite") \
-                    .format("csv") \
+                    .format("parquet") \
                     .option("header", "true") \
                     .option("partitions", "1") \
                     .save(output_path)
-            elif True:
-                print(f"saving unformatted output")
-                self.df \
-                    .write.mode("overwrite") \
-                    .format("csv") \
-                    .option("header", "true") \
-                    .save(output_path)
-            else:
-                print(f"not saving output")
-                rows = self.df.collect()
-                self.num_rows = len(rows)
-            if self.num_rows is None:
                 output_files = glob.glob(os.path.join(output_path, 'part-*'))
                 if len(output_files) > 0:
-                    self.size_bytes_csv = os.path.getsize(output_files[0])
+                    self.size_bytes_pq = os.path.getsize(output_files[0])
                 else:
-                    self.size_bytes_csv = os.path.getsize(output_path)
-                with open(output_files[0], 'r') as fp:
-                    self.num_rows = len(fp.readlines())
-
-        elif "parquet" in self._output:
-            output_path = self._output_path + ".parquet"
-            self.df.repartition(1) \
-                .write.mode("overwrite") \
-                .format("parquet") \
-                .option("header", "true") \
-                .option("partitions", "1") \
-                .save(output_path)
-            output_files = glob.glob(os.path.join(output_path, 'part-*'))
-            if len(output_files) > 0:
-                self.size_bytes_pq = os.path.getsize(output_files[0])
-            else:
-                self.size_bytes_pq = os.path.getsize(output_path)
-        self.duration_sec = time.time() - self._start_time
+                    self.size_bytes_pq = os.path.getsize(output_path)
+            self.duration_sec = time.time() - self._query_start_time
+            self.overall_duration_sec = time.time() - self._overall_start_time
 
     def header(self):
         if self._verbose:

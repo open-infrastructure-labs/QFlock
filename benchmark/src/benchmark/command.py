@@ -17,6 +17,7 @@
 import os
 import sys
 import subprocess
+import logging
 
 
 def shell_cmd(cmd, show_cmd=False, fail_on_err=True,
@@ -24,9 +25,9 @@ def shell_cmd(cmd, show_cmd=False, fail_on_err=True,
     rc, output = run_cmd(
         cmd, show_cmd, enable_stdout=enable_stdout, no_capture=no_capture)
     if fail_on_err and rc != 0:
-        print("cmd failed with status: {} cmd: {}".format(rc, cmd))
+        logging.info("cmd failed with status: {} cmd: {}".format(rc, cmd))
         if err_msg:
-            print(err_msg)
+            logging.info(err_msg)
     return rc, output
 
 def run_cmd(command, show_cmd=False, enable_stdout=True, no_capture=False, log_file=""):
@@ -37,10 +38,10 @@ def run_cmd(command, show_cmd=False, enable_stdout=True, no_capture=False, log_f
     else:
         mode = "w"
     if log_file != "":
-        print("opening {}".format(log_file))
+        logging.info("opening {}".format(log_file))
         log_fd = open(log_file, mode)
     if show_cmd:
-        print("{}: {} ".format(sys.argv[0], command))
+        logging.info("{}: {} ".format(sys.argv[0], command))
     if no_capture:
         rc = subprocess.call(command, shell=True)
         return rc, output_lines

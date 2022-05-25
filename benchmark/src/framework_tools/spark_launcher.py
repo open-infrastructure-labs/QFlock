@@ -80,7 +80,7 @@ class SparkLauncher:
                     if logfile:
                         print(output_text.rstrip('\n'), file=fd)
                     if self._args.terse and 'qflock:: ' in output_text:
-                        print(output_text.rstrip('\n'))
+                        print(output_text.rstrip('\n').lstrip('qflock:: '))
                     elif not self._args.terse and 'qflock::' in output_text:
                         print(output_text.rstrip('\n'))
                     elif wait_text is not None:

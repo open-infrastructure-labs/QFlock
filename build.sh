@@ -9,6 +9,8 @@ pushd storage/docker
 ./build.sh
 popd
 
+spark/docker/build.sh
+
 pushd jdbc
 ./build.sh
 popd

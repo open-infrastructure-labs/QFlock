@@ -118,6 +118,8 @@ class QflockBench:
                                          parents=parents)
         parser.add_argument("--debug", "-dbg", action="store_true",
                             help="enable debugger")
+        parser.add_argument("--verbose", "-v", action="store_true",
+                            help="Increase verbosity of output.")
         parser.add_argument("--terse", "-t", action="store_true",
                             help="Limited output.")
         parser.add_argument("--extensions", "-ext", default=None,
@@ -170,33 +172,20 @@ class QflockBench:
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
         self._wait_for_string = None
+        if not self._args.verbose:
+            # IF we are not verbose Then we are terse by default.
+            self._args.terse = True
         if not self._args.terse:
             self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
         if "--capture_log_level" in self._remaining_args:
             self._wait_for_string = None
         return True
 
-    def process_cmd_status(self, cmd, status, output):
-        if status != 0:
-            self._test_failures += 1
-            failure = "test failed with status {0} cmd {0}".format(status, cmd)
-            self._test_results.append(failure)
-            print(failure)
-        line_num = 0
+    def process_cmd_status(self, output):
         for line in output:
-            if line_num > 0:
-                line_num += 1
-            if status == 0 and (("Cmd Failed" in line) or ("FAILED" in line)):
-                self._test_failures += 1
-                failure = "test failed cmd: {0}".format(cmd)
-                print(failure)
-                self._test_results.append(failure)
-            if "Test Results" in line:
-                line_num += 1
-            if line_num == 4:
-                print(line.rstrip())
-                self._test_results.append(line)
-                break
+            if ("Cmd Failed" in line) or ("FAILED" in line):
+                return False
+        return True
 
     def show_results(self):
         if os.path.exists(self._args.results):
@@ -217,6 +206,8 @@ class QflockBench:
 
     def run_query(self):
         # timestr = time.strftime("%Y%m%d-%H%M%S")
+        failure_count = 0
+        success_count = 0
         for w in self._workers_list:
             idx = 0
             for q in self._query_list:
@@ -236,14 +227,19 @@ class QflockBench:
                 rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
                                                                enable_stdout=self._args.log_level != "OFF",
                                                                wait_text=self._wait_for_string)
+                output_status = self.process_cmd_status(output)
                 if rc != 0:
                     self._exit_code = rc
+                if not output_status or rc != 0:
+                    failure_count += 1
+                else:
+                    success_count += 1
                 idx += 1
-        print("")
         # self.show_results()
-        self.display_elapsed()
-        if self._test_failures > 0:
-            print("test failures: {0}".format(self._test_failures))
+        #self.display_elapsed()
+
+        print("")
+        print(f"SUCCESS: {success_count} FAILURE: {failure_count}")
 
     def run_cmd(self):
         cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} '
@@ -286,7 +282,6 @@ class QflockBench:
     def run(self):
         if not self._parse_args():
             return
-        print(f"extensions: {self._args.extensions}")
         self._config = Config(self._args.file)
         self._parse_test_list()
         self._spark_launcher = SparkLauncher(self._config['spark'], self._args)

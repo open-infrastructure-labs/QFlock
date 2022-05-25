@@ -389,6 +389,8 @@ object PushdownSQL {
       PushdownSqlStatus.FullyValid
     } else if (invalidCount > 0 && validCount > 0) {
       PushdownSqlStatus.PartiallyValid
+    } else if (filters.length == 0) {
+      PushdownSqlStatus.FullyValid
     } else {
       PushdownSqlStatus.Invalid
     }
