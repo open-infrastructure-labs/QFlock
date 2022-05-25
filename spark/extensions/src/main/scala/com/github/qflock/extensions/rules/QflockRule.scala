@@ -16,7 +16,6 @@
  */
 package com.github.qflock.extensions.rules
 
-import java.io.FileWriter
 import java.util
 import java.util.HashMap
 
@@ -24,13 +23,11 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
-import com.github.qflock.extensions.common.{PushdownJson, PushdownJsonStatus, PushdownSQL, PushdownSqlStatus}
+import com.github.qflock.extensions.common.{PushdownJson, PushdownSQL, PushdownSqlStatus}
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
-import org.json._
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.planning.ScanOperation
@@ -272,36 +269,21 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     val cols = references.toStructType.fields.map(x => s"" + s"${x.name}").mkString(",")
 
-   /* The below allows us to log the available filters
-    * for pushdown, even if we currently do not push these down.
-    * These get logged to filters.txt, along with the
-    * projects and the Spark view of the filters too.
-    */
-    if (false) {
-      val filtersJson = PushdownJson.getFiltersJsonMaxDesired(filters, "")
-      val fw = new FileWriter("/build/filters.txt", true)
-      try {
-        fw.write("Pushdown Filters " + filters.mkString(", ") + "\n")
-        fw.write("Pushdown Projects " + cols + "\n")
-        fw.write("Pushdown Filter Json " + filtersJson + "\n")
-      }
-      finally fw.close()
-    }
     val allRefs = attrReferences ++ filterReferences
     val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
     val sqlQuery: String = {
       // For now we always push down
-      if (true || filtersStatus != PushdownSqlStatus.Invalid) {
+      if (filtersStatus != PushdownSqlStatus.Invalid) {
         val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
         val query = pushdownSql.query
-        logger.warn("Pushdown query " + query)
+        // logger.info("Pushdown query " + query)
         query
       } else {
-        logger.warn("No Pushdown " + filters.toString)
+        // logger.info("No Pushdown " + filters.toString)
         ""
       }
     }
-    logger.info(s"sqlQuery: $sqlQuery")
+    // logger.info(s"sqlQuery: $sqlQuery")
 
     val opt = new util.HashMap[String, String](relationArgs.options)
     val path = opt.get("path")
@@ -337,7 +319,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                                        relationArgs, attrReferences,
                                                        filterReferences, opt,
                                                        references, spark)
-    opt.put("queryStats", relationForStats.toString)
+//    opt.put("queryStats", relationForStats.toString)
     val hdfsScanObject = new QflockJdbcScan(references.toStructType, opt,
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, opt, schemaStr)
@@ -360,13 +342,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       }
     } else {
       withFilter
-    }
-  }
-  def getCatalogProperties(catalog: CatalogTable): Map[String, String] = {
-    logger.info(catalog.toString())
-    catalog match {
-      case CatalogTable(_, _, _, _, _, _, _, _, _, _, _, prop, _, _, _, _, _, _, _, _) =>
-      prop
     }
   }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {

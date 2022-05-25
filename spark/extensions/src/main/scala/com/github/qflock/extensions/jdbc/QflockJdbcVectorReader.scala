@@ -91,7 +91,7 @@ class QflockJdbcVectorReader(schema: StructType,
     val driver = options.get("driver")
     val url = options.get("url")
     try {
-      logger.info("Loading " + driver)
+      logger.debug("Loading " + driver)
       // scalastyle:off classforname
       Class.forName(driver).newInstance
       // scalastyle:on classforname
@@ -106,7 +106,7 @@ class QflockJdbcVectorReader(schema: StructType,
     properties.setProperty("rowGroupOffset", part.offset.toString)
     properties.setProperty("rowGroupCount", part.length.toString)
     properties.setProperty("tableName", options.get("tableName"))
-    properties.setProperty("queryStats", options.get("queryStats"))
+    properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
     connection = Some(DriverManager.getConnection(url, properties))
     logger.debug(s"connected to $url")
     val select = connection.get.prepareStatement(query)
