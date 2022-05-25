@@ -16,15 +16,21 @@ def get_veth(interface: str):
 
 def set_rate(veth:str, rate:str):
     sep = '\n\t'
-    cmd = f'sudo tc qdisc del dev {veth} root '
+    # Check if we need to delete TBF (Token Bucket Filter)
+    cmd = f'sudo tc qdisc show dev {veth}'
     result = subprocess.run(cmd.split(' '), stdout=subprocess.PIPE)
-    print(cmd, result.stdout.decode("utf-8"))
+    if 'qdisc tbf' in result.stdout.decode("utf-8"):
+        # Delete old TBF
+        cmd = f'sudo tc qdisc del dev {veth} root '
+        result = subprocess.run(cmd.split(' '), stdout=subprocess.PIPE)
+        print(cmd, result.stdout.decode("utf-8"))
 
+    # Add new TBF
     cmd = f'sudo tc qdisc add dev {veth} root tbf rate {rate} limit 128mb burst 128kb'
     result = subprocess.run(cmd.split(' '), stdout=subprocess.PIPE)
     print(cmd, result.stdout.decode("utf-8"))
 
-    cmd  = f'sudo tc qdisc show dev {veth}'
+    cmd = f'sudo tc qdisc show dev {veth}'
     result = subprocess.run(cmd.split(' '), stdout=subprocess.PIPE)
     print(cmd, result.stdout.decode("utf-8"), sep=sep)
 
