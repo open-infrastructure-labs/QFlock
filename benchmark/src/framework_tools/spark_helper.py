@@ -198,7 +198,8 @@ class SparkHelper:
             for t in db[d].keys():
                 self.drop_table(t)
 
-    def query(self, query, explain=False, query_name="", collect_only=False):
+    def query(self, query, explain=False, query_name="", collect_only=False,
+              overall_start_time=None):
         start_time = time.time()
         df = None
         try:
@@ -206,9 +207,10 @@ class SparkHelper:
                 df = self._spark.sql(f"explain cost {query}")
             else:
                 df = self._spark.sql(query)
-            result = BenchmarkResult(df, start_time=start_time,
+            result = BenchmarkResult(df, query_start_time=start_time,
                                      verbose=self._verbose, explain=explain, query_name=query_name,
-                                     output_path=self._output_path, spark_helper=self, query=query)
+                                     output_path=self._output_path, spark_helper=self, query=query,
+                                     overall_start_time=overall_start_time)
             result.process_result(collect_only)
         except (ValueError, Exception):
             print(f"caught error executing query for {query}")
@@ -216,7 +218,8 @@ class SparkHelper:
             result = None
         return result
 
-    def query_from_file(self, query_file, explain=False, limit=None):
+    def query_from_file(self, query_file, query_name,
+                        explain=False, limit=None, overall_start_time=None):
         with open(query_file, "r") as fd:
             lines = []
             for line in fd.readlines():
@@ -228,7 +231,8 @@ class SparkHelper:
                 query += f" LIMIT {limit}"
             if self._verbose:
                 print(f"Executing spark query {query_file}: {query}")
-            result = self.query(query, explain, query_name=query_file)
+            result = self.query(query, explain, query_name=query_name,
+                                overall_start_time=overall_start_time)
         return result
 
     @staticmethod
