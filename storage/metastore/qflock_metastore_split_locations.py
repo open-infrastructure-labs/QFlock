@@ -5,6 +5,7 @@ import subprocess
 import functools
 import os
 import time
+import socket
 
 from thrift import Thrift
 from thrift.transport import TSocket
@@ -25,6 +26,10 @@ from hive_metastore import ttypes
 
 
 def get_docker_ip(docker_name: str):
+    # Detect if we are running inside docker
+    if docker_name == socket.gethostname():
+        return '127.0.0.1'
+
     result = subprocess.run('docker network inspect qflock-net'.split(' '), stdout=subprocess.PIPE)
     d = json.loads(result.stdout)
 
