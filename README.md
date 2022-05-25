@@ -47,18 +47,18 @@ Use these commands to stop services, remove all artifacts and rebuild the repo.
 ./init.sh
 
 - Run all benchmark queries
-benchmark/src/docker-bench.py --queries "*"
+benchmark/src/docker-bench.py --query_range "*"
 
 - Get help on available switches
 benchmark/src/docker-bench.py --help
 ```
 
 # Testing with jdbc
-```shell  
+```shell
 - Set metastore locations to be all on dc2 (helps with testing jdbc)
 python3 storage/metastore/qflock_metastore_one_location.py dc2
 - Or split locations between dc2 and dc2 evenly
 python3 storage/metastore/qflock_metastore_split_locations.py
 - Run all benchmark queries against jdbc server
-benchmark/src/docker-bench.py --queries "*" --ext jdbc
+benchmark/src/docker-bench.py --query_range "*" -ext jdbc
 ```
