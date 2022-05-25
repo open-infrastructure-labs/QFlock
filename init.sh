@@ -14,4 +14,9 @@ ${ROOT_DIR}/benchmark/src/docker-bench.py --init
 # Copy data to dc2
 ${ROOT_DIR}/storage/init_dc2.sh
 
+# Split metastore locations between dc1 and dc2
+${ROOT_DIR}/storage/metastore_split_locations.sh
 
+# Restart datacenters after initialization phase
+${ROOT_DIR}/stop.sh
+${ROOT_DIR}/start.sh
