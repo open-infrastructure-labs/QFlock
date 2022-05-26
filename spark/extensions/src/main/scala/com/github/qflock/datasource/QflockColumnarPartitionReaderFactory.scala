@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.hdfs
+package com.github.qflock.datasource
 
 import java.net.URI
 import java.time.ZoneId
@@ -22,7 +22,6 @@ import java.util
 
 import scala.collection.JavaConverters._
 
-import com.github.qflock.datasource.common.Pushdown
 import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapred.FileSplit
 import org.apache.hadoop.mapreduce._
@@ -39,16 +38,14 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader}
 import org.apache.spark.sql.execution.datasources.{DataSourceUtils, RecordReaderIterator}
-import org.apache.spark.sql.execution.datasources.parquet.{ParquetReadSupport, ParquetWriteSupport}
-import org.apache.spark.sql.execution.datasources.parquet.ParquetFilters
-import org.apache.spark.sql.execution.datasources.parquet.ParquetOptions
+import org.apache.spark.sql.execution.datasources.parquet.{ParquetFilters, ParquetOptions, ParquetReadSupport, ParquetWriteSupport}
 import org.apache.spark.sql.extension.parquet.VectorizedParquetRecordReader
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.util.SerializableConfiguration
+
 
 /** Creates a factory for creating HdfsPartitionReader objects,
  *  for parquet files to be read using ColumnarBatches.
@@ -58,18 +55,16 @@ import org.apache.spark.util.SerializableConfiguration
  * @param sharedConf - Hadoop configuration
  * @param sqlConf - SQL configuration.
  */
-class HdfsColumnarPartitionReaderFactory(pushdown: Pushdown,
-                                         options: util.Map[String, String],
- sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration],
- sqlConf: SQLConf)
+class QflockColumnarPartitionReaderFactory(pushdown: Pushdown,
+                                           options: util.Map[String, String],
+      sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration],
+                                           sqlConf: SQLConf)
   extends PartitionReaderFactory {
   private val parquetOptions = new ParquetOptions(options.asScala.toMap,
                                                   sqlConf)
   private val logger = LoggerFactory.getLogger(getClass)
   private val isCaseSensitive = sqlConf.caseSensitiveAnalysis
   private val enableOffHeapColumnVector = sqlConf.offHeapColumnVectorEnabled
-  private val enableVectorizedReader: Boolean = sqlConf.parquetVectorizedReaderEnabled
-  private val enableRecordFilter: Boolean = sqlConf.parquetRecordFilterEnabled
   private val timestampConversion: Boolean = sqlConf.isParquetINT96TimestampConversion
   private val batchSize = sqlConf.parquetVectorizedReaderBatchSize
   private val enableParquetFilterPushDown: Boolean = sqlConf.parquetFilterPushDown
@@ -81,17 +76,12 @@ class HdfsColumnarPartitionReaderFactory(pushdown: Pushdown,
   private val datetimeRebaseModeInRead = parquetOptions.datetimeRebaseModeInRead
   private val int96RebaseModeInRead = parquetOptions.int96RebaseModeInRead
 
-  private val sparkSession: SparkSession = SparkSession
-      .builder()
-      .appName("ndp")
-      .getOrCreate()
-
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
-    throw new UnsupportedOperationException("Cannot create row reader.");
+    throw new UnsupportedOperationException("Cannot create row reader.")
   }
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 
-  private def buildReader(partition: HdfsPartition): VectorizedParquetRecordReader = {
+  private def buildReader(partition: QflockPartition): VectorizedParquetRecordReader = {
     val conf = sharedConf.value.value
     val filePath = new Path(new URI(partition.name))
     lazy val footerFileMetaData =
@@ -121,7 +111,7 @@ class HdfsColumnarPartitionReaderFactory(pushdown: Pushdown,
     // have different writers.
     // Define isCreatedByParquetMr as function to avoid unnecessary parquet footer reads.
     def isCreatedByParquetMr: Boolean =
-      footerFileMetaData.getCreatedBy().startsWith("parquet-mr")
+      footerFileMetaData.getCreatedBy.startsWith("parquet-mr")
     val convertTz = if (timestampConversion && !isCreatedByParquetMr) {
         Some(DateTimeUtils.getZoneId(conf.get(SQLConf.SESSION_LOCAL_TIMEZONE.key)))
       } else {
@@ -169,7 +159,7 @@ class HdfsColumnarPartitionReaderFactory(pushdown: Pushdown,
     taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
     vectorizedReader
   }
-  private def createVectorizedReader(partition: HdfsPartition): VectorizedParquetRecordReader = {
+  private def createVectorizedReader(partition: QflockPartition): VectorizedParquetRecordReader = {
     val vectorizedReader = buildReader(partition)
       .asInstanceOf[VectorizedParquetRecordReader]
     if (vectorizedReader.totalRowCount != 0) {
@@ -178,7 +168,7 @@ class HdfsColumnarPartitionReaderFactory(pushdown: Pushdown,
     vectorizedReader
   }
   override def createColumnarReader(partition: InputPartition): PartitionReader[ColumnarBatch] = {
-    val part = partition.asInstanceOf[HdfsPartition]
+    val part = partition.asInstanceOf[QflockPartition]
     val vectorizedReader = createVectorizedReader(part)
     if (vectorizedReader.totalRowCount != 0) {
       vectorizedReader.enableReturningBatches()
@@ -230,7 +220,7 @@ class HdfsEmptyColumnarPartitionReader(vectorizedReader: VectorizedParquetRecord
  *                           which provides the data for the PartitionReader.
  */
 class HdfsColumnarPartitionReader(vectorizedReader: VectorizedParquetRecordReader,
-batchSize: Integer, part: HdfsPartition)
+batchSize: Integer, part: QflockPartition)
   extends PartitionReader[ColumnarBatch] {
   private val logger = LoggerFactory.getLogger(getClass)
   override def next(): Boolean = vectorizedReader.nextKeyValue()
@@ -248,7 +238,7 @@ batchSize: Integer, part: HdfsPartition)
  *                           which provides the data for the PartitionReader.
  */
 class HdfsColumnarPartitionReaderProgress(vectorizedReader: VectorizedParquetRecordReader,
-                                          batchSize: Long, part: HdfsPartition)
+                                          batchSize: Long, part: QflockPartition)
   extends PartitionReader[ColumnarBatch] {
   private val logger = LoggerFactory.getLogger(getClass)
   private var index: Long = 0
@@ -262,7 +252,7 @@ class HdfsColumnarPartitionReaderProgress(vectorizedReader: VectorizedParquetRec
     val batch = vectorizedReader.getCurrentValue.asInstanceOf[ColumnarBatch]
     if ((index % logSize) == 0 ||
         (index + batchSize) >= vectorizedReader.totalRowCount()) {
-      logger.info(s"batch rows: ${vectorizedReader.totalRowCount()} index: ${index} " +
+      logger.info(s"batch rows: ${vectorizedReader.totalRowCount()} index: $index " +
                   s"offset: ${part.offset} partition: ${part.name}")
     }
     index += batchSize

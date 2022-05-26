@@ -18,17 +18,14 @@
  * were inspired by this patch by Huaxin Gao:
  *   https://github.com/apache/spark/pull/29695
  */
-package com.github.qflock.datasource.common
+package com.github.qflock.datasource
 
-import java.sql.{Date, Timestamp}
+
 import java.util
-import java.util.{HashMap, Locale, StringTokenizer}
 
-import scala.collection.mutable.ArrayBuilder
+import org.slf4j.{Logger, LoggerFactory}
 
-import org.slf4j.LoggerFactory
-
-import org.apache.spark.sql.connector.expressions.aggregate.{AggregateFunc, Aggregation => ExprAgg, Count, CountStar, Max, Min, Sum}
+import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation => ExprAgg}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 
@@ -42,31 +39,31 @@ class Pushdown(val schema: StructType, val prunedSchema: StructType,
                val aggregation: Option[ExprAgg],
                val options: util.Map[String, String]) extends Serializable {
 
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  protected var supportsIsNull = !options.containsKey("DisableSupportsIsNull")
+  protected var supportsIsNull: Boolean = !options.containsKey("DisableSupportsIsNull")
 
   def isPushdownNeeded: Boolean = {
     /* Determines if we should send the pushdown to ndp.
      * If any of the pushdowns are in use (project, filter, aggregate),
      * then we will consider that pushdown is needed.
      */
-    ((prunedSchema.length != schema.length) ||
-     (filters.length > 0))
+    (prunedSchema.length != schema.length) ||
+     filters.nonEmpty
   }
   /**
    * `columns`, but as a String suitable for injection into a SQL query.
    */
-  def getColumnSchema(): (String, StructType) = {
+  def getColumnSchema: (String, StructType) = {
     val sb = new StringBuilder()
     var updatedSchema: StructType = new StructType()
     val cols = prunedSchema.fields.map(x => {
       getColString(x.name)
-    }).toArray
+    })
     updatedSchema = prunedSchema
     cols.foreach(x => sb.append(",").append(x))
-    (if (sb.length == 0) "" else sb.substring(1),
-      if (sb.length == 0) prunedSchema else updatedSchema)
+    (if (sb.isEmpty) "" else sb.substring(1),
+      if (sb.isEmpty) prunedSchema else updatedSchema)
   }
 
   /** returns the representation of the column name according to the
@@ -75,14 +72,13 @@ class Pushdown(val schema: StructType, val prunedSchema: StructType,
    *  @return String - representation of the column name.
    */
   def getColString(attr: String): String = {
-    val colString = s"${attr}"
+    val colString = s"$attr"
     colString
   }
 
   val (readColumns: String,
        readSchema: StructType) = {
-    var (columns, updatedSchema) =
-      getColumnSchema()
+    val (columns, updatedSchema) = getColumnSchema
     (columns,
      if (updatedSchema.names.isEmpty) schema else updatedSchema)
   }

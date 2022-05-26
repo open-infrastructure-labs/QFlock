@@ -14,17 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.hdfs
+package com.github.qflock.datasource
 
 import java.util
 
 import scala.collection.mutable.ArrayBuffer
 
-import com.github.qflock.datasource.QflockTableDescriptor
-import com.github.qflock.datasource.common.Pushdown
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.BlockLocation
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{BlockLocation, Path}
 import org.apache.parquet.HadoopReadOptions
 import org.apache.parquet.hadoop.ParquetFileReader
 import org.apache.parquet.hadoop.util.HadoopInputFile
@@ -33,9 +30,9 @@ import org.slf4j.LoggerFactory
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.connector.expressions.aggregate.{Aggregation => ExprAgg}
 import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.connector.read.InputPartition
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
+
 
 /** A scan object that works on HDFS files.
  *
@@ -45,10 +42,10 @@ import org.apache.spark.sql.types._
  * @param prunedSchema the new array of columns after pruning
  * @param pushedAggregation the array of aggregations to push down
  */
-class HdfsScan(schema: StructType,
-               options: util.Map[String, String],
-               filters: Array[Filter], prunedSchema: StructType,
-               pushedAggregation: Option[ExprAgg] = None)
+class QflockScan(schema: StructType,
+                 options: util.Map[String, String],
+                 filters: Array[Filter], prunedSchema: StructType,
+                 pushedAggregation: Option[ExprAgg] = None)
       extends Scan with Batch {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -94,12 +91,12 @@ class HdfsScan(schema: StructType,
       val parquetBlocks = reader.getFooter.getBlocks
       logger.info(s"found table: $tableName requestId: $requestId " +
         s"offset: ${requestInfo.offset} count: ${requestInfo.count} " +
-        s"blocks: ${parquetBlocks.size()} file: ${fName}")
+        s"blocks: ${parquetBlocks.size()} file: $fName")
 
       // Generate one partition per row group in the range
       for (i <- requestInfo.offset until (requestInfo.offset + requestInfo.count)) {
         val parquetBlock = parquetBlocks.get(i)
-        a += new HdfsPartition(index = i, offset = parquetBlock.getStartingPos,
+        a += new QflockPartition(index = i, offset = parquetBlock.getStartingPos,
           length = parquetBlock.getCompressedSize,
           name = fName,
           rows = parquetBlock.getRowCount,
@@ -136,7 +133,7 @@ class HdfsScan(schema: StructType,
     partitions
   }
   override def createReaderFactory(): PartitionReaderFactory = {
-    new HdfsColumnarPartitionReaderFactory(pushdown, options,
+    new QflockColumnarPartitionReaderFactory(pushdown, options,
       broadcastedHadoopConf, sqlConf)
   }
 }

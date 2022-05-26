@@ -18,22 +18,11 @@ package com.github.qflock.datasource
 
 import java.util
 
-import scala.collection.JavaConverters._
-
-import com.github.qflock.datasource.common.Pushdown
-import com.github.qflock.datasource.hdfs.{HdfsScan, HdfsStore}
 import com.github.qflock.extensions.jdbc.QflockJdbcDatasource
-import org.apache.hadoop.hive.conf.HiveConf
-import org.apache.hadoop.hive.metastore.HiveMetaStoreClient
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.connector.catalog.{SessionConfigSupport, SupportsRead, Table, TableCapability, TableProvider}
+import org.apache.spark.sql.connector.catalog.{SessionConfigSupport, Table, TableProvider}
 import org.apache.spark.sql.connector.expressions._
-import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.execution.datasources.parquet.ParquetUtils
-import org.apache.spark.sql.hive.extension.ExtHiveUtils
-import org.apache.spark.sql.sources._
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -49,9 +38,6 @@ class QflockDatasource extends TableProvider
   override def toString: String = s"QflockDs()"
   override def supportsExternalMetadata(): Boolean = true
 
-  private val sparkSession: SparkSession = SparkSession
-      .builder()
-      .getOrCreate()
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
     if (options.get("format") == "parquet") {
       QflockJdbcDatasource.getSchema(options)
@@ -75,92 +61,3 @@ class QflockDatasource extends TableProvider
   override def shortName(): String = "qflockDs"
 }
 
-/** Creates a Table object that supports pushdown predicates
- *   such as Filter, Project.
- *
- * @param schema the StructType format of this table
- * @param options the parameters for creating the table
- *                "endpoint" is the server name,
- *                "accessKey" and "secretKey" are the credentials for above server.
- *                 "path" is the full path to the file.
- */
-class QflockBatchTable(schema: StructType,
-                       options: util.Map[String, String],
-                       path: String)
-  extends Table with SupportsRead {
-
-  private val logger = LoggerFactory.getLogger(getClass)
-  logger.trace("Created")
-  override def name(): String = this.getClass.toString
-
-  override def schema(): StructType = schema
-
-  override def capabilities(): util.Set[TableCapability] =
-    Set(TableCapability.BATCH_READ).asJava
-
-  override def newScanBuilder(params: CaseInsensitiveStringMap): ScanBuilder =
-      new QflockScanBuilder(schema, options, path)
-}
-
-/** Creates a builder for scan objects.
- *  For hdfs HdfsScan.
- *
- * @param schema the format of the columns
- * @param options the options (see PushdownBatchTable for full list.)
- */
-class QflockScanBuilder(schema: StructType,
-                        options: util.Map[String, String],
-                        path: String)
-  extends ScanBuilder
-    with SupportsPushDownFilters
-    with SupportsPushDownRequiredColumns {
-
-  private val logger = LoggerFactory.getLogger(getClass)
-  var pushedFilter: Array[Filter] = new Array[Filter](0)
-  private var prunedSchema: StructType = schema
-
-  /** Returns a scan object for this particular query.
-   *   Currently we only support Hdfs.
-   *
-   * @return the scan object a HdfsScan
-   */
-  override def build(): Scan = {
-    /* Make the map modifiable.
-     * The objects below can override defaults.
-     */
-    val opt: util.Map[String, String] = new util.HashMap[String, String](options)
-
-    if (!path.contains("hdfs")) {
-      throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
-    }
-    opt.put("path", path)
-    new HdfsScan(schema, opt, pushedFilter, prunedSchema)
-  }
-  /** Pushes down the list of columns specified by requiredSchema
-   *
-   * @param requiredSchema the list of coumns we should use, and prune others.
-   */
-  override def pruneColumns(requiredSchema: StructType): Unit = {
-    prunedSchema = requiredSchema
-    logger.info("pruneColumns " + requiredSchema.toString)
-  }
-
-  override def pushedFilters: Array[Filter] = {
-    logger.info("pushedFilters" + pushedFilter.toList)
-    pushedFilter
-  }
-
-  /** Pushes down a list of filters.  We assume the filters
-   *  are "and" separated. e.g. filter1 and filter2 and filter3, etc.
-   *
-   * @param filters the list of filters to push down
-   * @return list of filters to be re-evaluated upon completion of query.
-   */
-  override def pushFilters(filters: Array[Filter]): Array[Filter] = {
-    logger.trace("pushFilters" + filters.toList)
-    pushedFilter = filters
-    // In this case we know that we need to re-evaluate the filters
-    // since the pushdown cannot guarantee application of the filter.
-    filters
-  }
-}

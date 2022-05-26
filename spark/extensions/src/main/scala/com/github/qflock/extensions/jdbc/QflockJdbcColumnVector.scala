@@ -19,21 +19,18 @@ package com.github.qflock.extensions.jdbc
 import java.sql.ResultSet
 
 import com.github.qflock.jdbc.QflockResultSet
-import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnVector
 import org.apache.spark.unsafe.types.UTF8String
 
 /** Represents a ColumnVector to wrap a column from a jdbc ResultSet.
- *  @param batchSize the number of items in each row of a batch.
  *  @param dataType the Int representing the NdpDataType.
  *  @param schema the schema returned from the server.
  *  @return
  */
-class QflockJdbcColumnVector(batchSize: Integer, dataType: DataType, schema: StructType)
+class QflockJdbcColumnVector(dataType: DataType, schema: StructType)
   extends ColumnVector(schema: StructType) {
-  private val logger = LoggerFactory.getLogger(getClass)
 
   val typeSize: Int = {
     dataType match {
@@ -93,14 +90,12 @@ object QflockJdbcColumnVector {
    *  This provides the api to return a relevant set of
    *  NdpColumnVectors representing the appropriate types.
    *
-   *  @param batchSize the number of rows in a batch
    *  @param schema the relevant schema for the vector.
    */
-  def apply(batchSize: Integer,
-            schema: StructType): Array[QflockJdbcColumnVector] = {
+  def apply(schema: StructType): Array[QflockJdbcColumnVector] = {
     val vectors = new Array[QflockJdbcColumnVector](schema.fields.length)
     for (i <- schema.fields.indices) {
-      vectors(i) = new QflockJdbcColumnVector(batchSize, schema.fields(i).dataType, schema)
+      vectors(i) = new QflockJdbcColumnVector(schema.fields(i).dataType, schema)
     }
     vectors
   }

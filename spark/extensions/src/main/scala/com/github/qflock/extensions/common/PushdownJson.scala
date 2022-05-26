@@ -18,24 +18,15 @@
 package com.github.qflock.extensions.common
 
 import java.io.StringWriter
-import java.util.Iterator
 import javax.json.Json
-import javax.json.JsonArrayBuilder
 import javax.json.JsonObject
-import javax.json.JsonObjectBuilder
-import javax.json.JsonWriter
-import javax.xml.namespace.QName
-import javax.xml.stream._
 
-import scala.xml._
-
-import PushdownJsonStatus._
+import com.github.qflock.extensions.common.PushdownJsonStatus._
 import org.json._
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Count, Max, Min, Sum}
-import org.apache.spark.sql.execution.datasources.PushableColumnAndNestedColumn
 import org.apache.spark.sql.execution.datasources.PushableColumnWithoutNestedColumn
 import org.apache.spark.sql.types._
 
@@ -43,7 +34,7 @@ object PushdownJson {
 
   private val filterMaxDepth = 100
 
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def buildFiltersJson(expr: Expression): JsonObject = {
     def buildComparison(left: Expression, right: Expression, comparisonOp: String): JsonObject = {
@@ -126,11 +117,11 @@ object PushdownJson {
       case Contains(left, right) => buildExpression("Contains",
                                                     buildFiltersJson(left),
                                                     buildFiltersJson(right))
-      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+      case AttributeReference(name, dataType, nullable, meta) =>
         buildGeneric("ColumnReference", name)
       case Literal(value, dataType) =>
         buildGeneric("Literal", value.toString)
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case Cast(expression, _, _, _) =>
         buildFiltersJson(expression)
       case other@_ => logger.warn("unknown filter:" + other)
          buildUnknown(other)
@@ -153,7 +144,7 @@ object PushdownJson {
     val writer = Json.createWriter(stringWriter)
     writer.writeObject(filterNodeBuilder.build())
     writer.close()
-    val jsonString = stringWriter.getBuffer().toString()
+    val jsonString = stringWriter.getBuffer.toString
     // val indented = (new JSONObject(jsonString)).toString(4)
     jsonString
   }
@@ -174,8 +165,8 @@ object PushdownJson {
     val writer = Json.createWriter(stringWriter)
     writer.writeObject(filterNodeBuilder.build())
     writer.close()
-    val jsonString = stringWriter.getBuffer().toString()
-    val indented = (new JSONObject(jsonString)).toString(4)
+    val jsonString = stringWriter.getBuffer.toString
+    val indented = new JSONObject(jsonString).toString(4)
     indented
   }
   def validateFilterExpression(expr: Expression, depth: Int = 0): Boolean = {
@@ -208,7 +199,7 @@ object PushdownJson {
                                     validateFilterExpression(right, depth + 1)
       case Contains(left, right) => validateFilterExpression(left, depth + 1) &&
                                     validateFilterExpression(right, depth + 1) */
-      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+      case AttributeReference(name, dataType, nullable, meta) =>
         true
       case Literal(value, dataType) =>
         true
@@ -278,7 +269,7 @@ object PushdownJson {
     def getProjectJson(columnNames: Seq[String],
                        test: String): String = {
       val projectionNodeBuilder = Json.createObjectBuilder()
-      if (columnNames.length > 0) {
+      if (columnNames.nonEmpty) {
         projectionNodeBuilder.add("Name", test)
         projectionNodeBuilder.add("Type", "_PROJECTION")
         val projectionArrayBuilder = Json.createArrayBuilder()
@@ -292,7 +283,7 @@ object PushdownJson {
       val writer = Json.createWriter(stringWriter)
       writer.writeObject(projectionNodeBuilder.build())
       writer.close()
-      val jsonString = stringWriter.getBuffer().toString()
+      val jsonString = stringWriter.getBuffer.toString
       // val indented = (new JSONObject(jsonString)).toString(4)
       jsonString
     }
@@ -340,7 +331,7 @@ object PushdownJson {
       val writer = Json.createWriter(stringWriter)
       writer.writeObject(aggNodeBuilder.build())
       writer.close()
-      val jsonString = stringWriter.getBuffer().toString()
+      val jsonString = stringWriter.getBuffer.toString
       // val indented = (new JSONObject(jsonString)).toString(4)
       jsonString
   }
@@ -364,23 +355,21 @@ object PushdownJson {
     for (a <- aggregates) {
       a.aggregateFunction match {
         case min @ Min(PushableColumnWithoutNestedColumn(name)) =>
-          schema = schema.add(StructField(s"min(${name})", min.dataType))
+          schema = schema.add(StructField(s"min(name)", min.dataType))
         case max @ Max(PushableColumnWithoutNestedColumn(name)) =>
-          schema = schema.add(StructField(s"max(${name})", max.dataType))
+          schema = schema.add(StructField(s"max(name)", max.dataType))
         case count: aggregate.Count if count.children.length == 1 =>
           count.children.head match {
             // SELECT COUNT(*) FROM table is translated to SELECT 1 FROM table
             case Literal(_, _) =>
               schema = schema.add(StructField("count(*)", LongType))
             case PushableColumnWithoutNestedColumn(name) =>
-              schema = schema.add(StructField(s"count(${name})", LongType))
-            case _ => None
+              schema = schema.add(StructField(s"count($name)", LongType))
           }
         case sum @ Sum(PushableColumnWithoutNestedColumn(name), _) =>
-          schema = schema.add(StructField(s"sum(${name})", sum.dataType))
+          schema = schema.add(StructField(s"sum($name)", sum.dataType))
         case sum @ Sum(child: Expression, _) =>
           schema = schema.add(StructField(s"sum(${getAggregateString(child)})", sum.dataType))
-        case _ => None
       }
     }
     schema

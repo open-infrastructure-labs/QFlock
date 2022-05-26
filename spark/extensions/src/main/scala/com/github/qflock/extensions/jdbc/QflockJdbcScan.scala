@@ -23,11 +23,9 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan, Statistics => ReadStats, SupportsReportStatistics}
 import org.apache.spark.sql.types._
-import org.apache.spark.util.SerializableConfiguration
 
 
 /** A scan object that works on Jdbc.
@@ -62,6 +60,9 @@ case class QflockJdbcScan(schema: StructType,
     val rowsPerPartition = numRows / partitions
     // Set below to true to do a 1 partition test.
     val partitionArray = new ArrayBuffer[InputPartition](0)
+//    if (path.contains("store_sales")) {
+//      throw new Exception("fake exception")
+//    }
     if (false) {
       partitions = 1
       partitionArray += new QflockJdbcPartition(index = 0,
@@ -84,12 +85,6 @@ case class QflockJdbcScan(schema: StructType,
     logger.debug(partitionArray.mkString(", "))
     partitionArray.toArray
   }
-  private val sparkSession: SparkSession = SparkSession
-    .builder()
-    .getOrCreate()
-  private val broadcastedHadoopConf =
-    sparkSession.sparkContext.broadcast(new SerializableConfiguration(
-      sparkSession.sessionState.newHadoopConf()))
 
   override def planInputPartitions(): Array[InputPartition] = {
     if (partitions.length == 0) {
@@ -98,7 +93,7 @@ case class QflockJdbcScan(schema: StructType,
     partitions
   }
   override def createReaderFactory(): PartitionReaderFactory = {
-      new QflockPartitionReaderFactory(options, broadcastedHadoopConf)
+      new QflockPartitionReaderFactory(options)
   }
 }
 

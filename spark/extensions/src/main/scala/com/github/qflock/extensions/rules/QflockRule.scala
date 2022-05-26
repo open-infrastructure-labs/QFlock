@@ -17,7 +17,6 @@
 package com.github.qflock.extensions.rules
 
 import java.util
-import java.util.HashMap
 
 import scala.annotation.tailrec
 import scala.collection.mutable
@@ -25,7 +24,7 @@ import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
 import com.github.qflock.extensions.common.{PushdownJson, PushdownSQL, PushdownSqlStatus}
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions._
@@ -55,7 +54,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     origExpression match {
       case Alias(child, _) =>
         getAttribute(child)
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case Cast(expression, _, _, _) =>
         getAttribute(expression)
       case Add(left, right, failOnError) =>
         // @todo For now assume right is constant.
@@ -103,7 +102,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     var failed = false
     val attributes = filters.flatMap(f => {
       val attrSeq = getFilterExpressionAttributes(f)
-      if (attrSeq.length == 0) {
+      if (attrSeq.isEmpty) {
         failed = true
       }
       attrSeq
@@ -161,7 +160,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                     child: Any,
                     alwaysInject: Boolean = true): Boolean = {
     val relationArgsOpt = QflockRelationArgs(child)
-    if (relationArgsOpt == None) {
+    if (relationArgsOpt.isEmpty) {
       return false
     }
     if (!PushdownSQL.canHandleFilters(filters)) {
@@ -196,7 +195,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         // logger.warn("Plan not modified due to filter")
         alwaysInject
       // } else if (!filters.exists(x => !x.isInstanceOf[IsNotNull])) {
-      } else if (!filters.exists(x => !x.isInstanceOf[IsNotNull])) {
+      } else if (filters.forall(x => x.isInstanceOf[IsNotNull])) {
         // We only pushdown if there are some filters that are not (IsNotNull).
         // logger.warn("Plan has no filters ")
         relationArgs.scan match {
@@ -320,7 +319,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                                        filterReferences, opt,
                                                        references, spark)
 //    opt.put("queryStats", relationForStats.toString)
-    val hdfsScanObject = new QflockJdbcScan(references.toStructType, opt,
+    val hdfsScanObject = QflockJdbcScan(references.toStructType, opt,
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, opt, schemaStr)
     val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
@@ -334,7 +333,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         filterCondition.map(LogicalFilter(_, scanRelation)).getOrElse(scanRelation)
       }
     }
-    if (withFilter.output != project || filters.length == 0) {
+    if (withFilter.output != project || filters.isEmpty) {
       if (project != scanRelation.output) {
         Project(project, withFilter)
       } else {
@@ -408,7 +407,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
           | ${pushedAggregates.get.groupByColumns.mkString(", ")}
           |Output: ${output.mkString(", ")}
           """.stripMargin) */
-    val opt = new HashMap[String, String](relationArgs.options)
+    val opt = new util.HashMap[String, String](relationArgs.options)
     val aggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
       aggregates,
       "")
@@ -517,15 +516,15 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         case agg: AggregateExpression => agg
       }
     }
-    !aggregates.exists(x => !validateAggFunction(x))
+    aggregates.forall(x => validateAggFunction(x))
   }
 
   private def pushAggregate(plan: LogicalPlan)
   : LogicalPlan = {
     val newPlan = plan.transform {
       case aggNode @ Aggregate(groupingExpressions, resultExpressions, childAgg)
-        if (false && aggExpressionIsValid(groupingExpressions, resultExpressions) &&
-          aggNeedsRule(childAgg)) =>
+        if false && aggExpressionIsValid(groupingExpressions, resultExpressions) &&
+          aggNeedsRule(childAgg) =>
         childAgg match {
           case s@ScanOperation(project,
           filters,
@@ -533,10 +532,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
             if filters.isEmpty =>
             transformAggregate(groupingExpressions,
               resultExpressions, child)
-          case r: DataSourceV2ScanRelation =>
+          case _: DataSourceV2ScanRelation =>
             aggNode
-          case other =>
-            aggNode
+          case _ => aggNode
         }
     }
     if (newPlan != plan) {
@@ -545,7 +543,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     newPlan
   }
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
     // val after = pushAggregate(pushFilterProject(inputPlan))
     val after = pushFilterProject(inputPlan)
@@ -562,13 +560,13 @@ object QflockOptimizationRule extends Rule[LogicalPlan] {
 }
 object QflockRuleBuilder {
   var injected: Boolean = false
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def injectExtraOptimization(): Unit = {
     val testSparkSession: SparkSession =
       SparkSession.builder().appName("Extra optimization rules")
         .getOrCreate()
-    import testSparkSession.implicits._
-    logger.info(s"added QflockOptimizationRule to session ${testSparkSession}")
+    // import testSparkSession.implicits._
+    logger.info(s"added QflockOptimizationRule to session $testSparkSession")
     testSparkSession.experimental.extraOptimizations = Seq(QflockOptimizationRule)
   }
 }

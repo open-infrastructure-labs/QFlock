@@ -16,8 +16,6 @@
  */
 package com.github.qflock.extensions.jdbc
 
-import com.github.qflock.extensions.common.PushdownPartition
-
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition
 /** Represents a partition for jdbc
@@ -26,14 +24,13 @@ import org.apache.spark.sql.connector.read.InputPartition
  * @param offset the byte offset from start of file
  * @param length the total bytes in the file
  * @param name the full path of the file
- * @param modifiedTime the last modification time of the file.
+ * @param rows the rows in the file.
  */
 class QflockJdbcPartition(var index: Int,
                           var offset: Long = 0,
                           var length: Long = 0,
                           var name: String = "",
-                          var rows: Long = 0,
-                          var modifiedTime: Long = 0)
+                          var rows: Long = 0)
   extends Partition with InputPartition {
 
   override def toString: String = {
