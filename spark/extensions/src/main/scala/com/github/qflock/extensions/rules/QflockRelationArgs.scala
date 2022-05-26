@@ -52,15 +52,15 @@ object QflockRelationArgs {
     val (relation, scan, output, catalogTable) = child match {
       case DataSourceV2ScanRelation(relation, scan, output) =>
         (relation, scan, output, None)
-      case LogicalRelation(relation, output, table, streaming) =>
+      case LogicalRelation(relation, output, table, _) =>
         (relation, relation, output, table)
     }
     val (dataSchema, readSchema, options) = scan match {
       case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _) =>
         (dataSchema, readSchema, opts)
-      case HadoopFsRelation(location, partitionSchema, dataSchema, _, fileFormat, opts) =>
+      case HadoopFsRelation(_, _, dataSchema, _, _, opts) =>
         (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava))
-      case QflockRelation(schema, parts, opts) =>
+      case QflockRelation(schema, _, opts) =>
         (schema, schema, new CaseInsensitiveStringMap(opts.asJava))
     }
     Some(new QflockRelationArgs(relation, scan, output, dataSchema,

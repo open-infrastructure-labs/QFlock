@@ -29,7 +29,7 @@ from benchmark.benchmark_factory import BenchmarkFactory
 from benchmark.metastore import MetastoreClient
 from framework_tools.spark_helper import SparkHelper
 from benchmark.config import Config
-from benchmark.logging import setup_logger
+from benchmark.bench_logging import setup_logger
 
 
 class BenchmarkApp:

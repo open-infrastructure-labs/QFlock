@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.hdfs
+package com.github.qflock.datasource
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition
@@ -28,18 +28,18 @@ import org.apache.spark.sql.connector.read.InputPartition
  * @param modifiedTime the last modification time of the file.
  * @param last true if it is the last partition.
  */
-class HdfsPartition(var index: Int,
-                    var offset: Long = 0,
-                    var length: Long = 0,
-                    var name: String = "",
-                    var rows: Long = 0,
-                    var modifiedTime: Long = 0,
-                    var last: Boolean = false)
+class QflockPartition(var index: Int,
+                      var offset: Long = 0,
+                      var length: Long = 0,
+                      var name: String = "",
+                      var rows: Long = 0,
+                      var modifiedTime: Long = 0,
+                      var last: Boolean = false)
   extends Partition with InputPartition {
 
-  override def toString() : String = {
-    s"""HdfsPartition index ${index} offset: ${offset} length: ${length} """ +
-    s"""name: ${name}"""
+  override def toString: String = {
+    s"""HdfsPartition index $index offset: $offset length: $length """ +
+    s"""name: $name"""
   }
 
   override def preferredLocations(): Array[String] = {

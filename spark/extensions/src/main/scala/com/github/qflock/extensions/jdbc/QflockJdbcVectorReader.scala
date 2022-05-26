@@ -31,12 +31,10 @@ import org.apache.spark.sql.vectorized.ColumnVector
  *  using the NDP binary columnar format.
  *
  *  @param schema description of columns
- *  @param batchSize the number of rows in a batch
  *  @param part the current jdbc partition
  *  @param options data source options.
  */
 class QflockJdbcVectorReader(schema: StructType,
-                             batchSize: Integer,
                              part: QflockJdbcPartition,
                              options: util.Map[String, String]) extends QflockColumnarVectorReader {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -57,7 +55,7 @@ class QflockJdbcVectorReader(schema: StructType,
   private var currentBatchSize: Int = 0
   private var batchIdx: Long = 0
   private val numCols = schema.fields.length
-  private val colVectors = QflockJdbcColumnVector.apply(batchSize, schema)
+  private val colVectors = QflockJdbcColumnVector.apply(schema)
   private val columnarBatch = new ColumnarBatch(colVectors.asInstanceOf[Array[ColumnVector]])
   private var results: Option[ResultSet] = None
   /** Fetches the next set of columns from the stream, returning the

@@ -19,8 +19,6 @@ package com.github.qflock.datasource
 import scala.collection._
 import scala.collection.JavaConverters._
 
-import org.slf4j.LoggerFactory
-
 
 case class QflockTableRecord(var offset: Int, var count: Int, var freed: Boolean) {
 
@@ -61,7 +59,6 @@ case class QflockTableDescriptor(name: String, requests: Int) {
 }
 
 object QflockTableDescriptor {
-  private val logger = LoggerFactory.getLogger(getClass)
   private val tableMap: concurrent.Map[String, QflockTableDescriptor] =
     new java.util.concurrent.ConcurrentHashMap[String, QflockTableDescriptor].asScala
 

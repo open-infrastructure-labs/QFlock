@@ -14,22 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource.hdfs
+package com.github.qflock.datasource
 
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import java.io.{BufferedReader, InputStreamReader}
 import java.net.URI
-import java.util
 
-import com.github.qflock.datasource.common.Pushdown
 import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.BlockLocation
-import org.apache.hadoop.fs.FileStatus
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.fs.Path
-import org.slf4j.LoggerFactory
+import org.apache.hadoop.fs.{BlockLocation, FileStatus, FileSystem, Path}
+import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.SparkSession
+
 
 /** A Factory to fetch the correct type of
  *  store object.
@@ -53,17 +48,17 @@ object HdfsStoreFactory {
  */
 class HdfsStore(options: java.util.Map[String, String],
                 sharedConf: Configuration) {
-  override def toString() : String = "HdfsStore" + options
-  protected val path = options.get("path")
-  protected val endpoint = {
+  override def toString: String = "HdfsStore" + options
+  protected val path: String = options.get("path")
+  protected val endpoint: String = {
     val server = path.split("/")(2)
     if (path.contains("webhdfs://")) {
-      ("webhdfs://" + server + {if (server.contains(":9870")) "" else ":9870"})
+      "webhdfs://" + server + {if (server.contains(":9870")) "" else ":9870"}
     } else {
-      ("hdfs://" + server + {if (server.contains(":9000")) "" else ":9000"})
+      "hdfs://" + server + {if (server.contains(":9000")) "" else ":9000"}
     }
   }
-  val filePath = {
+  val filePath: String = {
     val server = path.split("/")(2)
     if (path.contains("webhdfs")) {
       path.replace(server, server + {if (server.contains(":9870")) "" else ":9870"})
@@ -71,20 +66,20 @@ class HdfsStore(options: java.util.Map[String, String],
       path.replace(server, server + {if (server.contains(":9000")) "" else ":9000"})
     }
   }
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val configure: Configuration = {
     /* val conf = new Configuration()
     conf.set("dfs.datanode.drop.cache.behind.reads", "true")
     conf.set("dfs.client.cache.readahead", "0") */
     sharedConf
   }
-  protected val fileSystem = {
+  protected val fileSystem: FileSystem = {
     val conf = configure
     FileSystem.get(URI.create(endpoint), conf)
   }
-  protected val fileSystemType = fileSystem.getScheme
+  protected val fileSystemType: String = fileSystem.getScheme
   protected val traceReadable: Boolean =
-    (!options.containsKey("DisableCasts") && !options.containsKey("useColumnNames"))
+    !options.containsKey("DisableCasts") && !options.containsKey("useColumnNames")
 
   /** Returns a list of BlockLocation object representing
    *  all the hdfs blocks in a file.
@@ -96,9 +91,8 @@ class HdfsStore(options: java.util.Map[String, String],
   def getBlockList(fileName: String) : scala.collection.immutable.Map[String,
     Array[BlockLocation]] = {
     val fileToRead = new Path(fileName)
-    val fileStatus = fileSystem.getFileStatus(fileToRead)
     val blockMap = scala.collection.mutable.Map[String, Array[BlockLocation]]()
-    if (fileSystem.isFile(fileToRead)) {
+    if (fileSystem.getFileStatus(fileToRead).isFile) {
       // Use MaxValue to indicate we want info on all blocks.
       blockMap(fileName) = fileSystem.getFileBlockLocations(fileToRead, 0, Long.MaxValue)
     } else {
@@ -149,7 +143,7 @@ class HdfsStore(options: java.util.Map[String, String],
    * @return (offset, length) - Offset to begin reading partition, Length of partition.
    */
   @throws(classOf[Exception])
-  def getPartitionInfo(partition: HdfsPartition) : (Long, Long) = {
+  def getPartitionInfo(partition: QflockPartition) : (Long, Long) = {
     val currentPath = new Path(partition.name)
     var startOffset = partition.offset
     var nextChar: Integer = 0
@@ -164,7 +158,7 @@ class HdfsStore(options: java.util.Map[String, String],
       do {
         nextChar = reader.read
         startOffset += 1
-      } while ((nextChar.toChar != '\n') && (nextChar != -1));
+      } while ((nextChar.toChar != '\n') && (nextChar != -1))
     }
     var partitionLength = (partition.offset + partition.length) - startOffset
     if (!partition.last) {
@@ -181,7 +175,7 @@ class HdfsStore(options: java.util.Map[String, String],
         if (nextChar != -1) {
           partitionLength += 1
         }
-      } while ((nextChar.toChar != '\n') && (nextChar != -1));
+      } while ((nextChar.toChar != '\n') && (nextChar != -1))
     }
     (startOffset, partitionLength)
   }
@@ -192,7 +186,7 @@ class HdfsStore(options: java.util.Map[String, String],
  */
 object HdfsStore {
 
-  protected val logger = LoggerFactory.getLogger(getClass)
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
   private val sparkSession: SparkSession = SparkSession
       .builder()
       .getOrCreate()
@@ -221,9 +215,8 @@ object HdfsStore {
   def getFileList(fileName: String, fileSystem: FileSystem):
       Seq[String] = {
     val fileToRead = new Path(getFilePath(fileName))
-    val fileStatus = fileSystem.getFileStatus(fileToRead)
     var fileArray: Array[String] = Array[String]()
-    if (fileSystem.isFile(fileToRead)) {
+    if (fileSystem.getFileStatus(fileToRead).isFile) {
       // Use MaxValue to indicate we want info on all blocks.
       fileArray = fileArray ++ Array(fileName)
     } else {
@@ -259,9 +252,9 @@ object HdfsStore {
   private def getEndpoint(path: String): String = {
     val server = path.split("/")(2)
     if (path.contains("webhdfs://")) {
-      ("webhdfs://" + server + {if (path.contains(":9870")) "" else ":9870"})
+      "webhdfs://" + server + {if (path.contains(":9870")) "" else ":9870"}
     } else {
-      ("hdfs://" + server + {if (path.contains(":9000")) "" else ":9000"})
+      "hdfs://" + server + {if (path.contains(":9000")) "" else ":9000"}
     }
   }
   /** Fetches the FileSystem for this file string

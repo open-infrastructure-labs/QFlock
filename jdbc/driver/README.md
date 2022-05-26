@@ -1,4 +1,2 @@
-thrift-jdbc-server
-==================
-
-Thrift protocol designed to suit JDBC API. Implementation of server and simple JDBC connector included
+This jdbc driver started from this example:
+https://github.com/damiencarol/thrift-jdbc-server

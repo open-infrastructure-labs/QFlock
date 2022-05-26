@@ -19,15 +19,12 @@ package com.github.qflock.extensions.jdbc
 import java.net.URI
 import java.util
 
-import scala.collection.JavaConverters._
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.expressions._
-import org.apache.spark.sql.connector.read._
 import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -90,7 +87,6 @@ class QflockJdbcDatasource extends TableProvider
 }
 
 object QflockJdbcDatasource {
-  private val logger = LoggerFactory.getLogger(getClass)
   var initialized = false
 
   def getSchema(options: util.Map[String, String]): StructType = {
@@ -112,58 +108,5 @@ object QflockJdbcDatasource {
     } else {
       new StructType()
     }
-  }
-}
-/** Creates a Table object that supports pushdown predicates
- *   such as Filter, Project, and Aggregate.
- *
- * @param schema the StructType format of this table
- * @param options the parameters for creating the table
- *                "endpoint" is the server name,
- *                "accessKey" and "secretKey" are the credentials for above server.
- *                 "path" is the full path to the s3 file.
- */
-class QflockJdbcBatchTable(schema: StructType,
-                           options: util.Map[String, String])
-  extends Table with SupportsRead {
-
-  private val logger = LoggerFactory.getLogger(getClass)
-  override def name(): String = this.getClass.toString
-
-  override def schema(): StructType = schema
-
-  override def capabilities(): util.Set[TableCapability] =
-    Set(TableCapability.BATCH_READ).asJava
-
-  override def newScanBuilder(params: CaseInsensitiveStringMap): ScanBuilder =
-    new QflockJdbcScanBuilder(schema, options)
-}
-
-/** Creates a builder for scan objects.
- *  For s3 we build the S3Scan, and for hdfs HdfsScan.
- *
- * @param schema the format of the columns
- * @param options the options (see PushdownBatchTable for full list.)
- */
-class QflockJdbcScanBuilder(schema: StructType,
-                            options: util.Map[String, String])
-  extends ScanBuilder {
-
-  private val logger = LoggerFactory.getLogger(getClass)
-
-  /** Returns a scan object for this particular query.
-   *   Currently we only support S3 and Hdfs.
-   *
-   * @return the scan object either a S3Scan or HdfsScan
-   */
-  override def build(): Scan = {
-    /* Make the map modifiable.
-     * The objects below can override defaults.
-     */
-    val opt: util.Map[String, String] = new util.HashMap[String, String](options)
-    if (!options.get("path").contains("hdfs")) {
-      throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
-    }
-    QflockJdbcScan(schema, opt)
   }
 }
