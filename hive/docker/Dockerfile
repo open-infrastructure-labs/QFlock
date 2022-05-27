@@ -70,7 +70,7 @@ RUN rm ${TEZ_HOME}/lib/slf4j-log4j12-1.7.10.jar
 RUN rm ${HIVE_HOME}/lib/log4j-slf4j-impl-2.6.2.jar
 
 # Workaround the guava problem. Tez-0.9.2 uses guava 19 content but hive 2.3.8 has guava 14
-RUN mv ${TEZ_HOME}/lib/guava-14.0.1.jar ${TEZ_HOME}/lib/guava-14.0.1.jar.save
+RUN mv ${HIVE_HOME}/lib/guava-14.0.1.jar ${HIVE_HOME}/lib/guava-14.0.1.jar.save
 
 COPY entry.sh /usr/local/bin/entry.sh
 RUN chmod a+x /usr/local/bin/entry.sh
