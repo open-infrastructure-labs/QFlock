@@ -20,6 +20,7 @@ import java.sql.{Connection, DriverManager, ResultSet}
 import java.util
 import java.util.Properties
 
+import com.github.qflock.jdbc.QflockResultSet
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.types._
@@ -104,12 +105,21 @@ class QflockJdbcVectorReader(schema: StructType,
     properties.setProperty("rowGroupCount", part.length.toString)
     properties.setProperty("tableName", options.get("tableName"))
     properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
+    val startTime = System.nanoTime()
     connection = Some(DriverManager.getConnection(url, properties))
     logger.debug(s"connected to $url")
     val select = connection.get.prepareStatement(query)
     logger.debug(s"Starting query $query")
     val result = select.executeQuery(query)
     logger.debug(s"Query complete $query")
+    val elapsed = System.nanoTime() - startTime
+    val qfResultSet = result.asInstanceOf[QflockResultSet]
+    val appId = options.get("appId")
+    val queryName = options.getOrDefault("queryName", "")
+    val tableName = options.get("tableName")
+    QflockLog.log(s"queryName:$queryName appId:$appId rows:${qfResultSet.getNumRows} " +
+                  s"tableName:$tableName part:${part.index} " +
+                  s"timeNs:$elapsed query:$query")
     // return the result and the connection so we can close it later.
     result
   }

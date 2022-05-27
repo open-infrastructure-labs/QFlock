@@ -47,7 +47,6 @@ import org.apache.spark.sql.types._
  */
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
-  protected var generationId = 0
 
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
@@ -238,7 +237,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                filters: Seq[Expression],
                                child: LogicalPlan)
   : LogicalPlan = {
-    generationId += 1
+    val generationId = QflockOptimizationRule.getGenerationId
     val relationArgs = QflockRelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
 
@@ -289,6 +288,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("appId", s"$appId-$generationId")
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
+    opt.put("queryName", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
     val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
@@ -556,6 +556,12 @@ object QflockOptimizationRule extends Rule[LogicalPlan] {
       .getOrCreate()
   def apply(logicalPlan: LogicalPlan): LogicalPlan = {
     QflockRule(spark).apply(logicalPlan)
+  }
+  private var generationId: Int = 0
+
+  def getGenerationId: Int = {
+    generationId += 1
+    generationId
   }
 }
 object QflockRuleBuilder {
