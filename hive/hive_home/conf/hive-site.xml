@@ -1346,12 +1346,12 @@
   </property>
   <property>
     <name>hive.jar.path</name>
-    <value>/opt/hive/apache-hive-3.1.2-bin/lib</value>
+    <value>/opt/hive/apache-hive-2.3.8-bin/lib</value>
     <description>The location of hive_cli.jar that is used when submitting jobs in a separate jvm.</description>
   </property>
   <property>
     <name>hive.aux.jars.path</name>
-    <value>/opt/hive/apache-hive-3.1.2-bin/lib</value>
+    <value/>
     <description>The location of the plugin jars that contain implementations of user defined functions and serdes.</description>
   </property>
   <property>
