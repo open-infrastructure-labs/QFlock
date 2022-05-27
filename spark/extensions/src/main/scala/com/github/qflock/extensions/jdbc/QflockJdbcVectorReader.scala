@@ -100,7 +100,6 @@ class QflockJdbcVectorReader(schema: StructType,
     logger.debug(s"connecting to $url")
     val properties = new Properties
     properties.setProperty("compression", "true")
-    properties.setProperty("bufferSize", "42")
     properties.setProperty("rowGroupOffset", part.offset.toString)
     properties.setProperty("rowGroupCount", part.length.toString)
     properties.setProperty("tableName", options.get("tableName"))
