@@ -118,10 +118,12 @@ class QflockBench:
                                          parents=parents)
         parser.add_argument("--debug", "-dbg", action="store_true",
                             help="enable debugger")
+        parser.add_argument("--verbose", "-v", action="store_true",
+                            help="Increase verbosity of output.")
         parser.add_argument("--terse", "-t", action="store_true",
                             help="Limited output.")
-        parser.add_argument("--extensions", "-ext", action="store_true",
-                            help="enable extensions")
+        parser.add_argument("--extensions", "-ext", default=None,
+                            help="enable extensions (explain, jdbc, ds)")
         parser.add_argument("--log_level", "-ll", default="OFF",
                             help="log level set to input arg.\n"
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
@@ -170,33 +172,20 @@ class QflockBench:
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
         self._wait_for_string = None
+        if not self._args.verbose:
+            # IF we are not verbose Then we are terse by default.
+            self._args.terse = True
         if not self._args.terse:
             self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
         if "--capture_log_level" in self._remaining_args:
             self._wait_for_string = None
         return True
 
-    def process_cmd_status(self, cmd, status, output):
-        if status != 0:
-            self._test_failures += 1
-            failure = "test failed with status {0} cmd {0}".format(status, cmd)
-            self._test_results.append(failure)
-            print(failure)
-        line_num = 0
+    def process_cmd_status(self, output):
         for line in output:
-            if line_num > 0:
-                line_num += 1
-            if status == 0 and (("Cmd Failed" in line) or ("FAILED" in line)):
-                self._test_failures += 1
-                failure = "test failed cmd: {0}".format(cmd)
-                print(failure)
-                self._test_results.append(failure)
-            if "Test Results" in line:
-                line_num += 1
-            if line_num == 4:
-                print(line.rstrip())
-                self._test_results.append(line)
-                break
+            if ("Cmd Failed" in line) or ("FAILED" in line):
+                return False
+        return True
 
     def show_results(self):
         if os.path.exists(self._args.results):
@@ -217,25 +206,40 @@ class QflockBench:
 
     def run_query(self):
         # timestr = time.strftime("%Y%m%d-%H%M%S")
+        failure_count = 0
+        success_count = 0
         for w in self._workers_list:
             idx = 0
             for q in self._query_list:
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)} ' + \
                       f'--test_num {idx} '
+                if self._args.extensions == "explain":
+                    # Auto enable explain on this query if we are using explain extension.
+                    cmd += '--explain --ext explain'
+                if self._args.extensions == "jdbc":
+                    cmd += '--ext jdbc '
+                if self._args.extensions == "ds":
+                    # Auto enable qflock_ds if we are using qflock_ds extension.
+                    cmd += '--qflock_ds '
                 if self._args.output_path:
                     cmd += f'--output_path {self._args.output_path} '
                 rc, output = self._spark_launcher.spark_submit(cmd, workers=w,
                                                                enable_stdout=self._args.log_level != "OFF",
                                                                wait_text=self._wait_for_string)
+                output_status = self.process_cmd_status(output)
                 if rc != 0:
                     self._exit_code = rc
+                if not output_status or rc != 0:
+                    failure_count += 1
+                else:
+                    success_count += 1
                 idx += 1
-        print("")
         # self.show_results()
-        self.display_elapsed()
-        if self._test_failures > 0:
-            print("test failures: {0}".format(self._test_failures))
+        #self.display_elapsed()
+
+        print("")
+        print(f"SUCCESS: {success_count} FAILURE: {failure_count}")
 
     def run_cmd(self):
         cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} '
@@ -247,6 +251,14 @@ class QflockBench:
             cmd += f'--query_text "{self._args.query_text}" '
         if self._args.view_columns:
             cmd += f'--view_columns "{self._args.view_columns}" '
+        if self._args.extensions == "explain":
+            # Auto enable explain on this query if we are using explain extension.
+            cmd += '--explain --ext explain '
+        if self._args.extensions == "jdbc":
+            cmd += '--ext jdbc '
+        if self._args.extensions == "ds":
+            # Auto enable qflock_ds if we are using qflock_ds extension.
+            cmd += '--qflock_ds '
         cmd += " ".join(self._remaining_args)
         cmd += self._extra_args
 

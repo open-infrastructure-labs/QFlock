@@ -17,6 +17,7 @@
 import os
 import sys
 import subprocess
+import logging
 
 
 def run_command(command, show_cmd=False,
@@ -30,12 +31,12 @@ def run_command(command, show_cmd=False,
     else:
         mode = "w"
     if log_file != "":
-        print("opening {}".format(log_file))
+        logging.info("opening {}".format(log_file))
         log_fd = open(log_file, mode)
     if show_cmd or debug:
-        print("{}: {} ".format(sys.argv[0], command))
+        logging.info("{}: {} ".format(sys.argv[0], command))
     if dry_run:
-        # print("")
+        # logging.info("")
         return 0, output_lines
     if wait_for_string:
         enable_stdout = False

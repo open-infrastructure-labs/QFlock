@@ -16,10 +16,9 @@
  */
 package com.github.qflock.extensions.rules
 
-import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, ExpressionSet, PredicateHelper, SubqueryExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{Filter => LogicalFilter, LogicalPlan, OrderPreservingUnaryNode, Statistics}
+import org.apache.spark.sql.catalyst.expressions.Expression
+import org.apache.spark.sql.catalyst.plans.logical.{Filter => LogicalFilter, LogicalPlan, Statistics}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
-import org.apache.spark.sql.catalyst.trees.TreePattern.{FILTER, TreePattern}
 
 class QflockFilter(override val condition: Expression, override val child: LogicalPlan)
   extends LogicalFilter(condition, child) {

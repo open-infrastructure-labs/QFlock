@@ -1,7 +1,8 @@
 #!/bin/bash
-
+set -e
 pushd "$(dirname "$0")"
-source ../docker/spark_version
+ROOT_DIR=$(git rev-parse --show-toplevel)
+source $ROOT_DIR/scripts/spark/spark_version
 source ../docker/setup.sh
 WORKING_DIR=$(pwd)
 echo "WORKING_DIR: $WORKING_DIR"
@@ -16,19 +17,21 @@ if [ ! -d $SPARK_JAR_DIR ]; then
   echo "Please build spark before building extensions"
   exit 1
 fi
+JDBC_JAR_DIR=$ROOT_DIR/jdbc/driver/target/
+if [ ! -d $JDBC_JAR_DIR ]; then
+  echo "Please build jdbc driver ($JDBC_JAR_DIR) before building extensions"
+  exit 1
+fi
 if [ ! -d ./lib ]; then
   mkdir ./lib
 fi
 if [ ! -d build ]; then
   mkdir build
 fi
-echo "Copy over spark jars"
+echo "Copy over spark jars ($SPARK_JAR_DIR)"
 cp $SPARK_JAR_DIR/*.jar ./lib
-
-#SPARK_TEST_JAR_DIR=../spark/spark/
-#cp $SPARK_TEST_JAR_DIR/sql/core/target/spark-sql_2.12-${SPARK_VERSION}-tests.jar ./lib
-#cp $SPARK_TEST_JAR_DIR/sql/catalyst/target/spark-catalyst_2.12-${SPARK_VERSION}-tests.jar ./lib
-#cp $SPARK_TEST_JAR_DIR/core/target/spark-core_2.12-${SPARK_VERSION}-tests.jar ./lib
+echo "Copy over jdbc jars ($JDBC_JAR_DIR)"
+cp $JDBC_JAR_DIR/*.jar ./lib
 
 if [ "$#" -gt 0 ]; then
   if [ "$1" == "-d" ]; then

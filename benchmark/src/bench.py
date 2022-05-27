@@ -16,8 +16,10 @@
 # limitations under the License.
 #
 import os
+import time
 import argparse
 from argparse import RawTextHelpFormatter
+import logging
 
 from pyfiglet import Figlet
 import yaml
@@ -27,6 +29,7 @@ from benchmark.benchmark_factory import BenchmarkFactory
 from benchmark.metastore import MetastoreClient
 from framework_tools.spark_helper import SparkHelper
 from benchmark.config import Config
+from benchmark.bench_logging import setup_logger
 
 
 class BenchmarkApp:
@@ -34,18 +37,19 @@ class BenchmarkApp:
     def __init__(self):
         self._args = None
         self._config = None
+        self._start_time = time.time()
 
     def _load_config(self):
         config_file = self._args.file
         if not os.path.exists(config_file):
-            print(f"{config_file} is missing.  Please add it.")
+            logging.info(f"{config_file} is missing.  Please add it.")
             exit(1)
         with open(config_file, "r") as fd:
             try:
                 self._config = yaml.safe_load(fd)
             except yaml.YAMLError as err:
-                print(err)
-                print(f"{config_file} is missing.  Please add it.")
+                logging.info(err)
+                logging.info(f"{config_file} is missing.  Please add it.")
                 exit(1)
 
     def get_parser(self, parent_parser=False):
@@ -75,6 +79,8 @@ class BenchmarkApp:
                                      "(.csv and/or .parquet is added to folder name)")
             parser.add_argument("--test_num", default=0, type=int,
                                 help="The index of the test")
+            parser.add_argument("--qflock_ds", action="store_true",
+                                help="Use qflock parquet datasource")
         parser.add_argument("--init_all", action="store_true",
                             help="Equivalent to --gen_data, --gen_parquet, \n"
                                  "--create_catalog, --compute_stats, --view_catalog")
@@ -104,6 +110,8 @@ class BenchmarkApp:
                             help="log level to capture to file.")
         parser.add_argument("--continue_on_error", action="store_true",
                             help="continue with remaining queries if query encounters an error.")
+        parser.add_argument("--ext", default=None,
+                            help="Extension to load")
         return parser
 
     def _parse_args(self):
@@ -122,6 +130,7 @@ class BenchmarkApp:
                                               self._args.verbose,
                                               not self._args.no_catalog,
                                               self._args.jdbc,
+                                              self._args.qflock_ds,
                                               self._args.test_num)
 
     def _get_query_config(self):
@@ -153,20 +162,26 @@ class BenchmarkApp:
             catalogs = mclient.client.get_catalogs()
             for catalog_name in ["spark_dc"]:
                 if self._args.verbose:
-                    print(f"qflock::found catalogs {catalogs}")
+                    logging.info(f"qflock::found catalogs {catalogs}")
                 if catalog_name not in catalogs.names:
-                    print(f"qflock::creating catalog {catalog_name}")
+                    logging.info(f"qflock::creating catalog {catalog_name}")
                     mclient.create_catalog(name=catalog_name, description='Spark Catalog for a Data Center',
                                            locationUri='/opt/volume/metastore/metastore_db_DBA')
 
     def run(self):
+        setup_logger()
         if not self._parse_args():
             return
         self._load_config()
-        sh = SparkHelper(verbose=self._args.verbose, jdbc=self._args.jdbc,
+        jdbc_config = None
+        if self._args.jdbc or self._args.ext == "jdbc":
+            jdbc_config = self._config['benchmark']['jdbc-path']
+        sh = SparkHelper(verbose=self._args.verbose, jdbc=jdbc_config,
+                         qflock_ds=self._args.qflock_ds,
                          output_path=self._args.output_path)
         if self._args.jdbc:
             sh.load_extension()
+        sh.load_rule(self._args.ext)
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
@@ -174,10 +189,10 @@ class BenchmarkApp:
         # if not self._args.no_catalog:
         #     self._create_default_catalog()
         if self._args.log_level:
-            print(f"Set log level to {self._args.log_level}")
+            logging.info(f"Set log level to {self._args.log_level}")
             sh.set_log_level(self._args.log_level)
         if self._args.capture_log_level:
-            print(f"Set capture log level to {self._args.capture_log_level}")
+            logging.info(f"Set capture log level to {self._args.capture_log_level}")
             sh.set_log_level(self._args.capture_log_level)
         benchmark = self._get_benchmark(sh)
         BenchmarkApp._banner()
@@ -213,22 +228,24 @@ class BenchmarkApp:
             sh.get_catalog_columns(self._args.view_columns)
         if self._args.delete_catalog:
             benchmark.delete_catalog()
-        if self._args.no_catalog or self._args.jdbc:
+        if self._args.no_catalog or self._args.jdbc or self._args.qflock_ds:
             if self._args.jdbc:
-                print(f"set database {self._config['benchmark']['db-name']}")
+                logging.info(f"set database {self._config['benchmark']['db-name']}")
                 sh.set_db(self._config['benchmark']['db-name'])
             benchmark.create_tables_view()
         if self._args.query_text or self._args.query_file or self._args.query_range:
             for i in range(0, self._args.loops):
                 if self._args.query_text:
-                    benchmark.query_text(self._args.query_text, self._args.explain)
+                    benchmark.query_text(self._args.query_text, self._args.explain,
+                                         self._start_time)
                 elif self._args.query_file:
-                    benchmark.query_file(self._args.query_file, self._args.explain)
+                    benchmark.query_file(self._args.query_file, self._args.explain,
+                                         self._start_time)
                 elif self._args.query_range:
                     qc = self._get_query_config()
                     benchmark.query_range(qc, self._args.explain)
                 if self._args.explain:
-                    print("see logs/explain.txt for output of explain")
+                    logging.info("see logs/explain.txt for output of explain")
 
 
 if __name__ == "__main__":

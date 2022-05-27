@@ -42,8 +42,9 @@ class Benchmark:
 
     @classmethod
     def _get_all_queries(cls, query_path, query_extension, exception_list=None,
-                         start_query=None, end_query=None):
+                         start_query=None, end_query=None, num_queries=None):
         all_queries = []
+        query_count = 0
         if os.path.exists(query_path):
             queries = glob(os.path.join(query_path, f"*.{query_extension}"))
             if exception_list:
@@ -76,11 +77,15 @@ class Benchmark:
                 queries = new_queries
 
             all_queries.extend(queries)
+            if num_queries is not None and len(all_queries) > num_queries:
+                all_queries = all_queries[:num_queries]
         return all_queries
 
     @classmethod
-    def get_query_files(cls, query, query_path, query_extension, exception_list=None):
+    def get_query_files(cls, query, query_path, query_extension, exception_list=None,
+                        num_queries=None):
         query_list = []
+        query_count = 0
         files = glob(os.path.join(query_path, str(query)) + "*" + query_extension)
         for file in files:
             skip = False
@@ -90,27 +95,36 @@ class Benchmark:
                         skip = True
             if not skip and (re.search(f"\/{query}.sql", file) or re.search(f"\/{query}[a-z].sql", file)):
                 query_list.append(file)
+                query_count += 1
+            if num_queries is not None and query_count >= num_queries:
+                break
         return query_list
 
     @classmethod
     def get_query_list(cls, query, query_path, query_extension, exceptions=None):
         query_list = []
+        num_queries = None
+        if ":" in query:
+            num_queries = int(query.split(":")[1])
+            query = query.split(":")[0]
         query_selections = query.split(",")
         for i in query_selections:
             if i == "*":
-                query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions))
+                query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions,
+                                                             num_queries=num_queries))
             elif "-*" in i:
                 r = i.split("-")
                 if len(r) == 2:
                     query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions,
-                                                                 start_query=r[0]))
+                                                                 start_query=r[0], num_queries=num_queries))
             elif "-" in i:
                 r = i.split("-")
                 if len(r) == 2:
                     query_list.extend(Benchmark._get_all_queries(query_path, query_extension, exceptions,
-                                                                 start_query=r[0], end_query=r[1]))
+                                                                 start_query=r[0], end_query=r[1],
+                                                                 num_queries=num_queries))
             else:
-                qf = Benchmark.get_query_files(str(i), query_path, query_extension, exceptions)
+                qf = Benchmark.get_query_files(str(i), query_path, query_extension, exceptions, num_queries)
                 query_list.extend(qf)
         return query_list
 

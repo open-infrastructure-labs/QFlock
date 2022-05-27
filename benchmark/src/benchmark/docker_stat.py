@@ -16,6 +16,7 @@
 #
 
 import docker
+import logging
 from benchmark.benchmark_stat import BenchmarkStat
 
 

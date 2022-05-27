@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 pushd "$(dirname "$0")"
 source ../docker/setup.sh
 WORKING_DIR=$(pwd)

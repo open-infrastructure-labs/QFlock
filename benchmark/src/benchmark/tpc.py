@@ -16,6 +16,8 @@
 #
 import os
 import shutil
+import time
+import logging
 
 from benchmark.command import shell_cmd
 from benchmark.benchmark import Benchmark
@@ -30,16 +32,18 @@ class TpcBenchmark(Benchmark):
        running queries against those tables."""
 
     def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
-                 jdbc=False, test_num=0):
+                 jdbc=False, qflock_ds=False, test_num=0):
         super().__init__(name, config, framework, tables)
         # self._tables = tables
+        self._catalog_set = False
         self._file_ext = "." + self._config['file-extension']
         self._verbose = verbose
         self._catalog = catalog
         self._jdbc = jdbc
-        if self._jdbc:
+        self._qflock_ds = qflock_ds
+        if self._jdbc or self._qflock_ds:
             self._catalog = False
-        print(f"test_num: {test_num}")
+        logging.info(f"test_num: {test_num}")
         self._test_num = test_num
         self._stat_list = [] #[HdfsLogStat()]
         self._stat_list.extend(DockerStat.get_stats(self._config['docker-stats']))
@@ -68,54 +72,57 @@ class TpcBenchmark(Benchmark):
                     os.remove(dest_path)
                 shutil.move(file_path, dest_path)
                 file_count += 1
-        print(f"{file_count} files copied {self._config['tool-path']} -> "
-              f"{self._config['raw-data-path']}")
+        logging.info(f"{file_count} files copied {self._config['tool-path']} -> "
+                     f"{self._config['raw-data-path']}")
 
-    def query_text(self, query_string, explain=False):
+    def query_text(self, query_string, explain=False, start_time=None):
         if self._catalog:
             self._framework.set_db(self._config['db-name'])
         for s in self._stat_list:
             s.start()
-        print("qflock::starting query::")
-        result = self._framework.query(query_string, explain=explain)
-        print("qflock::query finished::")
+        logging.info("qflock::starting query::")
+        result = self._framework.query(query_string, explain=explain,
+                                       overall_start_time=start_time)
+        logging.info("qflock::query finished::")
         stat_result = ""
         stat_header = ""
         for s in self._stat_list:
             s.end()
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
-        print("qflock::process result::")
-        if result is not None:
-            result.process_result()
-            print("qflock::process result done::")
         if self._test_num == 0:
             print(f"qflock:: ,{result.header()},{stat_header}")
         print(f"qflock:: ,{result.brief_result()},{stat_result}")
         return result
 
-    def query_file(self, query_file, explain=False):
-        if self._catalog:
+    def query_file(self, query_file, explain=False, start_time=None):
+        if self._catalog and not self._catalog_set:
             self._framework.set_db(self._config['db-name'])
+            self._catalog_set = True
+        logging.info("qflock::starting query::")
         for s in self._stat_list:
             s.start()
-        print("qflock::starting query::")
+        if len(os.path.split(query_file)) > 1:
+            query_name = os.path.split(query_file)[1]
+        else:
+            query_name = query_file
         result = self._framework.query_from_file(query_file, explain=explain,
-                                                 limit=self._limit_rows)
-        print("qflock::query finished::")
+                                                 query_name=query_name,
+                                                 limit=self._limit_rows,
+                                                 overall_start_time=start_time)
+        logging.info("qflock::query finished::")
         stat_result = ""
         stat_header = ""
         for s in self._stat_list:
             s.end()
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
-        print("qflock::process result::")
-        if result is not None:
-            result.process_result()
-            print("qflock::process result done::")
-        if self._test_num == 0:
-            print(f"qflock:: ,{result.header()},{stat_header}")
-        print(f"qflock:: ,{result.brief_result()},{stat_result}")
+        if result is None:
+            print(f"qflock:: FAILED,{query_name},{stat_header}")
+        else:
+            if self._test_num == 0:
+                print(f"qflock:: status,{result.header()},{stat_header}")
+            print(f"qflock:: PASSED,{result.brief_result()},{stat_result}")
         return result
 
     def query_range(self, query_config, explain=False):
@@ -126,46 +133,47 @@ class TpcBenchmark(Benchmark):
                                               self._config['query-exceptions'].split(","))
         success_count, failure_count = 0, 0
         if self._verbose:
-            print(f"query_list {query_list}")
-        print(f"query_range {query_config['query_range']}")
+            logging.info(f"query_list {query_list}")
+        logging.info(f"query_range {query_config['query_range']}")
 
         for q in query_list:
-            result = self.query_file(q, explain)
-            if result.status == 0:
+            result = self.query_file(q, explain, start_time=time.time())
+            if result is not None and result.status == 0:
                 success_count += 1
             else:
                 failure_count += 1
                 if query_config.get('continue_on_error') is False:
+                    logging.info(f"qflock:: Failure seen in test {q}")
                     break
             self._test_num += 1
-
-        print(f"SUCCESS: {success_count} FAILURE: {failure_count}")
+        print("qflock:: ")
+        print(f"\nqflock:: SUCCESS: {success_count} FAILURE: {failure_count}")
 
     def write_parquet(self, base_input_path, base_output_path):
         for table in self.tables.get_tables():
             full_output_path = base_output_path + os.path.sep + table + ".parquet"
             full_input_path = base_input_path + os.path.sep + table + self._file_ext
             if not os.path.exists(full_input_path):
-                print(f"input file {full_input_path} does not exist")
+                logging.info(f"input file {full_input_path} does not exist")
                 exit(1)
             if not os.path.exists(full_output_path):
                 self._framework.write_file_as_parquet(self.tables.get_struct_type(table),
                                                       full_input_path,
                                                       full_output_path)
             else:
-                print(f"directory {full_output_path} already exists")
+                logging.info(f"directory {full_output_path} already exists")
 
     def create_catalog(self):
         files_path = self._config['parquet-path']
         if 'hdfs' not in files_path:
             files_path = os.path.abspath(self._config['parquet-path'])
-        print(f"creating catalog for {files_path}")
+        logging.info(f"creating catalog for {files_path}")
         self._framework.create_db(self._config['db-name'])
         self._framework.set_db(self._config['db-name'])
         self._framework.create_tables(self.tables, files_path)
 
     def delete_catalog(self):
-        print(f"deleting catalog {self._config['db-name']}")
+        logging.info(f"deleting catalog {self._config['db-name']}")
         self._framework.set_db(self._config['db-name'])
         self._framework.delete_tables()
         self._framework.delete_db(self._config['db-name'])
@@ -178,28 +186,35 @@ class TpcBenchmark(Benchmark):
             if 'hdfs' not in db_path:
                 db_path = os.path.abspath(self._config['parquet-path'])
         if self._verbose:
-            print(f"qflock::creating table view for {db_path}")
-        self._framework.create_tables_view(self.tables, db_path)
+            logging.info(f"qflock::creating table view for {db_path}")
+        self._framework.create_tables_view(self.tables, db_path, self._config['db-name'])
 
     def compute_stats(self):
         for table in self.tables.get_tables():
-            print(f"computing stats for table {table}")
-            self._framework.query(f"analyze table {table} COMPUTE STATISTICS FOR ALL COLUMNS")
+            logging.info(f"computing stats for table {table}")
+            # We do not want to write out the result, so we simply
+            # collect the result in memory.
+            self._framework.query(f"analyze table {table} COMPUTE STATISTICS FOR ALL COLUMNS",
+                                  collect_only=True)
 
 
 class TpchBenchmark(TpcBenchmark):
     """A TPC-H benchmark, which is capable of generating the TPC-H tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False, test_num=0):
-        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc, test_num)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False,
+                 qflock_ds=False, test_num=0):
+        super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc,
+                         qflock_ds, test_num)
 
 
 class TpcdsBenchmark(TpcBenchmark):
     """A TPC-DS benchmark, which is capable of generating the TPC-DS tables, and
        running queries against those tables."""
 
-    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False, test_num=0):
-        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc, test_num)
+    def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False,
+                 qflock_ds=False, test_num=0):
+        super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc,
+                         qflock_ds, test_num)
 
 

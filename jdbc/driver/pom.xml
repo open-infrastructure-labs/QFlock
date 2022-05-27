@@ -38,6 +38,12 @@ The library includes thrift class, implementation of a server (JDBC gateway) and
 	</properties>
 
 	<dependencies>
+		<!-- https://mvnrepository.com/artifact/com.github.luben/zstd-jni -->
+		<dependency>
+			<groupId>com.github.luben</groupId>
+			<artifactId>zstd-jni</artifactId>
+			<version>1.5.2-2</version>
+		</dependency>
 		<dependency>
 			<groupId>org.apache.thrift</groupId>
 			<artifactId>libthrift</artifactId>

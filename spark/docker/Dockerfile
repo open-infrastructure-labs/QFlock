@@ -39,7 +39,8 @@ RUN apt-get update \
    python3 python3-setuptools python3.8-venv\
  && ln -s /usr/bin/python3 /usr/bin/python \
  && apt install -y python3-pip \
- && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml hive-metastore-client docker\
+ && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml hive-metastore-client \
+                          docker zstandard \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -71,6 +72,7 @@ ADD /${HADOOP_PACKAGE} /opt
 ENV HADOOP_HOME /opt/hadoop-${HADOOP_VERSION}
 ENV LD_LIBRARY_PATH $LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
 RUN echo $LD_LIBRARY_PATH $HADOOP_HOME
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 
 # Setup Spark Environment
 ARG SPARK_VERSION=
@@ -81,6 +83,7 @@ ENV SPARK_PACKAGE_URL https://downloads.apache.org/spark/spark-${SPARK_VERSION}/
 ENV SPARK_SRC /spark
 ENV SPARK_BUILD /build
 ENV SPARK_HOME /opt/spark-${SPARK_VERSION}
+ENV SPARK_CONF_DIR /opt/spark-$SPARK_VERSION/conf/
 ENV PATH $PATH:${SPARK_HOME}/bin
 ENV echo "export SPARK_HOME=/opt/spark" >> ~/.profile
 ENV echo "export SPARK_VERSION=$SPARK_VERSION" >> ~/.profile

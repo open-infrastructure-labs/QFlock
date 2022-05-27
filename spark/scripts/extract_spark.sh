@@ -1,5 +1,7 @@
 #!/bin/bash
-source docker/spark_version
+set -e
+ROOT_DIR=$(git rev-parse --show-toplevel)
+source $ROOT_DIR/scripts/spark/spark_version
 source docker/setup.sh
 echo $SPARK_VERSION
 echo ${SPARK_PACKAGE}

@@ -1,8 +1,9 @@
 #!/bin/bash
 
-source docker/spark_version
+ROOT_DIR=$(git rev-parse --show-toplevel)
+source $ROOT_DIR/scripts/spark/spark_version
 source docker/setup.sh
-echo $SPARK_VERSION
+echo "Spark Version: $SPARK_VERSION"
 
 if [ ! -f ${SPARK_SRC_PACKAGE} ]
 then

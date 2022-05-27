@@ -28,22 +28,25 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=False, output_path=None):
+                 jdbc=None, qflock_ds=False, output_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
+        self._qflock_ds = qflock_ds
         self._output_path = output_path
-        if self._jdbc:
+        if self._jdbc or self._qflock_ds:
             use_catalog = False
         if use_catalog:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
                 .appName(app_name)\
+                .config("qflockJdbcUrl", self._jdbc)\
                 .enableHiveSupport()\
                 .getOrCreate()
         else:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
                 .appName(app_name)\
+                .config("qflockJdbcUrl", self._jdbc)\
                 .getOrCreate()
 
     def set_log_level(self, level="INFO"):
@@ -70,7 +73,19 @@ class SparkHelper:
         gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
-    def create_table_view(self, table, db_path):
+    def load_rule(self, ext):
+        from py4j.java_gateway import java_import
+        gw = self._spark.sparkContext._gateway
+        if ext == "explain":
+            # print("Loading explain rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockExplainRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockExplainRuleBuilder.injectExtraOptimization()
+        elif ext == "jdbc":
+            # print("Loading jdbc rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockRuleBuilder.injectExtraOptimization()
+
+    def create_table_view(self, table, db_path, db_name):
         if self._jdbc:
             df = self._spark.read.option("url", db_path)\
                  .option("batchSize", "100000")\
@@ -79,15 +94,25 @@ class SparkHelper:
                  .option("driver", "com.github.qflock.jdbc.QflockDriver") \
                  .option("dbtable", table).load()
             df.createOrReplaceTempView(table)
+        elif self._qflock_ds:
+            table_path = os.path.join(db_path, f"{table}.parquet")
+            # The table path is something like: hdfs://server/db_dir/table_dir
+            df = self._spark.read\
+                .format("qflockDs") \
+                .option("format", "parquet") \
+                .option("tableName", table) \
+                .option("dbName", db_name) \
+                .load()
+            df.createOrReplaceTempView(table)
         else:
             table_path = os.path.join(db_path, f"{table}.parquet")
             df = self._spark.read.parquet(table_path)
             df.createOrReplaceTempView(table)
 
-    def create_tables_view(self, tables, db_path):
+    def create_tables_view(self, tables, db_path, db_name):
         for t in tables.get_tables():
             print("create temp view table for", t)
-            self.create_table_view(t, db_path)
+            self.create_table_view(t, db_path, db_name)
 
     def get_catalog_info(self):
         databases = {}
@@ -97,6 +122,7 @@ class SparkHelper:
         print("*" * 50)
 
         for db in db_list:
+            self._spark.sql(f"USE {db.name}")
             if self._verbose:
                 self._spark.sql(f"DESCRIBE DATABASE EXTENDED {db.name}").show(5000, False)
             else:
@@ -109,7 +135,8 @@ class SparkHelper:
                 if self._verbose:
                     self._spark.sql(f"DESCRIBE TABLE EXTENDED {db.name}.{tbl.name}").show(5000, False)
                 else:
-                    print(f"  {i}) {tbl.database}.{tbl.name} {tbl.tableType}")
+                    rows = self._spark.sql(f"select * from {tbl.name}").count()
+                    print(f"  {i}) {tbl.database}.{tbl.name} {tbl.tableType} {rows}")
                 i += 1
                 c = 0
                 tables[tbl.name] = {'columns': []}
@@ -171,36 +198,28 @@ class SparkHelper:
             for t in db[d].keys():
                 self.drop_table(t)
 
-    def query(self, query, explain=False, query_name=""):
+    def query(self, query, explain=False, query_name="", collect_only=False,
+              overall_start_time=None):
         start_time = time.time()
-        status = 0
         df = None
-        explain_plan = None
-        rows = []
-        new_df = None
         try:
             if explain:
                 df = self._spark.sql(f"explain cost {query}")
-                explain_plan = df.collect()[0]['plan']
             else:
                 df = self._spark.sql(query)
-                df_rows = df.collect()
-                rows = df_rows
+            result = BenchmarkResult(df, query_start_time=start_time,
+                                     verbose=self._verbose, explain=explain, query_name=query_name,
+                                     output_path=self._output_path, spark_helper=self, query=query,
+                                     overall_start_time=overall_start_time)
+            result.process_result(collect_only)
         except (ValueError, Exception):
             print(f"caught error executing query for {query}")
             print(traceback.format_exc())
-            status = 1
-        duration = time.time() - start_time
-        
-        # Make local df from rows to avoid re-evaluation of df if we want to write it.
-        if not explain:
-            new_df = self._spark.createDataFrame(data=rows, schema=df.schema)
-        
-        return BenchmarkResult(new_df, status=status, duration_sec=duration, explain_text=explain_plan,
-                               verbose=self._verbose, explain=explain, query_name=query_name,
-                               output_path=self._output_path, num_rows=len(rows))
+            result = None
+        return result
 
-    def query_from_file(self, query_file, explain=False, limit=None):
+    def query_from_file(self, query_file, query_name,
+                        explain=False, limit=None, overall_start_time=None):
         with open(query_file, "r") as fd:
             lines = []
             for line in fd.readlines():
@@ -212,7 +231,8 @@ class SparkHelper:
                 query += f" LIMIT {limit}"
             if self._verbose:
                 print(f"Executing spark query {query_file}: {query}")
-            result = self.query(query, explain, query_name=query_file)
+            result = self.query(query, explain, query_name=query_name,
+                                overall_start_time=overall_start_time)
         return result
 
     @staticmethod
@@ -231,7 +251,10 @@ class SparkHelper:
             print(f"input_file {input_file}")
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
         print(f"database {input_file} has {df.count()} rows")
-
+        block_size = 1024 * 1024 * 128
+        # self._spark.sparkContext.hadoopConfiguration.setInt("dfs.blocksize", block_size)
+        # self._spark.sparkContext.hadoopConfiguration.setInt("parquet.block.size", block_size)
+        #df.repartition(1) \
         df.repartition(1).fillna(0).fillna("") \
             .write \
             .option("header", True) \
@@ -253,8 +276,3 @@ class SparkHelper:
     def show_db(self, name):
         self._spark.sql(f"DESCRIBE DATABASE EXTENDED {name}")
 
-# spark = SparkSession.\
-#     builder\
-#     .appName("test")\
-#     .config("spark.sql.extensions","com.github.datasource.generic.FederationExtensions")\
-#     .getOrCreate()

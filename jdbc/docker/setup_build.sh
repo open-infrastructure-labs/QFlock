@@ -1,4 +1,4 @@
-
+set -e
 WORKING_DIR=$(pwd)
 # By mapping the .m2 directory you can do an mvn install from
 # within the container and use the result on your normal
