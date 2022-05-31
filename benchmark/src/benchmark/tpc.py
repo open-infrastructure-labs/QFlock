@@ -75,6 +75,11 @@ class TpcBenchmark(Benchmark):
         logging.info(f"{file_count} files copied {self._config['tool-path']} -> "
                      f"{self._config['raw-data-path']}")
 
+    def log_status(self, message):
+        print(message)
+        with open(os.path.join("data", "results.csv"), "a") as fd:
+            print(message.replace("qflock:: ", ""), file=fd)
+
     def query_text(self, query_string, explain=False, start_time=None):
         if self._catalog:
             self._framework.set_db(self._config['db-name'])
@@ -91,8 +96,8 @@ class TpcBenchmark(Benchmark):
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
         if self._test_num == 0:
-            print(f"qflock:: ,{result.header()},{stat_header}")
-        print(f"qflock:: ,{result.brief_result()},{stat_result}")
+            self.log_status(f"qflock:: ,{result.header()},{stat_header}")
+        self.log_status(f"qflock:: ,{result.brief_result()},{stat_result}")
         return result
 
     def query_file(self, query_file, explain=False, start_time=None):
@@ -118,11 +123,11 @@ class TpcBenchmark(Benchmark):
             stat_result += f"{str(s)},"
             stat_header += f"{str(s.header)},"
         if result is None:
-            print(f"qflock:: FAILED,{query_name},{stat_header}")
+            self.log_status(f"qflock:: FAILED,{query_name},{stat_header}")
         else:
             if self._test_num == 0:
-                print(f"qflock:: status,{result.header()},{stat_header}")
-            print(f"qflock:: PASSED,{result.brief_result()},{stat_result}")
+                self.log_status(f"qflock:: status,{result.header()},{stat_header}")
+            self.log_status(f"qflock:: PASSED,{result.brief_result()},{stat_result}")
         return result
 
     def query_range(self, query_config, explain=False):

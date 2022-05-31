@@ -19,6 +19,7 @@ import time
 import re
 import traceback
 import pyspark
+import logging
 from benchmark.benchmark_result import BenchmarkResult
 
 
@@ -31,21 +32,28 @@ class SparkHelper:
                  jdbc=None, qflock_ds=False, output_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
+        self._app_name = app_name
+        self._use_catalog = use_catalog
         self._qflock_ds = qflock_ds
         self._output_path = output_path
+        self.create_spark()
+
+    def create_spark(self, query_name=""):
         if self._jdbc or self._qflock_ds:
             use_catalog = False
         if use_catalog:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
-                .appName(app_name)\
+                .appName(self._app_name)\
+                .config("qflockQueryName", query_name)\
                 .config("qflockJdbcUrl", self._jdbc)\
                 .enableHiveSupport()\
                 .getOrCreate()
         else:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
-                .appName(app_name)\
+                .appName(self._app_name)\
+                .config("qflockQueryName", query_name)\
                 .config("qflockJdbcUrl", self._jdbc)\
                 .getOrCreate()
 
@@ -200,6 +208,8 @@ class SparkHelper:
 
     def query(self, query, explain=False, query_name="", collect_only=False,
               overall_start_time=None):
+        if query_name:
+            self.create_spark(query_name=query_name)
         start_time = time.time()
         df = None
         try:
