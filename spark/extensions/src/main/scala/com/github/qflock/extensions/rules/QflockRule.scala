@@ -285,7 +285,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     val opt = new util.HashMap[String, String](relationArgs.options)
     val path = opt.get("path")
-    opt.put("appId", s"$appId-$generationId")
+    val testNum = spark.conf.get("qflockTestNum")
+    opt.put("appId", s"$appId$testNum-$generationId")
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
     opt.put("queryName", spark.conf.get("qflockQueryName"))

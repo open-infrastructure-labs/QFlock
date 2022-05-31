@@ -87,6 +87,7 @@ class TpcBenchmark(Benchmark):
             s.start()
         logging.info("qflock::starting query::")
         result = self._framework.query(query_string, explain=explain,
+                                       test_num=self._test_num,
                                        overall_start_time=start_time)
         logging.info("qflock::query finished::")
         stat_result = ""
@@ -113,6 +114,7 @@ class TpcBenchmark(Benchmark):
             query_name = query_file
         result = self._framework.query_from_file(query_file, explain=explain,
                                                  query_name=query_name,
+                                                 test_num=self._test_num,
                                                  limit=self._limit_rows,
                                                  overall_start_time=start_time)
         logging.info("qflock::query finished::")
