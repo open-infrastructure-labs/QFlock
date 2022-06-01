@@ -7,28 +7,45 @@ ROOT_DIR=$(pwd)
 
 DOCKER_DIR=${ROOT_DIR}
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
-DOCKER_NAME=qflock-hive
+DOCKER_NAME=qflock-hive-2.3.8
 
 # Download Hadoop
-ENV_HADOOP_VERSION=3.3.0
+ENV_HADOOP_VERSION=2.7.2
 if [ ! -f ${DOCKER_DIR}/hadoop-${ENV_HADOOP_VERSION}.tar.gz ]
 then
   echo "Downloading hadoop-${ENV_HADOOP_VERSION}.tar.gz"
   curl -L https://archive.apache.org/dist/hadoop/common/hadoop-${ENV_HADOOP_VERSION}/hadoop-${ENV_HADOOP_VERSION}.tar.gz  --output ${DOCKER_DIR}/hadoop-${ENV_HADOOP_VERSION}.tar.gz
 fi
 
-if [ ! -f ${DOCKER_DIR}/apache-hive-3.1.2-bin.tar.gz ]
+# Download HIVE
+ENV_HIVE_VERSION=2.3.8
+if [ ! -f ${DOCKER_DIR}/apache-hive-${ENV_HIVE_VERSION}-bin.tar.gz ]
 then
-  echo "Downloading apache-hive-3.1.2-bin.tar.gz"
-  curl -L https://downloads.apache.org/hive/hive-3.1.2/apache-hive-3.1.2-bin.tar.gz --output ${DOCKER_DIR}/apache-hive-3.1.2-bin.tar.gz
+  echo "Downloading apache-hive-${ENV_HIVE_VERSION}-bin.tar.gz"
+  curl -L https://archive.apache.org/dist/hive/hive-${ENV_HIVE_VERSION}//apache-hive-${ENV_HIVE_VERSION}-bin.tar.gz  --output ${DOCKER_DIR}/apache-hive-${ENV_HIVE_VERSION}-bin.tar.gz
 fi
 
-if [ ! -f ${DOCKER_DIR}/apache-tez-0.10.1-bin.tar.gz ]
-then
-  echo "Downloading apache-tez-0.10.1-bin.tar.gz"
-  curl -L https://downloads.apache.org/tez/0.10.1/apache-tez-0.10.1-bin.tar.gz --output ${DOCKER_DIR}/apache-tez-0.10.1-bin.tar.gz
-fi
+# Download Tez
+ENV_TEZ_VERSION=0.9.2
+#if [ ! -f ${DOCKER_DIR}/apache-tez-${ENV_TEZ_VERSION}-bin.tar.gz ]
+#then
+#  echo "Downloading apache-tez-${ENV_TEZ_VERSION}-bin.tar.gz"
+#  curl -L https://downloads.apache.org/tez/${ENV_TEZ_VERSION}/apache-tez-${ENV_TEZ_VERSION}-bin.tar.gz  --output ${DOCKER_DIR}/apache-tez-${ENV_TEZ_VERSION}-bin.tar.gz
+#fi
+rm -rf tez
+echo "Download tez source code and switch to branch-0.9.2"
+git clone https://github.com/apache/tez.git
+cd tez
+git switch branch-0.9.2
+git apply ../qflock-tez.patch
 
+# Download protobuf 2.5.0 required by tez
+ENV_PROTOBUF_VERSION=2.5.0
+if [ ! -f ${DOCKER_DIR}/protobuf-${ENV_PROTOBUF_VERSION}.tar.gz ]
+then
+  echo "Downloading protobuf-${ENV_PROTOBUF_VERSION}.tar.gz"
+  curl -L https://github.com/google/protobuf/releases/download/v${ENV_PROTOBUF_VERSION}/protobuf-${ENV_PROTOBUF_VERSION}.tar.gz --output ${DOCKER_DIR}/protobuf-${ENV_PROTOBUF_VERSION}.tar.gz
+fi
 
 DOCKER_CMD="docker build -t ${DOCKER_NAME} --build-arg HADOOP_VERSION -f $DOCKER_FILE $DOCKER_DIR"
 eval "$DOCKER_CMD"

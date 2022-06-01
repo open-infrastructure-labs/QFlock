@@ -1346,7 +1346,7 @@
   </property>
   <property>
     <name>hive.jar.path</name>
-    <value/>
+    <value>/opt/hive/apache-hive-2.3.8-bin/lib</value>
     <description>The location of hive_cli.jar that is used when submitting jobs in a separate jvm.</description>
   </property>
   <property>
@@ -1849,7 +1849,7 @@
   </property>
   <property>
     <name>hive.querylog.location</name>
-    <value>${system:java.io.tmpdir}/${system:user.name}</value>
+    <value>/tmp/hive/java</value>
     <description>Location of Hive run time structured log file</description>
   </property>
   <property>
@@ -2450,12 +2450,12 @@
   </property>
   <property>
     <name>hive.tez.container.size</name>
-    <value>-1</value>
+    <value/>
     <description>By default Tez will spawn containers of the size of a mapper. This can be used to overwrite.</description>
   </property>
   <property>
     <name>hive.tez.cpu.vcores</name>
-    <value>-1</value>
+    <value/>
     <description>
       By default Tez will ask for however many cpus map-reduce is configured to use per container.
       This can be used to overwrite.
@@ -4276,7 +4276,7 @@
   </property>
   <property>
     <name>hive.server2.active.passive.ha.enable</name>
-    <value>false</value>
+    <value>true</value>
     <description>Whether HiveServer2 Active/Passive High Availability be enabled when Hive Interactive sessions are enabled.This will also require hive.server2.support.dynamic.service.discovery to be enabled.</description>
   </property>
   <property>
@@ -5096,7 +5096,7 @@
   </property>
   <property>
     <name>hive.execution.engine</name>
-    <value>mr</value>
+    <value>tez</value>
     <description>
       Expects one of [mr, tez, spark].
       Chooses execution engine. Options are: mr (Map reduce, default), tez, spark. While MR
