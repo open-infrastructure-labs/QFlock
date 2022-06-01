@@ -2,6 +2,13 @@
 
 # One time setup
 
+# Download build dependencies
+```shell
+sudo apt-get update
+sudo apt-get install curl git docker.io build-essential bison flex
+```
+
+# Clone QFlock repository
 ```shell
 git submodule  init
 git submodule update --recursive --progress
