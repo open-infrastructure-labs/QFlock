@@ -1,4 +1,4 @@
-#! /usr/bin/python3
+#!/usr/bin/env python3
 import sys
 
 class ParseQflockLog:
@@ -7,6 +7,15 @@ class ParseQflockLog:
         self._file = qflock_log
         self.log = {}
         self.parse_log()
+        self.log_by_test = {}
+        self.get_log_by_test()
+
+    def get_log_by_test(self):
+        for query, log in self.log.items():
+            if log['name'] in self.log_by_test:
+                print(f"get_log_by_test: duplicate test name {log['name']}, dropping")
+            else:
+                self.log_by_test[log['name']] = log
 
     def parse_log(self):
         self.log = {}

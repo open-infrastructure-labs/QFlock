@@ -38,7 +38,7 @@ class DockerStat(BenchmarkStat):
         self._container_name = container_name
         self._stat_name = stat_name
         self._adapter = adapter
-        self.header = f"{self._container_name}:{self._stat_name}"
+        self.header = f"{self._container_name}:{self._stat_name}:{self._adapter}"
 
     def start(self):
         if self._enabled:
