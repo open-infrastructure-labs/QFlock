@@ -63,7 +63,7 @@ class AnalyzeData:
         self.load_tables(os.path.join(self._data_dir, 'tables.csv'))
         self.load_queries(os.path.join(self._data_dir, 'queries.csv'))
         self.load_results(os.path.join(self._data_dir, 'combined_results.csv'))
-        qflock_log = ParseQflockLog("data/qflock_log.txt")
+        qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
         self._qflock_log = qflock_log.log
         self._qflock_log_by_test = qflock_log.log_by_test
 
