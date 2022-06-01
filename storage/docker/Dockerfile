@@ -38,7 +38,7 @@ ADD /apache-hive-3.1.2-bin.tar.gz /opt/hive
 # Fix guava incompatibility issue
 ENV HADOOP_HOME=/opt/hadoop/hadoop-3.3.0
 ENV HIVE_HOME=/opt/hive/apache-hive-3.1.2-bin
-RUN rm ${HIVE_HOME}/lib/guava-19.0.jar \
+RUN mv ${HIVE_HOME}/lib/guava-19.0.jar ${HIVE_HOME}/lib/guava-19.0.jar.save \
     && cp ${HADOOP_HOME}/share/hadoop/hdfs/lib/guava-27.0-jre.jar $HIVE_HOME/lib/
 
 RUN apt-get -q update \
