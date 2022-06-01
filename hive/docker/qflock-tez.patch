@@ -1,0 +1,23 @@
+diff --git a/pom.xml b/pom.xml
+index 287cd413e..5a637a496 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -291,10 +291,6 @@
+             <groupId>commons-logging</groupId>
+             <artifactId>commons-logging-api</artifactId>
+           </exclusion>
+-          <exclusion>
+-            <groupId>org.eclipse.jetty</groupId>
+-            <artifactId>jetty-server</artifactId>
+-          </exclusion>
+           <exclusion>
+             <groupId>org.eclipse.jetty</groupId>
+             <artifactId>jetty-util</artifactId>
+@@ -764,7 +760,6 @@
+     <module>tez-tests</module>
+     <module>tez-dag</module>
+     <module>tez-ext-service-tests</module>
+-    <module>tez-ui</module>
+     <module>tez-plugins</module>
+     <module>tez-tools</module>
+     <module>hadoop-shim-impls</module>
