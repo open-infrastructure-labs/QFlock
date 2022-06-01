@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
+import sys
 import os
 import csv
 import re
@@ -180,7 +181,7 @@ class AnalyzeData:
         parser.add_argument("--dir", "-D", default=None, required=True,
                             help="folder for data files")
         parser.add_argument("--func", default=None, required=True,
-                            help="analysis function.  --func for list")
+                            help="analysis function. \"--func list\" for list of functions.")
         self._args = parser.parse_args()
 
         if not os.path.exists(self._args.dir):
@@ -191,10 +192,10 @@ class AnalyzeData:
 
     def run(self):
         self.parse_args()
-        if self._args.func is None:
+        if self._args.func == "list":
             print("available functions:")
             for f in AnalyzeData.functions:
-                print(f)
+                print("  " + f)
         else:
             self.load_data()
             self.curate_data()
