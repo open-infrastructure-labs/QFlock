@@ -1,4 +1,5 @@
-
+#!/usr/bin/python3
+import os
 from metastore_client import HiveMetastoreClient
 
 import pyarrow.parquet
@@ -24,6 +25,8 @@ class TableMetadata:
         return num_rows, num_row_groups
 
     def get_table_info(self):
+        if not os.path.exists("data"):
+            os.mkdir("data")
         db_name = 'tpcds'
         table_names = self._metastore_client.client.get_all_tables(db_name)
 
@@ -32,7 +35,8 @@ class TableMetadata:
         tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
 
         with open("data/tables.csv", "w") as fd:
-            print("path,data center,bytes,rows", file=fd)
+            print("table name,path,data center,bytes,metastore rows,metastore row groups," +
+                  "parquet rows,parquet row groups", file=fd)
             for tbl in tables:
                 dc = "dc1" if "dc1" in tbl.sd.location else "dc2"
                 rows, row_groups = self.get_file_stats(tbl.sd.location)

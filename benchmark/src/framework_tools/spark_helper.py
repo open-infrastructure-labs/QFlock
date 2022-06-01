@@ -38,14 +38,15 @@ class SparkHelper:
         self._output_path = output_path
         self.create_spark()
 
-    def create_spark(self, query_name=""):
+    def create_spark(self, query_name="", test_num="0"):
         if self._jdbc or self._qflock_ds:
-            use_catalog = False
-        if use_catalog:
+            self._use_catalog = False
+        if self._use_catalog:
             self._spark = pyspark.sql.SparkSession\
                 .builder\
                 .appName(self._app_name)\
                 .config("qflockQueryName", query_name)\
+                .config("qflockTestNum", test_num)\
                 .config("qflockJdbcUrl", self._jdbc)\
                 .enableHiveSupport()\
                 .getOrCreate()
@@ -54,6 +55,7 @@ class SparkHelper:
                 .builder\
                 .appName(self._app_name)\
                 .config("qflockQueryName", query_name)\
+                .config("qflockTestNum", test_num)\
                 .config("qflockJdbcUrl", self._jdbc)\
                 .getOrCreate()
 
@@ -206,10 +208,10 @@ class SparkHelper:
             for t in db[d].keys():
                 self.drop_table(t)
 
-    def query(self, query, explain=False, query_name="", collect_only=False,
+    def query(self, query, explain=False, query_name="", test_num="", collect_only=False,
               overall_start_time=None):
         if query_name:
-            self.create_spark(query_name=query_name)
+            self.create_spark(query_name=query_name, test_num=test_num)
         start_time = time.time()
         df = None
         try:
@@ -228,7 +230,7 @@ class SparkHelper:
             result = None
         return result
 
-    def query_from_file(self, query_file, query_name,
+    def query_from_file(self, query_file, query_name, test_num,
                         explain=False, limit=None, overall_start_time=None):
         with open(query_file, "r") as fd:
             lines = []
@@ -242,6 +244,7 @@ class SparkHelper:
             if self._verbose:
                 print(f"Executing spark query {query_file}: {query}")
             result = self.query(query, explain, query_name=query_name,
+                                test_num=test_num,
                                 overall_start_time=overall_start_time)
         return result
 

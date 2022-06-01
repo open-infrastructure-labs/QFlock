@@ -82,7 +82,26 @@ public class QflockResultSet implements ResultSet {
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
     }
-
+    public Integer getSize() {
+        Integer totalColBytes = 0;
+        Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
+        Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
+        Integer columnIndex = 0;
+        while (colBytesIterator.hasNext()) {
+            int colBytes = colBytesIterator.next();
+            int compColBytes = compColBytesIterator.next();
+            if (colBytes != compColBytes) {
+                totalColBytes += compColBytes;
+            } else {
+                totalColBytes += colBytes;
+            }
+        }
+        Integer columns = this.resultset.columnBytes.size();
+        // Add on size of column bytes, column bytes, column type bytes (all ints)
+        totalColBytes += columns * 4 * 3;
+        // We (for now) exclude the size of the metadata
+        return totalColBytes;
+    }
     private void getColumnResults() throws SQLException {
         Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
         Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
