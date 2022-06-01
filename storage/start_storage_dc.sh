@@ -41,8 +41,15 @@ mkdir -p ${ROOT_DIR}/data
 CMD="bin/run_services.sh"
 RUNNING_MODE="daemon"
 
+# We need to be absolutely sure that ssh configuration exists
+mkdir -p ${ROOT_DIR}/volume/ssh
+touch ${ROOT_DIR}/volume/ssh/authorized_keys
+touch ${ROOT_DIR}/volume/ssh/config
+
 DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/data:/data \
+  -v ${ROOT_DIR}/volume/ssh/authorized_keys:/home/${USER_NAME}/.ssh/authorized_keys \
+  -v ${ROOT_DIR}/volume/ssh/config:/home/${USER_NAME}/.ssh/config \
   -v ${ROOT_DIR}/volume/${DC}/namenode:/opt/volume/namenode \
   -v ${ROOT_DIR}/volume/${DC}/datanode0:/opt/volume/datanode \
   -v ${ROOT_DIR}/volume/${DC}/metastore:/opt/volume/metastore \
@@ -57,6 +64,7 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -e HADOOP_HOME=${HADOOP_HOME} \
   -e HIVE_HOME=${HIVE_HOME} \
   -e RUNNING_MODE=${RUNNING_MODE} \
+  -e USER=${USER_NAME} \
   --network qflock-net-${DC} \
   --name qflock-storage-${DC}  --hostname qflock-storage-${DC} \
   qflock-storage-${USER_NAME} ${CMD}"
