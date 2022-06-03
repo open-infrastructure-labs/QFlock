@@ -30,7 +30,7 @@ HADOOP_CLASSPATH=${HIVE_HOME}/lib/*:${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/li
 #HADOOP_CLASSPATH=${TEZ_CONF_DIR}:${TEZ_JARS}/*:${TEZ_JARS}/lib/*
 
 # Create NameNode and DataNode mount points
-# mkdir -p ${ROOT_DIR}/volume/namenode
+mkdir -p ${ROOT_DIR}/volume/namenode
 mkdir -p ${ROOT_DIR}/volume/datanode0
 mkdir -p ${ROOT_DIR}/volume/logs
 
