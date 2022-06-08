@@ -3,6 +3,16 @@
 
 <configuration>
     <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///opt/volume/namenode</value>
+    </property>
+
+    <property>
+        <name>dfs.namenode.handler.count</name>
+        <value>100</value>
+    </property>
+
+    <property>
         <name>dfs.data.dir</name>
         <value>file:///opt/volume/datanode</value>
     </property>

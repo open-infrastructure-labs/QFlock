@@ -12,6 +12,11 @@ export CLASSPATH=$(bin/hadoop classpath)
 echo "Start ssh service"
 sudo service ssh restart
 
+echo "Starting Hive cluster Name Node ..."
+if [ ! -f /opt/volume/namenode/current/VERSION ]; then
+    $HADOOP_PREFIX/bin/hdfs namenode -format
+fi
+$HADOOP_PREFIX/sbin/hadoop-daemon.sh --config $HADOOP_CONF_DIR --script hdfs start namenode
 echo "Starting Data Node ..."
 $HADOOP_PREFIX/sbin/hadoop-daemon.sh --config $HADOOP_CONF_DIR --script hdfs start datanode
 echo "start yarn Resource Manager"
@@ -30,6 +35,8 @@ if [ ! -f /opt/volume/metastore/metastore_db/dbex.lck ]; then
   "${HADOOP_HOME}/bin/hdfs" dfs -chmod g+w /user/hive/warehouse
   $HIVE_HOME/bin/schematool -dbType derby -initSchema
 fi
+$HIVE_HOME/bin/hive --service metastore &> /opt/volume/metastore/metastore.log &
+sleep 1
 
 # Tez setup, with hadoop in one tar ball 
 #echo "Setting up Apache tez in the cluster..."
