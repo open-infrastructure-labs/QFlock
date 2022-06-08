@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -81,6 +81,10 @@ class BenchmarkApp:
                                 help="The index of the test")
             parser.add_argument("--qflock_ds", action="store_true",
                                 help="Use qflock parquet datasource")
+            parser.add_argument("--results_path", default=None,
+                                help="directory for perf results.")
+            parser.add_argument("--results_file", default=None,
+                                help="file for perf results.")
         parser.add_argument("--init_all", action="store_true",
                             help="Equivalent to --gen_data, --gen_parquet, \n"
                                  "--create_catalog, --compute_stats, --view_catalog")
@@ -131,7 +135,9 @@ class BenchmarkApp:
                                               not self._args.no_catalog,
                                               self._args.jdbc,
                                               self._args.qflock_ds,
-                                              self._args.test_num)
+                                              self._args.test_num,
+                                              results_file=self._args.results_file,
+                                              results_path=self._args.results_path)
 
     def _get_query_config(self):
         qc = {}
@@ -203,23 +209,23 @@ class BenchmarkApp:
             self._args.compute_stats = True
             self._args.view_catalog = True
         if self._args.gen_data:
-            self.trace("Starting to generate {} data".format(self._config['benchmark']['name']))
+            logging.info("Starting to generate {} data".format(self._config['benchmark']['name']))
             benchmark.generate()
-            self.trace("Generate {} data Complete.".format(self._config['benchmark']['name']))
+            logging.info("Generate {} data Complete.".format(self._config['benchmark']['name']))
         if self._args.gen_parquet:
-            self.trace("Starting to generate {} parquet".format(self._config['benchmark']['name']))
+            logging.info("Starting to generate {} parquet".format(self._config['benchmark']['name']))
             benchmark.write_parquet(self._config['benchmark']['raw-data-path'],
                                     self._config['benchmark']['parquet-path'])
-            self.trace("Generate {} parquet Complete.".format(self._config['benchmark']['name']))
+            logging.info("Generate {} parquet Complete.".format(self._config['benchmark']['name']))
         if self._args.create_catalog:
-            self.trace("Starting to create {} catalog".format(self._config['benchmark']['name']))
+            logging.info("Starting to create {} catalog".format(self._config['benchmark']['name']))
             benchmark.create_catalog()
-            self.trace("Create {} catalog Complete".format(self._config['benchmark']['name']))
+            logging.info("Create {} catalog Complete".format(self._config['benchmark']['name']))
         if self._args.compute_stats:
-            self.trace("Starting to compute {} stats".format(self._config['benchmark']['name']))
+            logging.info("Starting to compute {} stats".format(self._config['benchmark']['name']))
             sh.set_db(self._config['benchmark']['db-name'])
             benchmark.compute_stats()
-            self.trace("Compute {} stats Complete".format(self._config['benchmark']['name']))
+            logging.info("Compute {} stats Complete".format(self._config['benchmark']['name']))
         if self._args.view_catalog:
             self.trace("View {} catalog Starting".format(self._config['benchmark']['name']))
             sh.get_catalog_info()

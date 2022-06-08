@@ -29,8 +29,7 @@ class Query:
         self.dc1_tables = dict()
         self.dc2_tables = dict()
 
-
-class Result:
+class CombinedResult:
     def __init__(self, d: dict):
         self.name = d['query']
         self.jdbc = d['Jdbc Seconds']
@@ -46,23 +45,36 @@ class Result:
 
         self.query = dict()
 
+class Result:
+    def __init__(self, d: dict):
+        self.name = d['query']
+        self.status = d['status']
+        self.rows = int(d['rows'])
+        self.seconds = float(d['seconds'])
+        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-jdbc-dc2:tx_bytes:eth1'])
+        self.spark_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-storage-dc2:tx_bytes:eth1'])
+
 
 class AnalyzeData:
-    functions = ["best_fit", "remote_table_filter"]
+    functions = ["best_fit", "remote_table_filter", "top_10g", "compare"]
 
     def __init__(self):
         self._args = None
         self._data_dir = None
         self._tables = None
         self._queries = None
-        self._results = None
+        self._combined_results = None
+        self._jdbc_results = None
+        self._spark_results = None
         self._qflock_log = None
         self._qflock_log_by_test = None
 
     def load_data(self):
         self.load_tables(os.path.join(self._data_dir, 'tables.csv'))
         self.load_queries(os.path.join(self._data_dir, 'queries.csv'))
-        self.load_results(os.path.join(self._data_dir, 'combined_results.csv'))
+        self._combined_results = self.load_combined_results(os.path.join(self._data_dir, 'combined_results.csv'))
+        self._jdbc_results = self.load_results(os.path.join(self._data_dir, 'jdbc_results.csv'))
+        self._spark_results = self.load_results(os.path.join(self._data_dir, 'spark_results.csv'))
         qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
         self._qflock_log = qflock_log.log
         self._qflock_log_by_test = qflock_log.log_by_test
@@ -75,7 +87,7 @@ class AnalyzeData:
             for t in q.dc2_table_names:
                 q.dc2_tables[t] = self._tables[t]
 
-        for k, r in self._results.items():
+        for k, r in self._combined_results.items():
             if r.name in self._queries.keys():
                 r.query = self._queries[r.name]
 
@@ -97,6 +109,15 @@ class AnalyzeData:
                 queries[q.name] = q
         self._queries = queries
 
+    def load_combined_results(self, file_name: str):
+        results = dict()
+        with open(file_name, newline='') as csv_file:
+            reader = csv.DictReader(csv_file, delimiter=',')
+            for row in reader:
+                r = CombinedResult(row)
+                results[r.name] = r
+        return results
+
     def load_results(self, file_name: str):
         results = dict()
         with open(file_name, newline='') as csv_file:
@@ -104,22 +125,22 @@ class AnalyzeData:
             for row in reader:
                 r = Result(row)
                 results[r.name] = r
-        self._results = results
+        return results
 
     def best_fit(self):
 
-        spark_time = [r.spark for r in self._results.values()]
+        spark_time = [r.spark for r in self._combined_results.values()]
         spark_time.sort(reverse=True)
         # print(spark_time)
         baseline_threshold = spark_time[len(spark_time)//2]  # 50 % of results
 
-        gain = [r.gain for r in self._results.values()]
+        gain = [r.gain for r in self._combined_results.values()]
         gain.sort(reverse=True)
         gain_threshold = gain[len(gain) // 10]  # 10 % of results
 
-        for r in self._results.values():
-            # print(f"{r.name},{r.spark},{r.jdbc},{baseline_threshold},{r.gain},{gain_threshold}," +
-            #       f"{r.query.dc1_table_names},{r.query.dc2_table_names}")
+        for r in self._combined_results.values():
+            print(f"{r.name},{r.spark},{r.jdbc},{baseline_threshold},{r.gain},{gain_threshold}," +
+                  f"{r.query.dc1_table_names},{r.query.dc2_table_names}")
             if r.spark < baseline_threshold:
                 continue
             if r.gain < gain_threshold:
@@ -149,8 +170,9 @@ class AnalyzeData:
 
     def remote_table_filter(self):
         found_count = 0
-        print("query,filters,remote table,queries")
-        for r in self._results.values():
+        gain_count = 0
+        print("query,filters,remote table,gain")
+        for r in self._combined_results.values():
             filter_found = False
             remote_table_found = False
             if r.name in self._qflock_log_by_test:
@@ -171,9 +193,54 @@ class AnalyzeData:
                             if filtered_where_clause != "":
                                 filter_found = True
             if not filter_found or not remote_table_found:
-                print(f"{r.name},{filter_found},{remote_table_found}")
+                print(f"{r.name},{filter_found},{remote_table_found},{r.gain},{r.spark},{r.jdbc}")
                 found_count += 1
-        print(f"{found_count} queries found")
+                if r.gain > 0.2:
+                    gain_count += 1
+        print(f"{found_count} queries found ({gain_count}) with gains > 5%")
+
+    def top_10g(self):
+        results_10g = self.load_combined_results(os.path.join(self._data_dir, 'combined_results_10g.csv'))
+
+        results_10g_sorted = \
+            [(k, results_10g[k].gain) for k in sorted(results_10g, key=lambda x: results_10g[x].gain, reverse=True)]
+
+        index = 0
+        print("test index,test number,10g gain,100g gain,gain difference")
+        for k in results_10g_sorted:
+            if index > 54:
+                 break
+            diff = self._combined_results[k[0]].gain - k[1]
+            print(index, k[0], k[1], self._combined_results[k[0]].gain, diff, sep=",")
+            # if (diff < 0.0):
+            #      print(index, k[0], k[1], self._combined_results[k[0]].gain, diff, sep=",")
+            # if (diff > 0.05):
+            #      print(index, k[0], k[1], self._combined_results[k[0]].gain, diff)
+            index += 1
+
+    def compare(self):
+        print("query,jdbc seconds,spark seconds,gain time,jdbc bytes,spark bytes,gain bytes")
+        for query, jdbc_result in self._jdbc_results.items():
+            spark_result = self._spark_results[query]
+
+            gain_time = (spark_result.seconds - jdbc_result.seconds) / spark_result.seconds
+            gain_bytes = (spark_result.spark_bytes - jdbc_result.jdbc_bytes) / spark_result.spark_bytes
+            self._jdbc_results[query].gain_time = gain_time
+            self._jdbc_results[query].gain_bytes = gain_bytes
+            print(query, jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
+                  jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(gain_bytes * 100, 4),
+                  sep=",")
+
+        results_sorted = \
+            [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_time, reverse=True)]
+
+        for query in results_sorted:
+            spark_result = self._spark_results[query]
+            jdbc_result = self._jdbc_results[query]
+            print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
+                  jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
+                  sep=",")
+
 
     def parse_args(self):
         parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -203,6 +270,10 @@ class AnalyzeData:
                 self.best_fit()
             elif self._args.func == "remote_table_filter":
                 self.remote_table_filter()
+            elif self._args.func == "top_10g":
+                self.top_10g()
+            elif self._args.func == "compare":
+                self.compare()
             else:
                 print(f"Unknown function {self._args.func}")
 

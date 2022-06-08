@@ -73,7 +73,7 @@ class SparkHelper:
 
     def create_tables(self, tables, db_path):
         for t in tables.get_tables():
-            print("create table for", t)
+            logging.info(f"create table for {t}")
             self.create_table(tables, t, db_path)
 
     def load_extension(self):
@@ -263,7 +263,7 @@ class SparkHelper:
             print(f"schema {schema}")
             print(f"input_file {input_file}")
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
-        print(f"database {input_file} has {df.count()} rows")
+        logging.info(f"database {input_file} has {df.count()} rows")
         block_size = 1024 * 1024 * 128
         # self._spark.sparkContext.hadoopConfiguration.setInt("dfs.blocksize", block_size)
         # self._spark.sparkContext.hadoopConfiguration.setInt("parquet.block.size", block_size)

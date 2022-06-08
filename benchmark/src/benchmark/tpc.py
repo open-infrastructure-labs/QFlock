@@ -32,9 +32,18 @@ class TpcBenchmark(Benchmark):
        running queries against those tables."""
 
     def __init__(self, name, config, framework, tables, verbose=False, catalog=True,
-                 jdbc=False, qflock_ds=False, test_num=0):
+                 jdbc=False, qflock_ds=False, test_num=0,
+                 results_file=None, results_path=None):
         super().__init__(name, config, framework, tables)
         # self._tables = tables
+        self._results_path = results_path
+        if self._results_path is None:
+            self._results_path = "data"
+        if not os.path.exists(self._results_path):
+            os.mkdir(self._results_path)
+        self._results_file = results_file
+        if self._results_file is None:
+            self._results_file = "results.csv"
         self._catalog_set = False
         self._file_ext = "." + self._config['file-extension']
         self._verbose = verbose
@@ -77,7 +86,7 @@ class TpcBenchmark(Benchmark):
 
     def log_status(self, message):
         print(message)
-        with open(os.path.join("data", "results.csv"), "a") as fd:
+        with open(os.path.join(self._results_path, self._results_file), "a") as fd:
             print(message.replace("qflock:: ", ""), file=fd)
 
     def query_text(self, query_string, explain=False, start_time=None):
@@ -210,9 +219,9 @@ class TpchBenchmark(TpcBenchmark):
        running queries against those tables."""
 
     def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False,
-                 qflock_ds=False, test_num=0):
+                 qflock_ds=False, test_num=0, results_path=None, results_file=None):
         super().__init__("TPC-H", config, framework, tpch_tables, verbose, catalog, jdbc,
-                         qflock_ds, test_num)
+                         qflock_ds, test_num, results_file, results_path)
 
 
 class TpcdsBenchmark(TpcBenchmark):
@@ -220,8 +229,8 @@ class TpcdsBenchmark(TpcBenchmark):
        running queries against those tables."""
 
     def __init__(self, config, framework, verbose=False, catalog=True, jdbc=False,
-                 qflock_ds=False, test_num=0):
+                 qflock_ds=False, test_num=0, results_file=None, results_path=None):
         super().__init__("TPC-DS", config, framework, tpcds_tables, verbose, catalog, jdbc,
-                         qflock_ds, test_num)
+                         qflock_ds, test_num, results_file, results_path)
 
 
