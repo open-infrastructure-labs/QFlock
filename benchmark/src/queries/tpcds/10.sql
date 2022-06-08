@@ -12,17 +12,17 @@
   ca_county in ('Rush County','Toole County','Jefferson County',
                 'Dona Ana County','La Porte County') and
   cd_demo_sk = c.c_current_cdemo_sk AND
-  exists (select * from store_sales, date_dim
+  exists (select ss_sold_date_sk,d_date_sk from store_sales, date_dim
           where c.c_customer_sk = ss_customer_sk AND
                 ss_sold_date_sk = d_date_sk AND
                 d_year = 2002 AND
                 d_moy between 1 AND 1+3) AND
-   (exists (select * from web_sales, date_dim
+   (exists (select ws_sold_date_sk,d_date_sk from web_sales, date_dim
             where c.c_customer_sk = ws_bill_customer_sk AND
                   ws_sold_date_sk = d_date_sk AND
                   d_year = 2002 AND
                   d_moy between 1 AND 1+3) or
-    exists (select * from catalog_sales, date_dim
+    exists (select cs_sold_date_sk,d_date_sk from catalog_sales, date_dim
             where c.c_customer_sk = cs_ship_customer_sk AND
                   cs_sold_date_sk = d_date_sk AND
                   d_year = 2002 AND
