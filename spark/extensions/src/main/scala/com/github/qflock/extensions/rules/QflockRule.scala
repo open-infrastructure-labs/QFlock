@@ -399,9 +399,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     val output = groupAttrs ++ newOutput.drop(groupAttrs.length)
     val opt = new util.HashMap[String, String](relationArgs.options)
-    val aggregateSql = PushdownSQL.getAggregateExpressionSql(aggregates)
     val query = opt.get("query").split("FROM ").drop(1).mkString(" ")
-    val newQuery = s"SELECT ${aggregateSql} FROM ${query}"
+    val newQuery = PushdownSQL.getAggregateSql(aggregates, groupingExpressions, query)
     opt.put("query", newQuery)
     opt.put("aggregatequery", "true")
     val hdfsScanObject = QflockJdbcScan(output.toStructType, opt)
@@ -491,7 +490,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         aggregate.aggregateFunction match {
           case Min(child: Expression) => aggValidateExpression(child)
           case Max(child: Expression) => aggValidateExpression(child)
-          case count: Count if count.children.length == 1 =>
+          case count@Count(children) if count.children.length == 1 && !aggregate.isDistinct =>
             aggValidateExpression(count.children.head)
           case sum @ Sum(child: Expression, _) => aggValidateExpression(child)
           case _ => false
@@ -537,8 +536,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
-//    val after = pushAggregate(pushFilterProject(inputPlan))
-    val after = pushFilterProject(inputPlan)
+    val after = pushAggregate(pushFilterProject(inputPlan))
+//    val after = pushFilterProject(inputPlan)
     after
   }
 }

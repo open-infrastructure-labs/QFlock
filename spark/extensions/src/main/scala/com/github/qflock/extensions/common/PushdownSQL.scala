@@ -461,7 +461,11 @@ object PushdownSQL {
     }
     def buildCount(value: Any,
                    isDistinct: Boolean = false): String = {
-      s"COUNT(${value})"
+      if (isDistinct) {
+        s"COUNT(DISTINCT ${value})"
+      } else {
+        s"COUNT(${value})"
+      }
     }
     if (aggregate.filter.isEmpty) {
       aggregate.aggregateFunction match {
@@ -503,5 +507,29 @@ object PushdownSQL {
       }
     }
     sql
+  }
+  def getGroupbyExpression(groupingExpressions: Seq[Expression]): String = {
+    var groupbySql = ""
+    for (e <- groupingExpressions) {
+      val expr = {
+        e match {
+          case PushableColumnWithoutNestedColumn(name) =>
+            Some(name)
+        }
+      }
+      groupbySql += s"${expr.get} "
+    }
+    groupbySql
+  }
+  def getAggregateSql(aggregateExpressions: Seq[AggregateExpression],
+                      groupingExpressions: Seq[Expression],
+                      query: String): String = {
+    val aggregateSql = getAggregateExpressionSql(aggregateExpressions)
+    if (groupingExpressions.length == 0) {
+      s"SELECT ${aggregateSql} FROM ${query}"
+    } else {
+      val groupby = getGroupbyExpression(groupingExpressions)
+      s"SELECT ${groupby},${aggregateSql} FROM ${query} GROUP BY ${groupby}"
+    }
   }
 }
