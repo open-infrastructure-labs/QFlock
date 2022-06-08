@@ -103,7 +103,7 @@ class QflockJdbcVectorReader(schema: StructType,
     properties.setProperty("compression", "true")
     properties.setProperty("rowGroupOffset", part.offset.toString)
     properties.setProperty("rowGroupCount", part.length.toString)
-    properties.setProperty("tableName", options.get("tableName"))
+    properties.setProperty("tableName", options.get("tablename"))
     properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
     val startTime = System.nanoTime()
     connection = Some(DriverManager.getConnection(url, properties))
@@ -114,9 +114,9 @@ class QflockJdbcVectorReader(schema: StructType,
     logger.debug(s"Query complete $query")
     val elapsed = System.nanoTime() - startTime
     val qfResultSet = result.asInstanceOf[QflockResultSet]
-    val appId = options.get("appId")
-    val queryName = options.getOrDefault("queryName", "")
-    val tableName = options.get("tableName")
+    val appId = options.get("appid")
+    val queryName = options.getOrDefault("queryname", "")
+    val tableName = options.get("tablename")
     QflockLog.log(s"queryName:$queryName appId:$appId rows:${qfResultSet.getNumRows} " +
                   s"bytes:${qfResultSet.getSize} " +
                   s"tableName:$tableName part:${part.index} " +

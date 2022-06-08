@@ -286,10 +286,10 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val opt = new util.HashMap[String, String](relationArgs.options)
     val path = opt.get("path")
     val testNum = spark.conf.get("qflockTestNum")
-    opt.put("appId", s"$appId$testNum-$generationId")
+    opt.put("appid", s"$appId$testNum-$generationId")
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
-    opt.put("queryName", spark.conf.get("qflockQueryName"))
+    opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
     val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
@@ -299,11 +299,11 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val dbName = catalogTable.identifier.database.getOrElse("")
     val table = ExtHiveUtils.getTable(dbName, tableName)
     val rgParamName = s"spark.qflock.statistics.tableStats.$tableName.row_groups"
-    opt.put("numRows",
+    opt.put("numrows",
       table.getParameters.get("spark.sql.statistics.numRows"))
-    opt.put("numRowGroups",
+    opt.put("numrowgroups",
             table.getParameters.get(rgParamName))
-    opt.put("tableName", tableName)
+    opt.put("tablename", tableName)
     val schemaStr = catalogTable.schema.fields.map(s =>
       s.dataType match {
         case StringType => s"${s.name}:string:${s.nullable}"
@@ -389,7 +389,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
           agg
       }
     }
-    val schema = PushdownJson.getAggregateSchema(aggregates, groupingExpressions)
+    val schema = PushdownSQL.getAggregateSchema(aggregates, groupingExpressions)
     val newOutput = schema.map(f => AttributeReference(f.name, f.dataType,
       f.nullable, f.metadata)())
     // assert(newOutput.length == groupingExpressions.length + aggregates.length)
@@ -398,24 +398,15 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case (_, b) => b
     }
     val output = groupAttrs ++ newOutput.drop(groupAttrs.length)
-
-    /* logInfo(
-      s"""
-          |Pushing operators to ${sHolder.relation.name}
-          |Pushed Aggregate Functions:
-          | ${pushedAggregates.get.aggregateExpressions.mkString(", ")}
-          |Pushed Group by:
-          | ${pushedAggregates.get.groupByColumns.mkString(", ")}
-          |Output: ${output.mkString(", ")}
-          """.stripMargin) */
     val opt = new util.HashMap[String, String](relationArgs.options)
-    val aggregateJson = PushdownJson.getAggregateJson(groupingExpressions,
-      aggregates,
-      "")
-    opt.put("ndpjsonaggregate", aggregateJson)
+    val aggregateSql = PushdownSQL.getAggregateExpressionSql(aggregates)
+    val query = opt.get("query").split("FROM ").drop(1).mkString(" ")
+    val newQuery = s"SELECT ${aggregateSql} FROM ${query}"
+    opt.put("query", newQuery)
+    opt.put("aggregatequery", "true")
     val hdfsScanObject = QflockJdbcScan(output.toStructType, opt)
     val scanRelation = DataSourceV2ScanRelation(
-      relationArgs.scan.asInstanceOf[DataSourceV2Relation],
+      relationArgs.relation.asInstanceOf[DataSourceV2Relation],
       hdfsScanObject, output)
     val plan = Aggregate(
       output.take(groupingExpressions.length),
@@ -434,7 +425,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
           }
         agg.copy(aggregateFunction = aggFunction)
     }
-    // plan
   }
   private def aggNeedsRule(plan: LogicalPlan): Boolean = {
     plan match {
@@ -452,7 +442,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
             opts
         }
         !scanOpts.containsKey("ndpjsonaggregate") &&
-          !scanOpts.containsKey("ndpdisableaggregatepush")
+          !scanOpts.containsKey("ndpdisableaggregatepush") &&
+          !scanOpts.containsKey("aggregatequery")
       case _ => false
     }
   }
@@ -524,7 +515,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   : LogicalPlan = {
     val newPlan = plan.transform {
       case aggNode @ Aggregate(groupingExpressions, resultExpressions, childAgg)
-        if false && aggExpressionIsValid(groupingExpressions, resultExpressions) &&
+        if aggExpressionIsValid(groupingExpressions, resultExpressions) &&
           aggNeedsRule(childAgg) =>
         childAgg match {
           case s@ScanOperation(project,
@@ -546,7 +537,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
-    // val after = pushAggregate(pushFilterProject(inputPlan))
+//    val after = pushAggregate(pushFilterProject(inputPlan))
     val after = pushFilterProject(inputPlan)
     after
   }

@@ -55,8 +55,8 @@ case class QflockJdbcScan(schema: StructType,
   }
   private def createPartitions(): Array[InputPartition] = {
     val path = options.get("path")
-    var partitions = options.get("numRowGroups").toInt
-    val numRows = options.get("numRows").toInt
+    var partitions = options.get("numrowgroups").toInt
+    val numRows = options.get("numrows").toInt
     val rowsPerPartition = numRows / partitions
     // Set below to true to do a 1 partition test.
     val partitionArray = new ArrayBuffer[InputPartition](0)
@@ -67,7 +67,7 @@ case class QflockJdbcScan(schema: StructType,
       partitions = 1
       partitionArray += new QflockJdbcPartition(index = 0,
         offset = 0,
-        length = options.get("numRowGroups").toInt,
+        length = options.get("numrowgroups").toInt,
         name = path)
     } else {
       // Generate one partition per row Group.

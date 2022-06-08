@@ -33,7 +33,9 @@ import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Count, Max, Min, Sum}
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.datasources.PushableColumnWithoutNestedColumn
 import org.apache.spark.sql.types._
 
 
@@ -230,6 +232,16 @@ class PushdownSQL(schema: StructType,
     val jsonString = stringWriter.getBuffer.toString
     jsonString
   }
+//  private def getGroupByClause(aggregation: Option[AggregateExpression]): String = {
+//    if ((aggregation != None) &&
+//      (aggregation.get.groupByColumns.length > 0)) {
+//      val quotedColumns =
+//        aggregation.get.groupByColumns.map(c => s"${getColString(c.fieldNames.head)}")
+//      s"GROUP BY ${quotedColumns.mkString(", ")}"
+//    } else {
+//      ""
+//    }
+//  }
 }
 
 object PushdownSQL {
@@ -377,5 +389,119 @@ object PushdownSQL {
     } else {
       PushdownSqlStatus.Invalid
     }
+  }
+
+  def getAggregateSchema(aggregates: Seq[AggregateExpression],
+                         groupingExpressions: Seq[Expression]): StructType = {
+    var schema = new StructType()
+    for (e <- groupingExpressions) {
+      e match {
+        case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+          schema = schema.add(StructField(name, dataType))
+      }
+    }
+    for (a <- aggregates) {
+      a.aggregateFunction match {
+        case min @ Min(PushableColumnWithoutNestedColumn(name)) =>
+          schema = schema.add(StructField(s"min(name)", min.dataType))
+        case max @ Max(PushableColumnWithoutNestedColumn(name)) =>
+          schema = schema.add(StructField(s"max(name)", max.dataType))
+        case count: aggregate.Count if count.children.length == 1 =>
+          count.children.head match {
+            // SELECT COUNT(*) FROM table is translated to SELECT 1 FROM table
+            case Literal(_, _) =>
+              schema = schema.add(StructField("count(*)", LongType))
+            case PushableColumnWithoutNestedColumn(name) =>
+              schema = schema.add(StructField(s"count($name)", LongType))
+          }
+        case sum @ Sum(PushableColumnWithoutNestedColumn(name), _) =>
+          schema = schema.add(StructField(s"sum($name)", sum.dataType))
+        case sum @ Sum(child: Expression, _) =>
+          schema = schema.add(StructField(s"sum(${getAggregateString(child)})", sum.dataType))
+      }
+    }
+    schema
+  }
+
+  def getAggregateString(e: Expression): String = {
+    e match {
+      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+        name
+      case Literal(value, dataType) =>
+        value.toString
+      case mult @ Multiply(left, right, failOnError) =>
+        s"(${getAggregateString(left)} * ${getAggregateString(right)})"
+      case div @ Divide(left, right, failOnError) =>
+        s"(${getAggregateString(left)} / ${getAggregateString(right)})"
+      case add @ Add(left, right, failOnError) =>
+        s"(${getAggregateString(left)} + ${getAggregateString(right)})"
+      case subtract @ Subtract(left, right, failOnError) =>
+        s"(${getAggregateString(left)} - ${getAggregateString(right)})"
+    }
+  }
+  def buildAggregateExpression(aggregate: AggregateExpression): Option[String] = {
+    def buildAggComp(left: Expression, right: Expression, comparisonOp: String): String = {
+      s"${buildAggExpr(left)} ${comparisonOp} ${buildAggExpr(right)}"
+    }
+    def buildAggExpr(e: Expression) : String = {
+      e match {
+        case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+          name
+        case Literal(value, dataType) =>
+          value.toString
+        case mult @ Multiply(left, right, failOnError) =>
+          buildAggComp(left, right, "*")
+        case div @ Divide(left, right, failOnError) =>
+          buildAggComp(left, right, "/")
+        case add @ Add(left, right, failOnError) =>
+          buildAggComp(left, right, "+")
+        case subtract @ Subtract(left, right, failOnError) =>
+          buildAggComp(left, right, "-")
+      }
+    }
+    def buildCount(value: Any,
+                   isDistinct: Boolean = false): String = {
+      s"COUNT(${value})"
+    }
+    if (aggregate.filter.isEmpty) {
+      aggregate.aggregateFunction match {
+        case Min(PushableColumnWithoutNestedColumn(name)) =>
+          Some("MIN(" + name + ")")
+        case Max(PushableColumnWithoutNestedColumn(name)) =>
+          Some("MAX(" + name + ")")
+        case count: Count if count.children.length == 1 =>
+          count.children.head match {
+            // SELECT COUNT(*) FROM table is translated to SELECT 1 FROM table
+            case Literal(_, _) =>
+              Some(buildCount("*",
+                              isDistinct = aggregate.isDistinct))
+            case PushableColumnWithoutNestedColumn(name) =>
+              Some(buildCount(name,
+                              isDistinct = aggregate.isDistinct))
+            case _ => None
+          }
+        case sum @ Sum(PushableColumnWithoutNestedColumn(name), _) =>
+          Some("SUM(" + name + ")")
+        case sum @ Sum(child: Expression, _) =>
+          Some("SUM(" + buildAggExpr(child) + ")")
+        case _ => None
+      }
+    } else {
+      None
+    }
+  }
+  def getAggregateExpressionSql(aggregateExpressions: Seq[AggregateExpression]): String = {
+    var sql: String = ""
+    for (f <- aggregateExpressions) {
+      val a = buildAggregateExpression(f)
+      if (a.isDefined) {
+        if (sql != "") {
+          sql += "," + a.get
+        } else {
+          sql += a.get
+        }
+      }
+    }
+    sql
   }
 }

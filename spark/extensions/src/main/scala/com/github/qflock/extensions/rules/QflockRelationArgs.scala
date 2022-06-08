@@ -18,6 +18,8 @@ package com.github.qflock.extensions.rules
 
 import scala.collection.JavaConverters._
 
+import com.github.qflock.extensions.jdbc.QflockJdbcScan
+
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -62,6 +64,8 @@ object QflockRelationArgs {
         (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava))
       case QflockRelation(schema, _, opts) =>
         (schema, schema, new CaseInsensitiveStringMap(opts.asJava))
+      case QflockJdbcScan(schema, opts, stats) =>
+        (schema, schema, new CaseInsensitiveStringMap(opts))
     }
     Some(new QflockRelationArgs(relation, scan, output, dataSchema,
                                 readSchema, options, catalogTable))
