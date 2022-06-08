@@ -19,6 +19,8 @@ import os
 import threading
 import inspect
 import logging
+import shutil
+import glob
 import pyspark
 from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType, ShortType
 import numpy as np
@@ -38,6 +40,7 @@ class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
                  metastore_ip="", metastore_port="", debug_pyspark=False,
                  max_views=4, compression=True):
+        self._spark_temp_dir = "/tmp/spark-temp"
         self._max_views = max_views
         self._compression = compression
         self._lock = threading.Lock()
@@ -75,13 +78,24 @@ class QflockThriftJdbcHandler:
             .config("spark.jars", "../../spark/extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar")\
             .getOrCreate()
 
+    def _clean_spark_temp_dir(self):
+        logging.info(f"clean spark temp dir {self._spark_temp_dir}")
+        temp_dirs_top = glob.glob(os.path.join(self._spark_temp_dir, "*"))
+        for t in temp_dirs_top:
+            temp_dirs = glob.glob(os.path.join(t, "*"))
+            for d in temp_dirs:
+                logging.debug(f"cleaning {d}")
+                shutil.rmtree(d)
+
     def _create_spark(self):
         # .enableHiveSupport()\
         # We do not use hive since we create
         # our own temp views with names of the table.
+        logging.info(f"create new session {self._query_id}")
         self._spark = pyspark.sql.SparkSession \
             .builder \
             .appName("qflock-jdbc")\
+            .config("spark.local.dir", self._spark_temp_dir)\
             .getOrCreate()
 
     def _get_tables(self):
@@ -248,10 +262,8 @@ class QflockThriftJdbcHandler:
                          f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
                          f"query: {query}")
         else:
-            logging.debug(f"query-done rows:{num_rows} " +
-                         f"query: {query}")
+            logging.debug(f"query-done rows:{num_rows} query: {query}")
         self._ds_table_desc[table_name].freeRequest(req_id)
-        # logging.info(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnTypeBytes=col_type_bytes,
                                   columnBytes=col_bytes, compressedColumnBytes=col_comp_bytes,
@@ -488,8 +500,16 @@ class QflockThriftJdbcHandler:
          - connection
 
         """
+
         if connection.id in self._connections:
             del self._connections[connection.id]
+            self._lock.acquire()
+            num_connections = len(self._connections.keys())
+            if len(self._connections.keys()) == 0:
+                self._clean_spark_temp_dir()
+            else:
+                logging.info(f"connections: {num_connections}")
+            self._lock.release()
             logging.debug(f"successfully closed connection {connection.id}")
         else:
             logging.warning(f"connection id {connection.id} not found")
