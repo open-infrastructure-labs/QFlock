@@ -79,7 +79,7 @@ class QflockThriftJdbcHandler:
             .getOrCreate()
 
     def _clean_spark_temp_dir(self):
-        logging.info(f"clean spark temp dir {self._spark_temp_dir}")
+        logging.debug(f"clean spark temp dir {self._spark_temp_dir}")
         temp_dirs_top = glob.glob(os.path.join(self._spark_temp_dir, "*"))
         for t in temp_dirs_top:
             temp_dirs = glob.glob(os.path.join(t, "*"))
@@ -203,6 +203,7 @@ class QflockThriftJdbcHandler:
         df_pandas = df.toPandas()
         num_rows = len(df_pandas.index)
         logging.debug(f"query toPandas() done rows:{num_rows}")
+        logging.debug(f"schema: {df.schema}")
         df_schema = df.schema
         binary_rows = []
         col_type_bytes = []
@@ -508,7 +509,7 @@ class QflockThriftJdbcHandler:
             if len(self._connections.keys()) == 0:
                 self._clean_spark_temp_dir()
             else:
-                logging.info(f"connections: {num_connections}")
+                logging.debug(f"connections: {num_connections}")
             self._lock.release()
             logging.debug(f"successfully closed connection {connection.id}")
         else:
