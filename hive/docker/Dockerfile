@@ -67,9 +67,9 @@ RUN apt-get -q update \
 RUN pip3 install pandas sqlparse fastparquet pyarrow thrift thrift_sasl sasl pyhive
 
 # build hive-testbench
- ADD /hive-testbench /tmp/hive-testbench
- RUN cd /tmp/hive-testbench \
-    && sudo ./tpcds-build.sh
+ADD /hive-testbench /tmp/hive-testbench
+RUN cd /tmp/hive-testbench \
+    && ./tpcds-build.sh
 
 # Fix multiple SLF4J binding conflict.
 RUN rm ${TEZ_HOME}/lib/slf4j-log4j12-1.7.10.jar

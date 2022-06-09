@@ -53,13 +53,14 @@ sleep 1
 echo "Start hiveserver2 ..."
 nohup $HIVE_HOME/bin/hive --service hiveserver2 &>/tmp/hs2.log &
 
-echo "Generate tpcds test data for hive testbench ..." 
-cd /tmp/hive-testbench
-./tpcds-setup.sh 2
+#echo "Generate tpcds test data for hive testbench ..." 
+cd /tmp
+#./tpcds-setup.sh 2
 
 echo "HADOOP_READY"
 echo "HADOOP_READY" > /opt/volume/status/HADOOP_STATE
 echo "RUNNING_MODE $RUNNING_MODE"
+echo "please go inside hive docker and go to /tmp/hive-testbench and run ./tpcds-setup.sh <scale_size> to generate tpcds data"
 
 if [ "$RUNNING_MODE" = "daemon" ]; then
     sleep infinity

@@ -9,6 +9,10 @@ DOCKER_DIR=${ROOT_DIR}
 DOCKER_FILE="${DOCKER_DIR}/Dockerfile"
 DOCKER_NAME=qflock-hive-2.3.8
 
+USER_NAME=${SUDO_USER:=$USER}
+USER_ID=$(id -u "${USER_NAME}")
+GROUP_ID=$(id -g "${USER_NAME}")
+
 # Download Hadoop
 ENV_HADOOP_VERSION=2.7.2
 if [ ! -f ${DOCKER_DIR}/hadoop-${ENV_HADOOP_VERSION}.tar.gz ]
@@ -49,7 +53,7 @@ then
 fi
 
 # Doanload hive-testbench
-#rm -rf hive-testbench
+rm -rf hive-testbench
 echo "Download hive-testbench for tpcds"
 git clone https://github.com/hortonworks/hive-testbench.git
 pushd hive-testbench
@@ -64,10 +68,6 @@ popd
 
 DOCKER_CMD="docker build -t ${DOCKER_NAME} --build-arg HADOOP_VERSION -f $DOCKER_FILE $DOCKER_DIR"
 eval "$DOCKER_CMD"
-
-USER_NAME=${SUDO_USER:=$USER}
-USER_ID=$(id -u "${USER_NAME}")
-GROUP_ID=$(id -g "${USER_NAME}")
 
 # Set the home directory in the Docker container.
 DOCKER_HOME_DIR=${DOCKER_HOME_DIR:-/home/${USER_NAME}}
@@ -85,6 +85,7 @@ WORKDIR "${DOCKER_HOME_DIR}"
 RUN ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
 RUN cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 RUN chmod 0600 ~/.ssh/authorized_keys
+RUN sudo chown -R ${USER_NAME}:${USER_NAME} /tmp/hive-testbench
 UserSpecificDocker
 
 popd
