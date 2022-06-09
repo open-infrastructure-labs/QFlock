@@ -42,16 +42,9 @@ RUN apt-get -q update \
     && apt-get -q install -y --no-install-recommends \
         keychain  ssh  openssh-server sudo
 
-# Install python and packages dependencies
-RUN apt-get -q update \
-    && apt-get -q install -y --no-install-recommends \
-        python3-pip python3-venv python3-wheel vim
-
-RUN pip3 install pandas sqlparse fastparquet pyarrow thrift
-
 # install build essential for compiling within docker
 RUN apt-get -q update \
-    && apt-get -q install -y build-essential maven autoconf automake libtool vim
+    && apt-get -q install -y build-essential maven autoconf automake libtool vim git unzip
 
 # Install protobuf 2.5.0 for tez
 ADD /protobuf-2.5.0.tar.gz /tmp
@@ -64,6 +57,19 @@ RUN cd /tmp/tez \
     && mvn package -Pdist -DskipTests -Dtar -Dmaven.javadoc.skip=true \
     && mkdir -p ${TEZ_HOME} \
     && tar -xvf tez-dist/target/tez-0.9.2-minimal.tar.gz -C ${TEZ_HOME}
+
+# Install python and packages dependencies
+RUN apt-get -q update \
+    && apt-get -q install -y \
+        python3-dev python3-pip python3-venv python3-wheel  \
+	libsasl2-dev libsasl2-2 libsasl2-modules-gssapi-mit 
+
+RUN pip3 install pandas sqlparse fastparquet pyarrow thrift thrift_sasl sasl pyhive
+
+# build hive-testbench
+ ADD /hive-testbench /tmp/hive-testbench
+ RUN cd /tmp/hive-testbench \
+    && sudo ./tpcds-build.sh
 
 # Fix multiple SLF4J binding conflict.
 RUN rm ${TEZ_HOME}/lib/slf4j-log4j12-1.7.10.jar

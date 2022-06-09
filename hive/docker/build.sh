@@ -35,9 +35,10 @@ ENV_TEZ_VERSION=0.9.2
 rm -rf tez
 echo "Download tez source code and switch to branch-0.9.2"
 git clone https://github.com/apache/tez.git
-cd tez
+pushd tez
 git switch branch-0.9.2
 git apply ../qflock-tez.patch
+popd
 
 # Download protobuf 2.5.0 required by tez
 ENV_PROTOBUF_VERSION=2.5.0
@@ -46,6 +47,20 @@ then
   echo "Downloading protobuf-${ENV_PROTOBUF_VERSION}.tar.gz"
   curl -L https://github.com/google/protobuf/releases/download/v${ENV_PROTOBUF_VERSION}/protobuf-${ENV_PROTOBUF_VERSION}.tar.gz --output ${DOCKER_DIR}/protobuf-${ENV_PROTOBUF_VERSION}.tar.gz
 fi
+
+# Doanload hive-testbench
+#rm -rf hive-testbench
+echo "Download hive-testbench for tpcds"
+git clone https://github.com/hortonworks/hive-testbench.git
+pushd hive-testbench
+git switch hive14
+# Remove a patch already applied to prevent reverse patch
+rm tpcds-gen/patches/all/tpcds_misspelled_header_guard.patch
+git apply ../tpcds.patch
+# Fix the problem tpcds_kit.zip no longer available for download
+# Need to request from tpc.org
+cp ../tpcds_kit.zip tpcds-gen/tpcds_kit.zip
+popd
 
 DOCKER_CMD="docker build -t ${DOCKER_NAME} --build-arg HADOOP_VERSION -f $DOCKER_FILE $DOCKER_DIR"
 eval "$DOCKER_CMD"
