@@ -4,7 +4,9 @@ set -e # exit on error
 pushd "$(dirname "$0")" # connect to root
 
 ROOT_DIR=$(pwd)
+PARENT_DIR=$(dirname ${ROOT_DIR})
 echo "ROOT_DIR ${ROOT_DIR}"
+echo "PARENT_DIR ${PARENT_DIR}"
 
 if [ -z "$1" ]
   then
@@ -64,6 +66,7 @@ HADOOP_ROOT_LOGGER=WARN,DRFA
 
 DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -v ${ROOT_DIR}/data:/data \
+  -v ${PARENT_DIR}/benchmark:/opt/benchmark \
   -v ${ROOT_DIR}/volume/namenode:/opt/volume/namenode \
   -v ${ROOT_DIR}/volume/datanode0:/opt/volume/datanode \
   -v ${ROOT_DIR}/volume/metastore:/opt/volume/metastore \
@@ -94,6 +97,7 @@ DOCKER_RUN="docker run --rm=true ${DOCKER_IT} \
   -e RUNNING_MODE=${RUNNING_MODE} \
   -e HADOOP_ROOT_LOGGER=${HADOOP_ROOT_LOGGER} \
   -e HIVE_AUX_JARS_PATH=${HIVE_HOME}/lib \
+  -e FORMAT=parquet \
   --network qflock-net-${DC} \
   --name qflock-hive-${HIVE_VERSION} --hostname qflock-hive \
   qflock-hive-${HIVE_VERSION}-${USER_NAME} ${CMD}"
