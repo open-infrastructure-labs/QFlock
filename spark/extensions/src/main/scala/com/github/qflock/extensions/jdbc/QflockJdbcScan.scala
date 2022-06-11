@@ -16,11 +16,13 @@
  */
 package com.github.qflock.extensions.jdbc
 
+
 import java.util
 import java.util.OptionalLong
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.github.qflock.extensions.rules.QflockStatsParameters
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
@@ -34,6 +36,7 @@ import org.apache.spark.sql.types._
  */
 case class QflockJdbcScan(schema: StructType,
                           options: util.Map[String, String],
+                          statsParams: Option[QflockStatsParameters],
                           stats: Statistics = Statistics(0, Some(0)))
   extends Scan with Batch with SupportsReportStatistics {
 

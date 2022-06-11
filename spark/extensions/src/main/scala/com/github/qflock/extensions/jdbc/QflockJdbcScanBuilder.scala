@@ -44,7 +44,7 @@ class QflockJdbcScanBuilder(schema: StructType,
     if (!options.get("path").contains("hdfs")) {
       throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
     }
-    QflockJdbcScan(schema, opt)
+    QflockJdbcScan(schema, opt, None)
   }
 }
 

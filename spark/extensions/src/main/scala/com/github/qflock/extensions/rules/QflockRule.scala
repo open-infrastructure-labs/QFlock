@@ -22,7 +22,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
-import com.github.qflock.extensions.common.{PushdownJson, PushdownSQL, PushdownSqlStatus}
+import com.github.qflock.extensions.common.{PushdownSQL, PushdownSqlStatus}
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -135,6 +135,20 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case EndsWith(left, right) => getFilterExpressionAttributes(left)
       case Contains(left, right) => getFilterExpressionAttributes(left)
       case other@_ => logger.warn("unknown filter:" + other) ; Seq[AttributeReference]()
+    }
+  }
+  private def needsUpdate(project: Seq[NamedExpression],
+                          filters: Seq[Expression],
+                          child: Any): Boolean = {
+    child match {
+      case DataSourceV2ScanRelation(relation, scan, output) =>
+        if (scan.isInstanceOf[QflockJdbcScan] &&
+            (output.length != project.length)) {
+          true
+        } else {
+          false
+        }
+      case _ => false
     }
   }
   private def needsRule(project: Seq[NamedExpression],
@@ -315,12 +329,17 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("schema", schemaStr)
 
     val filterCondition = filters.reduceLeftOption(And)
+    val statsParameters = QflockStatsParameters(project, filterCondition,
+                                                relationArgs, attrReferences,
+                                                filterReferences, opt,
+                                                references)
     val relationForStats = QflockLogicalRelation.apply(project, filterCondition,
                                                        relationArgs, attrReferences,
                                                        filterReferences, opt,
                                                        references, spark)
 //    opt.put("queryStats", relationForStats.toString)
     val hdfsScanObject = QflockJdbcScan(references.toStructType, opt,
+      Some(statsParameters),
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, opt, schemaStr)
     val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
@@ -344,8 +363,72 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       withFilter
     }
   }
+  private def updateProject(plan: LogicalPlan,
+                            project: Seq[NamedExpression],
+                            filters: Seq[Expression],
+                            child: LogicalPlan)
+  : LogicalPlan = {
+    val generationId = QflockOptimizationRule.getGenerationId
+    val relationArgs = QflockRelationArgs(child).get
+    val attrReferencesEither = getAttributeReferences(project)
+
+    val attrReferences = attrReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(l) => Seq[AttributeReference]()
+    }
+    val opt = new util.HashMap[String, String](relationArgs.options)
+    val query = opt.get("query")
+    val trimmedQuery = "FROM " + query.split("FROM").drop(1).mkString(" ")
+    val newSelect = project.map(x => x.name).mkString(",")
+    val newQuery = s"SELECT $newSelect $trimmedQuery"
+    opt.put("query", newQuery)
+    val references = attrReferences.distinct
+    val statsParam = relationArgs.statsParam.get
+    val statsParameters = QflockStatsParameters(
+      project, statsParam.filterCondition,
+      statsParam.relationArgs, attrReferences,
+      statsParam.filterReferences, opt,
+      references)
+    val relationForStats = QflockLogicalRelation.apply(project,
+      statsParam.filterCondition,
+      statsParam.relationArgs, attrReferences,
+      statsParam.filterReferences, opt,
+      references, spark)
+    //    opt.put("queryStats", relationForStats.toString)
+    val hdfsScanObject = QflockJdbcScan(references.toStructType, opt,
+      Some(statsParameters),
+      relationForStats.toPlanStats(statsParam.relationArgs.catalogTable.get.stats.get))
+    val ndpRel = getNdpRelation(opt.get("path"), opt, opt.get("schema"))
+    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
+    val withFilter = {
+      if (true) {
+        /* Clip the filter from the DAG, since we are going to
+         * push down the entire filter to NDP.
+         */
+        scanRelation
+      } else {
+        statsParam.filterCondition.map(LogicalFilter(_, scanRelation)).getOrElse(scanRelation)
+      }
+    }
+    if (withFilter.output != project || filters.isEmpty) {
+      if (project != scanRelation.output) {
+        Project(project, withFilter)
+      } else {
+        scanRelation
+      }
+    } else {
+      withFilter
+    }
+  }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
     val newPlan = plan.transform {
+      case s@ScanOperation(project,
+      filters,
+      child: DataSourceV2ScanRelation) if needsUpdate(project, filters, child) =>
+        val modified = updateProject(s, project, filters, child)
+        logger.info("before updateFilterProject: \n" + project + "\n" + s)
+        logger.info("after updateFilterProject: \n" + modified)
+        modified
       case s@ScanOperation(project,
       filters,
       child: DataSourceV2ScanRelation) if needsRule(project, filters, child) &&
@@ -403,7 +486,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val newQuery = PushdownSQL.getAggregateSql(aggregates, groupingExpressions, query)
     opt.put("query", newQuery)
     opt.put("aggregatequery", "true")
-    val hdfsScanObject = QflockJdbcScan(output.toStructType, opt)
+    val hdfsScanObject = QflockJdbcScan(output.toStructType, opt,
+                                        relationArgs.statsParam)
     val scanRelation = DataSourceV2ScanRelation(
       relationArgs.relation.asInstanceOf[DataSourceV2Relation],
       hdfsScanObject, output)
@@ -437,7 +521,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         val scanOpts = relationScan match {
           case ParquetScan(_, _, _, dataSchema, _, _, _, opts, _, _) =>
             opts
-          case QflockJdbcScan(schema, opts, stats) =>
+          case QflockJdbcScan(_, opts, _, _) =>
             opts
         }
         !scanOpts.containsKey("ndpjsonaggregate") &&
