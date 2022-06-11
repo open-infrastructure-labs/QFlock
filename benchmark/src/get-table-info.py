@@ -23,7 +23,10 @@ import time
 # The purpose of this script is to launch our get table info in a docker.
 #
 if __name__ == "__main__":
-    cmd = "docker exec -it qflock-spark-dc1 ./scripts/get-table-info.sh "
+    dest = ""
+    if len(sys.argv) > 1:
+        dest = sys.argv[1]
+    cmd = f"docker exec -it qflock-spark-dc1 ./scripts/get-table-info.sh {dest}"
     print(cmd)
     status = subprocess.call(cmd, shell=True)
     if status != 0:

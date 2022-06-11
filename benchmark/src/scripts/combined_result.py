@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import sys
 import csv
 
@@ -11,11 +12,11 @@ class TestResult:
         self.rows = d['rows']
 
 
-class CombinedResult:
-
-    def __init__(self, spark_file, qflock_file):
+class GenerateCombinedResult:
+    def __init__(self, spark_file, qflock_file, data_dir):
         self._spark_file = spark_file
         self._qflock_file = qflock_file
+        self._data_dir = data_dir
         self._spark_results = {}
         self._qflock_results = {}
 
@@ -41,7 +42,7 @@ class CombinedResult:
         return tables
 
     def gen_combined_result(self):
-        with open("data/combined_results.csv", "w") as fd:
+        with open(os.path.join(self._data_dir, "combined_results.csv"), "w") as fd:
             fd.write("query,Jdbc Seconds,Spark Seconds\n")
             for r in self._qflock_results:
                 if r in self._spark_results:
@@ -58,7 +59,9 @@ class CombinedResult:
 
 if __name__ == "__main__":
     if len(sys.argv) > 2:
-        cr = CombinedResult(sys.argv[1], sys.argv[2])
+        cr = GenerateCombinedResult(sys.argv[1], sys.argv[2])
     else:
-        cr = CombinedResult("data/spark_results.csv", "data/jdbc_results.csv")
+        cr = GenerateCombinedResult("data/spark_results.csv",
+                                    "data/jdbc_results.csv",
+                                    "data")
     cr.run()

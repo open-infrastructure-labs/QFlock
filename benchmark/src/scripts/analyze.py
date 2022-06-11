@@ -6,6 +6,7 @@ import re
 import argparse
 from argparse import RawTextHelpFormatter
 from parse_qflock_log import ParseQflockLog
+from combined_result import GenerateCombinedResult
 
 
 class Table:
@@ -257,8 +258,16 @@ class AnalyzeData:
         else:
             self._data_dir = self._args.dir
 
+    def generate_results(self):
+        if not os.path.exists(os.path.join(self._args.dir, "combined_results.csv")):
+            cr = GenerateCombinedResult(os.path.join(self._args.dir, "spark_results.csv"),
+                                        os.path.join(self._args.dir, "jdbc_results.csv"),
+                                        self._args.dir)
+            cr.run()
+
     def run(self):
         self.parse_args()
+        self.generate_results()
         if self._args.func == "list":
             print("available functions:")
             for f in AnalyzeData.functions:
