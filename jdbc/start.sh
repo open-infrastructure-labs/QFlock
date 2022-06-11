@@ -13,6 +13,11 @@ rm -f "${JDBC_DIR}/volume/logs/*.log"
 mkdir -p "${JDBC_DIR}/volume/status"
 rm -f "${JDBC_DIR}/volume/status/jdbc*"
 
+# We need to be absolutely sure that ssh configuration exists
+mkdir -p ${JDBC_DIR}/volume/ssh
+touch ${JDBC_DIR}/volume/ssh/authorized_keys
+touch ${JDBC_DIR}/volume/ssh/config
+
 RUNNING_MODE="daemon"
 START_LOCAL="YES"
 # STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qflock-net-dc1 qflock-storage-dc1)"
@@ -54,6 +59,8 @@ DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -v ${JDBC_DIR}/build/.ivy2:${DOCKER_HOME_DIR}/.ivy2 \
   -v ${JDBC_DIR}/volume/status:/opt/volume/status \
   -v ${JDBC_DIR}/volume/logs:/opt/volume/logs \
+  -v ${JDBC_DIR}/volume/ssh/authorized_keys:/home/${USER_NAME}/.ssh/authorized_keys \
+  -v ${JDBC_DIR}/volume/ssh/config:/home/${USER_NAME}/.ssh/config \
   -e RUNNING_MODE=${RUNNING_MODE} \
   -u ${USER_ID} \
   ${JDBC_DOCKER_NAME} ${CMD}"

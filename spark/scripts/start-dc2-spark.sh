@@ -15,6 +15,11 @@ rm -f "${SPARK_DIR}/volume/status/HIVESERVER2*"
 mkdir -p "${SPARK_DIR}/volume/metastore"
 mkdir -p "${SPARK_DIR}/volume/user/hive"
 
+# We need to be absolutely sure that ssh configuration exists
+mkdir -p ${SPARK_DIR}/volume/ssh
+touch ${SPARK_DIR}/volume/ssh/authorized_keys
+touch ${SPARK_DIR}/volume/ssh/config
+
 CMD="${DOCKER_HOME_DIR}/bin/start-thrift.sh"
 
 RUNNING_MODE="daemon"
@@ -61,6 +66,8 @@ if [ ${START_LOCAL} == "YES" ]; then
   -v ${SPARK_DIR}/volume/status:/opt/volume/status \
   -v ${SPARK_DIR}/volume/logs:/opt/volume/logs \
   -v ${SPARK_DIR}/bin/:${DOCKER_HOME_DIR}/bin \
+  -v ${SPARK_DIR}/volume/ssh/authorized_keys:/home/${USER_NAME}/.ssh/authorized_keys \
+  -v ${SPARK_DIR}/volume/ssh/config:/home/${USER_NAME}/.ssh/config \
   -e RUNNING_MODE=${RUNNING_MODE} \
   -u ${USER_ID} \
   ${SPARK_DOCKER_NAME} ${CMD}"
@@ -86,6 +93,8 @@ else
   -v ${SPARK_DIR}/volume/status:/opt/volume/status \
   -v ${SPARK_DIR}/volume/logs:/opt/volume/logs \
   -v ${SPARK_DIR}/bin/:${DOCKER_HOME_DIR}/bin \
+  -v ${SPARK_DIR}/volume/ssh/authorized_keys:/home/${USER_NAME}/.ssh/authorized_keys \
+  -v ${SPARK_DIR}/volume/ssh/config:/home/${USER_NAME}/.ssh/config \
   -e RUNNING_MODE=${RUNNING_MODE} \
   -u ${USER_ID} \
   ${SPARK_DOCKER_NAME} ${CMD}"

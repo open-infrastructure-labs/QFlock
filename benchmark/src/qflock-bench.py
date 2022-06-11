@@ -18,6 +18,7 @@
 import sys
 import os
 import time
+import subprocess
 import argparse
 from argparse import RawTextHelpFormatter
 import yaml
@@ -160,6 +161,8 @@ class QflockBench:
                             help="directory for perf results.")
         parser.add_argument("--results_file", default=None,
                             help="file for perf results.")
+        parser.add_argument("--restart_jdbc", action="store_true",
+                            help="Restart the jdbc server.")
         return parser
 
     def _terse_command(self):
@@ -221,6 +224,16 @@ class QflockBench:
         minutes, seconds = divmod(rem, 60)
         print("elapsed time: {:2}:{:02}:{:02}".format(int(hours), int(minutes), int(seconds)))
 
+    def restart_jdbc(self):
+        ssh_cmd = "ssh qflock-jdbc-dc2 /scripts/restart_jdbc.sh"
+        result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                shell=True)
+        if result.returncode != 0:
+            print("failed to restart jdbc")
+        print("restarted jdbc")
+        # TODO We should really poll the server to check it is up.
+        time.sleep(60)
+
     def run_query(self):
         # timestr = time.strftime("%Y%m%d-%H%M%S")
         failure_count = 0
@@ -228,6 +241,8 @@ class QflockBench:
         for w in self._workers_list:
             idx = 0
             for q in self._query_list:
+                if idx != 0 and self._args.restart_jdbc and (idx % 10) == 0:
+                    self.restart_jdbc()
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)} ' + \
                       f'--test_num {idx} '
