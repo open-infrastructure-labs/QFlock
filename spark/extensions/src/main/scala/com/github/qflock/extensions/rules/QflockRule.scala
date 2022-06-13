@@ -140,6 +140,13 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   private def needsUpdate(project: Seq[NamedExpression],
                           filters: Seq[Expression],
                           child: Any): Boolean = {
+    val projectValid = project.map(p => p match {
+      case _: AttributeReference => true
+      case _ => false
+    }).exists(a => a == true)
+    if (!projectValid) {
+      return false
+    }
     child match {
       case DataSourceV2ScanRelation(relation, scan, output) =>
         if (scan.isInstanceOf[QflockJdbcScan] &&
