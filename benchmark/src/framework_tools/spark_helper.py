@@ -29,13 +29,14 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=None, qflock_ds=False, output_path=None):
+                 jdbc=None, qflock_ds=False, output_path=None, results_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
         self._app_name = app_name
         self._use_catalog = use_catalog
         self._qflock_ds = qflock_ds
         self._output_path = output_path
+        self._results_path = results_path
         self.create_spark()
 
     def create_spark(self, query_name="", test_num="0"):
@@ -48,6 +49,7 @@ class SparkHelper:
                 .config("qflockQueryName", query_name)\
                 .config("qflockTestNum", test_num)\
                 .config("qflockJdbcUrl", self._jdbc)\
+                .config("qflockResultsPath", self._results_path)\
                 .enableHiveSupport()\
                 .getOrCreate()
         else:
@@ -55,6 +57,7 @@ class SparkHelper:
                 .builder\
                 .appName(self._app_name)\
                 .config("qflockQueryName", query_name)\
+                .config("qflockResultsPath", self._results_path)\
                 .config("qflockTestNum", test_num)\
                 .config("qflockJdbcUrl", self._jdbc)\
                 .getOrCreate()

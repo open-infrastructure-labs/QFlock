@@ -117,10 +117,12 @@ class QflockJdbcVectorReader(schema: StructType,
     val appId = options.get("appid")
     val queryName = options.getOrDefault("queryname", "")
     val tableName = options.get("tablename")
+    val ruleLog = options.get("rulelog")
     QflockLog.log(s"queryName:$queryName appId:$appId rows:${qfResultSet.getNumRows} " +
-                  s"bytes:${qfResultSet.getSize} " +
+                  s"bytes:${qfResultSet.getSize} ruleLog:$ruleLog " +
                   s"tableName:$tableName part:${part.index} " +
-                  s"timeNs:$elapsed query:$query")
+                  s"timeNs:$elapsed query:$query",
+                  path = options.get("resultspath"))
     // return the result and the connection so we can close it later.
     result
   }

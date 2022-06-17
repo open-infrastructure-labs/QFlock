@@ -184,7 +184,8 @@ class BenchmarkApp:
             jdbc_config = self._config['benchmark']['jdbc-path']
         sh = SparkHelper(verbose=self._args.verbose, jdbc=jdbc_config,
                          qflock_ds=self._args.qflock_ds,
-                         output_path=self._args.output_path)
+                         output_path=self._args.output_path,
+                         results_path=self._args.results_path)
         if self._args.jdbc:
             sh.load_extension()
         sh.load_rule(self._args.ext)

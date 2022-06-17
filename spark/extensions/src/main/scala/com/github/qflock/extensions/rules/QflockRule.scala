@@ -305,11 +305,16 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // logger.info(s"sqlQuery: $sqlQuery")
 
     val opt = new util.HashMap[String, String](relationArgs.options)
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + "projectfilter,")
+    if (filters.length > 0) {
+      opt.put("rulelog", opt.getOrDefault("rulelog", "") + "hasfilters,")
+    }
     val path = opt.get("path")
     val testNum = spark.conf.get("qflockTestNum")
     opt.put("appid", s"$appId$testNum-$generationId")
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
+    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
@@ -389,6 +394,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val newSelect = project.map(x => x.name).mkString(",")
     val newQuery = s"SELECT $newSelect $trimmedQuery"
     opt.put("query", newQuery)
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + "updateproject,")
     val references = attrReferences.distinct
     val statsParam = relationArgs.statsParam.get
     val statsParameters = QflockStatsParameters(
@@ -493,6 +499,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val newQuery = PushdownSQL.getAggregateSql(aggregates, groupingExpressions, query)
     opt.put("query", newQuery)
     opt.put("aggregatequery", "true")
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + "aggregate,")
     val hdfsScanObject = QflockJdbcScan(output.toStructType, opt,
                                         relationArgs.statsParam)
     val scanRelation = DataSourceV2ScanRelation(
