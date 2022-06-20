@@ -81,7 +81,7 @@ class BenchmarkApp:
                                 help="The index of the test")
             parser.add_argument("--qflock_ds", action="store_true",
                                 help="Use qflock parquet datasource")
-            parser.add_argument("--results_path", default=None,
+            parser.add_argument("--results_path", default="data/",
                                 help="directory for perf results.")
             parser.add_argument("--results_file", default=None,
                                 help="file for perf results.")

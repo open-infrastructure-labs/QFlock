@@ -23,7 +23,7 @@ import scala.collection.mutable
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
 import com.github.qflock.extensions.common.{PushdownSQL, PushdownSqlStatus}
-import com.github.qflock.extensions.jdbc.QflockJdbcScan
+import com.github.qflock.extensions.jdbc.{QflockDataSourceV2ScanRelation, QflockJdbcScan}
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.SparkSession
@@ -354,7 +354,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       Some(statsParameters),
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, opt, schemaStr)
-    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
+    val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references,
+      relationArgs.catalogTable.get)
+//    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
         /* Clip the filter from the DAG, since we are going to
