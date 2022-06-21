@@ -28,14 +28,15 @@ class ParseQflockLog:
                     app_id = app_id_full.split("-")[1]
                     rows = items[2].split(":")[1]
                     bytes = items[3].split(":")[1]
-                    table = items[4].split(":")[1]
-                    part = items[5].split(":")[1]
-                    time_ns = items[6].split(":")[1]
-                    query = " ".join(items[7:]).split(":")[1].rsplit("\n")[0]
+                    table = items[5].split(":")[1]
+                    part = items[6].split(":")[1]
+                    time_ns = items[7].split(":")[1]
+                    query = " ".join(items[8:]).split(":")[1].rsplit("\n")[0]
                     if app_id not in self.log:
                         query_result = {'name': name,
                                  'app_id': app_id,
-                                 'queries': {}}
+                                 'queries': {},
+                                        'bytes': 0}
                         self.log[app_id] = query_result
                     else:
                         query_result = self.log[app_id]
@@ -50,11 +51,13 @@ class ParseQflockLog:
                                                                           'bytes': bytes})
                     query_result['queries'][app_id_full]['rows'] += int(rows)
                     query_result['queries'][app_id_full]['bytes'] += int(bytes)
+                    self.log[app_id]['bytes'] += int(bytes)
 
     def show(self):
 
         for k, v in self.log.items():
-            print(f"query name: {v['name']} id: {k} subqueries: {len(v['queries'].keys())}")
+            print(f"query name: {v['name']} id: {k} subqueries: {len(v['queries'].keys())} " +
+                  f"bytes: {v['bytes']}")
             for id, subquery  in v['queries'].items():
                 print(f"    {id} - rows: {subquery['rows']} bytes: {subquery['bytes']} " +
                       f"parts: {len(subquery['parts'])} table: {subquery['table']} " +

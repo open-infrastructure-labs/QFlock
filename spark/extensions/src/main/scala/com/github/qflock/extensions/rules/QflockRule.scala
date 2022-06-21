@@ -311,7 +311,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     val path = opt.get("path")
     val testNum = spark.conf.get("qflockTestNum")
-    opt.put("appid", s"$appId$testNum-$generationId")
+    val fullAppId = s"$appId$testNum-$generationId"
+    opt.put("appid", fullAppId)
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
     opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
@@ -356,6 +357,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val ndpRel = getNdpRelation(path, opt, schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references,
       relationArgs.catalogTable.get)
+    logger.info(s"CacheQuery appId:$fullAppId query:$query")
 //    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {

@@ -89,6 +89,22 @@ class QflockJdbcVectorReader(schema: StructType,
     val query = options.get("query")
     val driver = options.get("driver")
     val url = options.get("url")
+    val key = s"$query-${part.index}"
+    val cachedValue = QflockJdbcVectorReader.checkCache(key)
+    if (cachedValue != None) {
+      logger.info(s"Using cached data for key: $key")
+      cachedValue.get
+    } else {
+      val res = getRemoteResults
+      QflockJdbcVectorReader.insertCache(key, res)
+      res
+    }
+  }
+
+  def getRemoteResults: ResultSet = {
+    val query = options.get("query")
+    val driver = options.get("driver")
+    val url = options.get("url")
     try {
       logger.debug("Loading " + driver)
       // scalastyle:off classforname
@@ -98,6 +114,7 @@ class QflockJdbcVectorReader(schema: StructType,
       case e: Exception =>
         logger.warn("Failed to load JDBC driver." + e.toString)
     }
+
     logger.debug(s"connecting to $url")
     val properties = new Properties
     properties.setProperty("compression", "true")
@@ -145,5 +162,20 @@ class QflockJdbcVectorReader(schema: StructType,
     } else {
       false
     }
+  }
+}
+
+object QflockJdbcVectorReader {
+
+  private val cache = collection.mutable.Map[String, ResultSet]()
+
+  def checkCache(key: String): Option[ResultSet] = {
+    cache.get(key)
+  }
+  def insertCache(cacheKey: String, value: ResultSet): Unit = {
+    cache(cacheKey) = value
+  }
+  def removeCache(cacheKey: String, value: ResultSet): Unit = {
+    cache(cacheKey) = value
   }
 }
