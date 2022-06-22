@@ -20,6 +20,7 @@ import java.sql.{Connection, DriverManager, ResultSet}
 import java.util
 import java.util.Properties
 
+import com.github.qflock.extensions.common.QflockQueryCache
 import com.github.qflock.jdbc.QflockResultSet
 import org.slf4j.LoggerFactory
 
@@ -87,16 +88,20 @@ class QflockJdbcVectorReader(schema: StructType,
   }
   def getResults: ResultSet = {
     val query = options.get("query")
-    val driver = options.get("driver")
-    val url = options.get("url")
-    val key = s"$query-${part.index}"
-    val cachedValue = QflockJdbcVectorReader.checkCache(key)
-    if (cachedValue != None) {
-      logger.info(s"Using cached data for key: $key")
-      cachedValue.get
+    val appId = options.get("appid")
+    val queryName = options.getOrDefault("queryname", "")
+    val cachedValue = QflockQueryCache.checkKey(query, part.index)
+    if (cachedValue.isDefined) {
+      QflockLog.log(s"queryName:$queryName use-cached-data " +
+                    s"appId:$appId part:${part.index} key:$query")
+      cachedValue.get.asInstanceOf[ResultSet]
     } else {
       val res = getRemoteResults
-      QflockJdbcVectorReader.insertCache(key, res)
+      val cached = QflockQueryCache.insertData(query, part.index, res)
+      if (cached) {
+          QflockLog.log(s"queryName:$queryName cache-data " +
+                        s"appId: $appId part: ${part.index} key: $query")
+      }
       res
     }
   }

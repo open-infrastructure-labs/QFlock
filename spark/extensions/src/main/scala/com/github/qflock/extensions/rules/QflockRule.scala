@@ -22,7 +22,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
-import com.github.qflock.extensions.common.{PushdownSQL, PushdownSqlStatus}
+import com.github.qflock.extensions.common.{PushdownSQL, PushdownSqlStatus, QflockQueryCache}
 import com.github.qflock.extensions.jdbc.{QflockDataSourceV2ScanRelation, QflockJdbcScan}
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -328,8 +328,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rgParamName = s"spark.qflock.statistics.tableStats.$tableName.row_groups"
     opt.put("numrows",
       table.getParameters.get("spark.sql.statistics.numRows"))
-    opt.put("numrowgroups",
-            table.getParameters.get(rgParamName))
+    val numRowGroups = table.getParameters.get(rgParamName)
+    opt.put("numrowgroups", numRowGroups)
     opt.put("tablename", tableName)
     val schemaStr = catalogTable.schema.fields.map(s =>
       s.dataType match {
@@ -341,6 +341,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       }).mkString(",")
     opt.put("schema", schemaStr)
 
+    /* Prepare for later caching if needed. */
+    QflockQueryCache.addKey(query)
     val filterCondition = filters.reduceLeftOption(And)
     val statsParameters = QflockStatsParameters(project, filterCondition,
                                                 relationArgs, attrReferences,
