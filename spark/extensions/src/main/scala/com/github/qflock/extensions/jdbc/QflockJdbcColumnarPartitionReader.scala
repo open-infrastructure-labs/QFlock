@@ -23,7 +23,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  *  is relying on the QflockColumnarVectorReader to
  *  fetch the batches.
  *
- * @param vectorizedReader - Already initialized QflockColVectReader
+ * @param vectorizedReader - Already initialized QflockColumnarVectorReader
  *                           which provides the data for the PartitionReader.
  */
 class QflockJdbcColumnarPartitionReader(vectorizedReader: QflockColumnarVectorReader)

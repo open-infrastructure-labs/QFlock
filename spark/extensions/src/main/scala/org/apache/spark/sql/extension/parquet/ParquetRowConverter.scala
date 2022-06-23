@@ -26,9 +26,8 @@ import scala.collection.mutable.ArrayBuffer
 
 import org.apache.parquet.column.Dictionary
 import org.apache.parquet.io.api.{Binary, Converter, GroupConverter, PrimitiveConverter}
-import org.apache.parquet.schema.{GroupType, OriginalType, Type}
+import org.apache.parquet.schema.{GroupType, Type}
 import org.apache.parquet.schema.LogicalTypeAnnotation._
-import org.apache.parquet.schema.OriginalType.LIST
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName.{BINARY, FIXED_LEN_BYTE_ARRAY, INT32, INT64, INT96}
 
 import org.apache.spark.internal.Logging
@@ -39,7 +38,6 @@ import org.apache.spark.sql.catalyst.util.RebaseDateTime.RebaseSpec
 import org.apache.spark.sql.errors.QueryExecutionErrors
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
 import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
 
@@ -304,7 +302,7 @@ private[parquet] class ParquetRowConverter(
         }
 
       // For INT64 backed decimals
-      case t: DecimalType if parquetType.asPrimitiveType().getPrimitiveTypeName == INT64 =>
+      case _: DecimalType if parquetType.asPrimitiveType().getPrimitiveTypeName == INT64 =>
         parquetType.asPrimitiveType().getLogicalTypeAnnotation match {
           case decimalType: DecimalLogicalTypeAnnotation =>
             new ParquetLongDictionaryAwareDecimalConverter(

@@ -60,7 +60,7 @@ case class QflockCacheKeyEntry(query: String) {
 }
 object QflockQueryCache {
   private val cache = collection.mutable.Map[String, QflockCacheKeyEntry]()
-  private val maxBytes: Long = (1024L * 1024L * 1024L * 10L)
+  private val maxBytes: Long = 1024L * 1024L * 1024L * 10L
   var bytes: Long = 0
   def checkKey(key: String, partitionIndex: Int): Option[Any] = {
     this.synchronized {

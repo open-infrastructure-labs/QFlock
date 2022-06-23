@@ -37,7 +37,7 @@ class QflockLogicalRelationWithStats(override val relation: BaseRelation,
   }
 
   override def computeStats(): Statistics = {
-    if (rowCount == None) {
+    if (rowCount.isEmpty) {
       catalogTable
         .flatMap(_.stats.map(_.toPlanStats(output, planStatsEnabled = true)))
         .getOrElse(Statistics(sizeInBytes = relation.sizeInBytes))

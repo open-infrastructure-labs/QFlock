@@ -18,28 +18,14 @@ package com.github.qflock.extensions.rules
 
 import java.util
 
-import scala.collection.convert.ImplicitConversions.`map AsScala`
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, NamedExpression}
 
-import org.apache.hadoop.hive.metastore.api.Table
-import org.slf4j.{Logger, LoggerFactory}
-
-import org.apache.spark.Partition
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference, Expression, NamedExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{Project, Statistics}
-import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
-import org.apache.spark.sql.catalyst.util.truncatedString
-import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.hive.extension.ExtHiveUtils
-import org.apache.spark.sql.sources.BaseRelation
-
-case class QflockStatsParameters(val project: Seq[NamedExpression],
-                                 val filterCondition: Option[Expression],
-                                 val relationArgs: QflockRelationArgs,
-                                 val attrReferences: Seq[AttributeReference],
-                                 val filterReferences: Seq[AttributeReference],
-                                 val opt: util.HashMap[String, String],
-                                 val references: Seq[AttributeReference]) {
+case class QflockStatsParameters(project: Seq[NamedExpression],
+                                 filterCondition: Option[Expression],
+                                 relationArgs: QflockRelationArgs,
+                                 attrReferences: Seq[AttributeReference],
+                                 filterReferences: Seq[AttributeReference],
+                                 opt: util.HashMap[String, String],
+                                 references: Seq[AttributeReference]) {
 
 }
