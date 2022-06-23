@@ -23,7 +23,7 @@ object QflockLog {
     this.synchronized {
       val fw = new FileWriter(s"$path/qflock_log.txt", true)
       try {
-        fw.write(message.toString + "\n")
+        fw.write(message + "\n")
       }
       finally fw.close()
     }

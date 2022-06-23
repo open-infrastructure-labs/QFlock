@@ -232,15 +232,15 @@ class AnalyzeData:
                   jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(gain_bytes * 100, 4),
                   sep=",")
 
-        results_sorted = \
-            [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_time, reverse=True)]
-
-        for query in results_sorted:
-            spark_result = self._spark_results[query]
-            jdbc_result = self._jdbc_results[query]
-            print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
-                  jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
-                  sep=",")
+        # results_sorted = \
+        #     [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_time, reverse=True)]
+        #
+        # for query in results_sorted:
+        #     spark_result = self._spark_results[query]
+        #     jdbc_result = self._jdbc_results[query]
+        #     print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
+        #           jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
+        #           sep=",")
 
 
     def parse_args(self):

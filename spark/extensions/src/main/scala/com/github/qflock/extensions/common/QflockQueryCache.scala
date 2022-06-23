@@ -19,7 +19,7 @@ package com.github.qflock.extensions.common
 import org.slf4j.{Logger, LoggerFactory}
 
 
-case class QflockCacheEntry(data: Any) {
+case class QflockCacheEntry(data: Any, bytes: Int) {
   var hits = 0
   def incHits(): Unit = hits += 1
   def getData: Any = {
@@ -30,14 +30,17 @@ case class QflockCacheEntry(data: Any) {
 case class QflockCacheKeyEntry(query: String) {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   private val cache = collection.mutable.Map[Int, QflockCacheEntry]()
-  def insertData(partition: Int, newData: Any): Unit = {
-    cache(partition) = QflockCacheEntry(newData)
+  var bytes: Long = 0
+  def insertData(partition: Int, newData: Any, dataBytes: Int): Unit = {
+    bytes += dataBytes.toLong
+    cache(partition) = QflockCacheEntry(newData, dataBytes)
   }
   def checkKey(partitionIndex: Int): Option[Any] = {
     val entry = cache.get(partitionIndex)
     if (entry.isDefined) {
       val value = Some(entry.get.getData)
-      logger.info(s"Cache Hit part: $partitionIndex query: $query hits: ${entry.get.hits}")
+      logger.info(s"Cache Hit part: $partitionIndex query: $query " +
+                  s"hits: ${entry.get.hits} bytes:$bytes")
       value
     } else {
       entry
@@ -46,8 +49,9 @@ case class QflockCacheKeyEntry(query: String) {
   def checkAndRelease(partitionIndex: Int): Unit = {
     val entry = cache.get(partitionIndex)
     if (entry.isDefined && entry.get.hits == maxHits) {
+      bytes -= entry.get.bytes
       logger.info(s"Cache Release part: $partitionIndex " +
-                  s"query: $query hits: ${entry.get.hits} maxHits: $maxHits")
+                  s"query:$query hits:${entry.get.hits} maxHits:$maxHits bytes:$bytes")
       cache.remove(partitionIndex)
     }
   }
@@ -56,13 +60,15 @@ case class QflockCacheKeyEntry(query: String) {
 }
 object QflockQueryCache {
   private val cache = collection.mutable.Map[String, QflockCacheKeyEntry]()
-
+  private val maxBytes: Long = (1024L * 1024L * 1024L * 10L)
+  var bytes: Long = 0
   def checkKey(key: String, partitionIndex: Int): Option[Any] = {
     this.synchronized {
       val entry = cache.get(key)
       if (entry.isDefined) {
         val data = entry.get.checkKey(partitionIndex)
         entry.get.checkAndRelease(partitionIndex)
+        updateBytes()
         data
       } else {
         entry
@@ -89,12 +95,18 @@ object QflockQueryCache {
       }
     }
   }
-  def insertData(key: String, partitionIndex: Int, data: Any): Boolean = {
+
+  def updateBytes(): Unit = {
+    bytes = cache.map({ case (_, v) => v.bytes }).sum
+  }
+
+  def insertData(key: String, partitionIndex: Int, data: Any, dataBytes: Int): Boolean = {
     this.synchronized {
       val entry = cache.get(key)
       /* Only cache the queries that we know will get hits. */
-      if (entry.isDefined && entry.get.maxHits > 0) {
-        cache(key).insertData(partitionIndex, data)
+      if (entry.isDefined && entry.get.maxHits > 0 && bytes < maxBytes) {
+        cache(key).insertData(partitionIndex, data, dataBytes)
+        bytes += dataBytes.toLong
         true
       } else {
         false

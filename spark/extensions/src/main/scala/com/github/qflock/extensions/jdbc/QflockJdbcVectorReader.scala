@@ -92,15 +92,18 @@ class QflockJdbcVectorReader(schema: StructType,
     val queryName = options.getOrDefault("queryname", "")
     val cachedValue = QflockQueryCache.checkKey(query, part.index)
     if (cachedValue.isDefined) {
+      val bytes = QflockQueryCache.bytes
       QflockLog.log(s"queryName:$queryName use-cached-data " +
-                    s"appId:$appId part:${part.index} key:$query")
+                    s"appId:$appId part:${part.index} cachedBytes:$bytes key:$query")
       cachedValue.get.asInstanceOf[ResultSet]
     } else {
       val res = getRemoteResults
-      val cached = QflockQueryCache.insertData(query, part.index, res)
+      val qfResultSet = res.asInstanceOf[QflockResultSet]
+      val cached = QflockQueryCache.insertData(query, part.index, res, qfResultSet.getSize)
       if (cached) {
-          QflockLog.log(s"queryName:$queryName cache-data " +
-                        s"appId: $appId part: ${part.index} key: $query")
+        val bytes = QflockQueryCache.bytes
+        QflockLog.log(s"queryName:$queryName cache-data " +
+          s"appId: $appId part: ${part.index} cachedBytes:$bytes key: $query")
       }
       res
     }
