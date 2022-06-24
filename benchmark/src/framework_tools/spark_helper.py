@@ -29,13 +29,14 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=None, qflock_ds=False, output_path=None):
+                 jdbc=None, qflock_ds=False, output_path=None, results_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
         self._app_name = app_name
         self._use_catalog = use_catalog
         self._qflock_ds = qflock_ds
         self._output_path = output_path
+        self._results_path = results_path
         self.create_spark()
 
     def create_spark(self, query_name="", test_num="0"):
@@ -48,6 +49,7 @@ class SparkHelper:
                 .config("qflockQueryName", query_name)\
                 .config("qflockTestNum", test_num)\
                 .config("qflockJdbcUrl", self._jdbc)\
+                .config("qflockResultsPath", self._results_path)\
                 .enableHiveSupport()\
                 .getOrCreate()
         else:
@@ -55,6 +57,7 @@ class SparkHelper:
                 .builder\
                 .appName(self._app_name)\
                 .config("qflockQueryName", query_name)\
+                .config("qflockResultsPath", self._results_path)\
                 .config("qflockTestNum", test_num)\
                 .config("qflockJdbcUrl", self._jdbc)\
                 .getOrCreate()
@@ -73,7 +76,7 @@ class SparkHelper:
 
     def create_tables(self, tables, db_path):
         for t in tables.get_tables():
-            print("create table for", t)
+            logging.info(f"create table for {t}")
             self.create_table(tables, t, db_path)
 
     def load_extension(self):
@@ -263,7 +266,7 @@ class SparkHelper:
             print(f"schema {schema}")
             print(f"input_file {input_file}")
         df = self._spark.read.options(delimiter='|').schema(schema).csv(input_file)
-        print(f"database {input_file} has {df.count()} rows")
+        logging.info(f"database {input_file} has {df.count()} rows")
         block_size = 1024 * 1024 * 128
         # self._spark.sparkContext.hadoopConfiguration.setInt("dfs.blocksize", block_size)
         # self._spark.sparkContext.hadoopConfiguration.setInt("parquet.block.size", block_size)

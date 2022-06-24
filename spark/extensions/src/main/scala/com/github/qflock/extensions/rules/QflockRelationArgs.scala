@@ -18,6 +18,8 @@ package com.github.qflock.extensions.rules
 
 import scala.collection.JavaConverters._
 
+import com.github.qflock.extensions.jdbc.QflockJdbcScan
+
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
@@ -39,6 +41,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
 case class QflockRelationArgs(relation: Any, scan: Any, output: Seq[AttributeReference],
                               dataSchema: StructType, readSchema: StructType,
                               options: CaseInsensitiveStringMap,
+                              statsParam: Option[QflockStatsParameters],
                               catalogTable: Option[CatalogTable])
 
 object QflockRelationArgs {
@@ -55,15 +58,17 @@ object QflockRelationArgs {
       case LogicalRelation(relation, output, table, _) =>
         (relation, relation, output, table)
     }
-    val (dataSchema, readSchema, options) = scan match {
+    val (dataSchema, readSchema, options, statsParam) = scan match {
       case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _) =>
-        (dataSchema, readSchema, opts)
+        (dataSchema, readSchema, opts, None)
       case HadoopFsRelation(_, _, dataSchema, _, _, opts) =>
-        (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava))
+        (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava), None)
       case QflockRelation(schema, _, opts) =>
-        (schema, schema, new CaseInsensitiveStringMap(opts.asJava))
+        (schema, schema, new CaseInsensitiveStringMap(opts.asJava), None)
+      case QflockJdbcScan(schema, opts, statsParam, _) =>
+        (schema, schema, new CaseInsensitiveStringMap(opts), statsParam)
     }
     Some(new QflockRelationArgs(relation, scan, output, dataSchema,
-                                readSchema, options, catalogTable))
+                                readSchema, options, statsParam, catalogTable))
   }
 }

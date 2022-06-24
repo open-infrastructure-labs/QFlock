@@ -16,11 +16,13 @@
  */
 package com.github.qflock.extensions.jdbc
 
+
 import java.util
 import java.util.OptionalLong
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.github.qflock.extensions.rules.QflockStatsParameters
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
@@ -34,6 +36,7 @@ import org.apache.spark.sql.types._
  */
 case class QflockJdbcScan(schema: StructType,
                           options: util.Map[String, String],
+                          statsParams: Option[QflockStatsParameters],
                           stats: Statistics = Statistics(0, Some(0)))
   extends Scan with Batch with SupportsReportStatistics {
 
@@ -55,8 +58,8 @@ case class QflockJdbcScan(schema: StructType,
   }
   private def createPartitions(): Array[InputPartition] = {
     val path = options.get("path")
-    var partitions = options.get("numRowGroups").toInt
-    val numRows = options.get("numRows").toInt
+    var partitions = options.get("numrowgroups").toInt
+    val numRows = options.get("numrows").toInt
     val rowsPerPartition = numRows / partitions
     // Set below to true to do a 1 partition test.
     val partitionArray = new ArrayBuffer[InputPartition](0)
@@ -67,7 +70,7 @@ case class QflockJdbcScan(schema: StructType,
       partitions = 1
       partitionArray += new QflockJdbcPartition(index = 0,
         offset = 0,
-        length = options.get("numRowGroups").toInt,
+        length = options.get("numrowgroups").toInt,
         name = path)
     } else {
       // Generate one partition per row Group.

@@ -42,11 +42,11 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, AttributeReference] = {
     origExpression match {
-      case Alias(child, name) =>
+      case Alias(child, _) =>
         getAttribute(child)
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case Cast(expression, _, _, _) =>
         getAttribute(expression)
-      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+      case attrib: AttributeReference =>
         EitherRight(attrib)
       case default => EitherLeft("Unknown Attribute: " + default)
     }
@@ -74,7 +74,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
     var failed = false
     val attributes = filters.flatMap(f => {
       val attrSeq = getFilterExpressionAttributes(f)
-      if (attrSeq.length == 0) {
+      if (attrSeq.isEmpty) {
         failed = true
       }
       attrSeq
@@ -87,43 +87,41 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   def getFilterExpressionAttributes(filter: Expression): Seq[AttributeReference] = {
     filter match {
-      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+      case attrib: AttributeReference =>
         Seq(attrib)
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case Cast(expression, _, _, _) =>
         getFilterExpressionAttributes(expression)
       case Or(left, right) => getFilterExpressionAttributes(left) ++
         getFilterExpressionAttributes(right)
       case And(left, right) => getFilterExpressionAttributes(left) ++
         getFilterExpressionAttributes(right)
       case Not(filter) => getFilterExpressionAttributes(filter)
-      case In(attr, list) => getFilterExpressionAttributes(attr)
-      case EqualTo(attr, value) => getFilterExpressionAttributes(attr)
-      case LessThan(attr, value) => getFilterExpressionAttributes(attr)
-      case GreaterThan(attr, value) => getFilterExpressionAttributes(attr)
-      case LessThanOrEqual(attr, value) => getFilterExpressionAttributes(attr)
-      case GreaterThanOrEqual(attr, value) => getFilterExpressionAttributes(attr)
+      case In(attr, _) => getFilterExpressionAttributes(attr)
+      case EqualTo(attr, _) => getFilterExpressionAttributes(attr)
+      case LessThan(attr, _) => getFilterExpressionAttributes(attr)
+      case GreaterThan(attr, _) => getFilterExpressionAttributes(attr)
+      case LessThanOrEqual(attr, _) => getFilterExpressionAttributes(attr)
+      case GreaterThanOrEqual(attr, _) => getFilterExpressionAttributes(attr)
       case IsNull(attr) => getFilterExpressionAttributes(attr)
       case IsNotNull(attr) => getFilterExpressionAttributes(attr)
-      case StartsWith(left, right) => getFilterExpressionAttributes(left)
-      case EndsWith(left, right) => getFilterExpressionAttributes(left)
-      case Contains(left, right) => getFilterExpressionAttributes(left)
+      case StartsWith(left, _) => getFilterExpressionAttributes(left)
+      case EndsWith(left, _) => getFilterExpressionAttributes(left)
+      case Contains(left, _) => getFilterExpressionAttributes(left)
       case other@_ => logger.warn("unknown filter:" + other) ; Seq[AttributeReference]()
     }
   }
-  private def needsRule(project: Seq[NamedExpression],
-                        filters: Seq[Expression],
-                        child: Any): Boolean = {
+  private def needsRule(child: Any): Boolean = {
     child match {
-      case DataSourceV2ScanRelation(relation, scan, output) =>
+      case DataSourceV2ScanRelation(_, scan, _) =>
         !scan.isInstanceOf[QflockJdbcScan]
-      case qlr@QflockLogicalRelation(relation, output, table, _) =>
+      case qlr@QflockLogicalRelation(relation, _, _, _) =>
         relation match {
           // If we injected it just for size estimates, allow it to continue.
-          case q@QflockRelation(_, _, _) if qlr.isEstimate => true
-          case q@QflockRelation(_, _, _) => false
+          case _: QflockRelation if qlr.isEstimate => true
+          case _: QflockRelation => false
           case _ => true
         }
-      case LogicalRelation(relation, output, table, _) => true
+      case LogicalRelation(_, _, _, _) => true
       case _ => false
     }
   }
@@ -132,10 +130,10 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
                     child: Any,
                     alwaysInject: Boolean = true): Boolean = {
     val relationArgsOpt = QflockRelationArgs(child)
-    if (relationArgsOpt == None) {
+    if (relationArgsOpt.isEmpty) {
       return false
     }
-    val relationArgs = relationArgsOpt.get
+//    val relationArgs = relationArgsOpt.get
     //    if (relationArgs.dataSchema == relationArgs.readSchema) {
     //      logger.warn("Plan not modified. No Project Necessary. " +
     //        relationArgs.options.get("currenttest"))
@@ -150,13 +148,14 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
       if (filterReferencesEither.isLeft) {
         logger.warn("Plan not modified due to filter")
         alwaysInject
-      } else if (false && !filters.exists(x => !x.isInstanceOf[IsNotNull])) {
-        // We only pushdown if there are some filters that are not (IsNotNull).
-        // logger.warn("Plan has no filters ")
-        relationArgs.scan match {
-            case QflockRelation(schema, parts, opts) => false
-            case _ => alwaysInject
-        }
+        //      } else if (false && !filters.exists(x => !x.isInstanceOf[IsNotNull])) {
+        //        // We only pushdown if there are some filters that are not (IsNotNull).
+        //        // logger.warn("Plan has no filters ")
+        //        relationArgs.scan match {
+        //            case QflockRelation(schema, parts, opts) => false
+        //            case _ => alwaysInject
+        //        }
+        //      }
       } else {
         true
       }
@@ -172,12 +171,12 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     val attrReferences = attrReferencesEither match {
       case EitherRight(r) => r
-      case EitherLeft(l) => Seq[AttributeReference]()
+      case EitherLeft(_) => Seq[AttributeReference]()
     }
     val filterReferencesEither = getFilterAttributes(filters)
     val filterReferences = filterReferencesEither match {
       case EitherRight(r) => r
-      case EitherLeft(l) => Seq[AttributeReference]()
+      case EitherLeft(_) => Seq[AttributeReference]()
     }
     val opt = new util.HashMap[String, String](relationArgs.options)
     val path = opt.get("path") // .replaceFirst("hdfs://.*:9000/", "hdfs://dikehdfs:9860/")
@@ -209,7 +208,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
         filterCondition.map(LogicalFilter(_, scanRelation)).getOrElse(scanRelation)
       }
     }
-    if (withFilter.output != project || filters.length == 0) {
+    if (withFilter.output != project || filters.isEmpty) {
       if (project != scanRelation.output) {
         Project(project, withFilter)
       } else {
@@ -230,14 +229,14 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val newPlan = plan.transform {
       case s@ScanOperation(project,
       filters,
-      child: DataSourceV2ScanRelation) if needsRule(project, filters, child) &&
+      child: DataSourceV2ScanRelation) if needsRule(child) &&
         canHandlePlan(project, filters, child) =>
         val modified = transformProject(s, project, filters, child)
         logger.info("before pushFilterProject: \n" + project + "\n" + s)
         logger.info("after pushFilterProject: \n" + modified)
         modified
       case s@ScanOperation(project,
-        filters, child: LogicalRelation) if needsRule(project, filters, child) &&
+        filters, child: LogicalRelation) if needsRule(child) &&
         canHandlePlan(project, filters, child) =>
       val modified = transformProject(s, project, filters, child)
       logger.info("before pushFilterProject: \n" + project + "\n" + s)

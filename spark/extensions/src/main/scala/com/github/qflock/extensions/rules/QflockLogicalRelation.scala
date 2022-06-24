@@ -137,7 +137,7 @@ object QflockLogicalRelation {
     }
     val (relationSizeInBytes, relationRows) = {
       // Just add the size required by the filter to the size required by the project.
-      val relationRows = if (filterReferences.length > 0) {
+      val relationRows = if (filterReferences.nonEmpty) {
         val filterRelationV = new QflockLogicalRelationWithStats(
           qflockRelation.asInstanceOf[BaseRelation],
           filterReferences,

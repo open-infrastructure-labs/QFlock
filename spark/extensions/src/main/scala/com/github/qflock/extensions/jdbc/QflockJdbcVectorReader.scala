@@ -20,6 +20,7 @@ import java.sql.{Connection, DriverManager, ResultSet}
 import java.util
 import java.util.Properties
 
+import com.github.qflock.extensions.common.QflockQueryCache
 import com.github.qflock.jdbc.QflockResultSet
 import org.slf4j.LoggerFactory
 
@@ -87,6 +88,29 @@ class QflockJdbcVectorReader(schema: StructType,
   }
   def getResults: ResultSet = {
     val query = options.get("query")
+    val appId = options.get("appid")
+    val queryName = options.getOrDefault("queryname", "")
+    val cachedValue = QflockQueryCache.checkKey(query, part.index)
+    if (cachedValue.isDefined) {
+      val bytes = QflockQueryCache.bytes
+      QflockLog.log(s"queryName:$queryName use-cached-data " +
+                    s"appId:$appId part:${part.index} cachedBytes:$bytes key:$query")
+      cachedValue.get.asInstanceOf[ResultSet]
+    } else {
+      val res = getRemoteResults
+      val qfResultSet = res.asInstanceOf[QflockResultSet]
+      val cached = QflockQueryCache.insertData(query, part.index, res, qfResultSet.getSize)
+      if (cached) {
+        val bytes = QflockQueryCache.bytes
+        QflockLog.log(s"queryName:$queryName cache-data " +
+          s"appId: $appId part: ${part.index} cachedBytes:$bytes key: $query")
+      }
+      res
+    }
+  }
+
+  def getRemoteResults: ResultSet = {
+    val query = options.get("query")
     val driver = options.get("driver")
     val url = options.get("url")
     try {
@@ -98,12 +122,13 @@ class QflockJdbcVectorReader(schema: StructType,
       case e: Exception =>
         logger.warn("Failed to load JDBC driver." + e.toString)
     }
+
     logger.debug(s"connecting to $url")
     val properties = new Properties
     properties.setProperty("compression", "true")
     properties.setProperty("rowGroupOffset", part.offset.toString)
     properties.setProperty("rowGroupCount", part.length.toString)
-    properties.setProperty("tableName", options.get("tableName"))
+    properties.setProperty("tableName", options.get("tablename"))
     properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
     val startTime = System.nanoTime()
     connection = Some(DriverManager.getConnection(url, properties))
@@ -114,13 +139,15 @@ class QflockJdbcVectorReader(schema: StructType,
     logger.debug(s"Query complete $query")
     val elapsed = System.nanoTime() - startTime
     val qfResultSet = result.asInstanceOf[QflockResultSet]
-    val appId = options.get("appId")
-    val queryName = options.getOrDefault("queryName", "")
-    val tableName = options.get("tableName")
+    val appId = options.get("appid")
+    val queryName = options.getOrDefault("queryname", "")
+    val tableName = options.get("tablename")
+    val ruleLog = options.get("rulelog")
     QflockLog.log(s"queryName:$queryName appId:$appId rows:${qfResultSet.getNumRows} " +
-                  s"bytes:${qfResultSet.getSize} " +
+                  s"bytes:${qfResultSet.getSize} ruleLog:$ruleLog " +
                   s"tableName:$tableName part:${part.index} " +
-                  s"timeNs:$elapsed query:$query")
+                  s"timeNs:$elapsed query:$query",
+                  path = options.get("resultspath"))
     // return the result and the connection so we can close it later.
     result
   }
@@ -143,5 +170,20 @@ class QflockJdbcVectorReader(schema: StructType,
     } else {
       false
     }
+  }
+}
+
+object QflockJdbcVectorReader {
+
+  private val cache = collection.mutable.Map[String, ResultSet]()
+
+  def checkCache(key: String): Option[ResultSet] = {
+    cache.get(key)
+  }
+  def insertCache(cacheKey: String, value: ResultSet): Unit = {
+    cache(cacheKey) = value
+  }
+  def removeCache(cacheKey: String, value: ResultSet): Unit = {
+    cache(cacheKey) = value
   }
 }

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 import os
 from metastore_client import HiveMetastoreClient
 
@@ -6,10 +7,11 @@ import pyarrow.parquet
 import pyarrow.fs
 
 class TableMetadata:
-    def __init__(self):
+    def __init__(self, dest_path=""):
         metastore_ip = "qflock-storage-dc1"
         metastore_port = "9084"
         self._metastore_client = HiveMetastoreClient(metastore_ip, metastore_port)
+        self._dest_path = dest_path
 
     def get_file_stats(self, location: str):
         # Open parquet file
@@ -25,8 +27,8 @@ class TableMetadata:
         return num_rows, num_row_groups
 
     def get_table_info(self):
-        if not os.path.exists("data"):
-            os.mkdir("data")
+        if not os.path.exists(self._dest_path):
+            os.mkdir(self._dest_path)
         db_name = 'tpcds'
         table_names = self._metastore_client.client.get_all_tables(db_name)
 
@@ -34,7 +36,7 @@ class TableMetadata:
                   for table_name in table_names]
         tables.sort(key=lambda tbl: int(tbl.sd.parameters['qflock.storage_size']), reverse=True)
 
-        with open("data/tables.csv", "w") as fd:
+        with open(os.path.join(self._dest_path, "tables.csv"), "w") as fd:
             print("table name,path,data center,bytes,metastore rows,metastore row groups," +
                   "parquet rows,parquet row groups", file=fd)
             for tbl in tables:
@@ -46,7 +48,10 @@ class TableMetadata:
                       f"{tbl.parameters[stat_name]},{rows},{row_groups}", file=fd)
 
 if __name__ == '__main__':
-    tbl = TableMetadata()
+    dest = ""
+    if len(sys.argv) > 1:
+        dest = sys.argv[1]
+    tbl = TableMetadata(dest_path=dest)
     tbl.get_table_info()
 
 
