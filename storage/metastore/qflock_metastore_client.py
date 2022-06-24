@@ -102,7 +102,7 @@ def get_file_stats(location: str):
 if __name__ == '__main__':
     datanode_name = 'qflock-storage-dc1'
     storage_ip = get_docker_ip(datanode_name)
-    client_transport = TSocket.TSocket(storage_ip, 9083)
+    client_transport = TSocket.TSocket(storage_ip, 9084)
     client_transport = TTransport.TBufferedTransport(client_transport)
     client_protocol = TBinaryProtocol.TBinaryProtocol(client_transport)
     client = ThriftHiveMetastore.Client(client_protocol)
@@ -113,9 +113,6 @@ if __name__ == '__main__':
         except BaseException as ex:
             print('Metastore is not ready. Retry in 1 sec.')
             time.sleep(1)
-
-    catalogs = client.get_catalogs()
-    print(catalogs)
 
     databases = client.get_all_databases()
     print(databases)
