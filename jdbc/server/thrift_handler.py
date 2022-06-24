@@ -19,6 +19,8 @@ import os
 import threading
 import inspect
 import logging
+import shutil
+import glob
 import pyspark
 from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType, ShortType
 import numpy as np
@@ -38,6 +40,7 @@ class QflockThriftJdbcHandler:
     def __init__(self, spark_log_level="INFO",
                  metastore_ip="", metastore_port="", debug_pyspark=False,
                  max_views=4, compression=True):
+        self._spark_temp_dir = "/tmp/spark-temp"
         self._max_views = max_views
         self._compression = compression
         self._lock = threading.Lock()
@@ -75,13 +78,24 @@ class QflockThriftJdbcHandler:
             .config("spark.jars", "../../spark/extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar")\
             .getOrCreate()
 
+    def _clean_spark_temp_dir(self):
+        logging.debug(f"clean spark temp dir {self._spark_temp_dir}")
+        temp_dirs_top = glob.glob(os.path.join(self._spark_temp_dir, "*"))
+        for t in temp_dirs_top:
+            temp_dirs = glob.glob(os.path.join(t, "*"))
+            for d in temp_dirs:
+                logging.debug(f"cleaning {d}")
+                shutil.rmtree(d)
+
     def _create_spark(self):
         # .enableHiveSupport()\
         # We do not use hive since we create
         # our own temp views with names of the table.
+        logging.info(f"create new session {self._query_id}")
         self._spark = pyspark.sql.SparkSession \
             .builder \
             .appName("qflock-jdbc")\
+            .config("spark.local.dir", self._spark_temp_dir)\
             .getOrCreate()
 
     def _get_tables(self):
@@ -170,25 +184,39 @@ class QflockThriftJdbcHandler:
         self._lock.acquire()
         query_id = self.get_query_id()
         self._lock.release()
-        query = sql.replace('\"', "")
-        query_stats = connection['properties']['queryStats']
         rg_offset = connection['properties']['rowGroupOffset']
         rg_count = connection['properties']['rowGroupCount']
         table_name = connection['properties']['tableName']
-        
+
         # get a request_id from the datasource.
         # This will allow us to pass parameters of rg_offset and count
         # down to the datasource, while still querying using an SQL string.
         # Choose the view which represents this request_id
-        req_id = self._ds_table_desc[table_name].fillRequestInfo(int(rg_offset), int(rg_count))
+        request_id = self._ds_table_desc[table_name].fillRequestInfo(int(rg_offset), int(rg_count))
+        result = None
+        try:
+            result = self.exec_query_with_req_id(sql, connection, query_id, request_id)
+        except BaseException as err:
+            logging.warning(f"Unexpected {err=}, {type(err)=}")
+        finally:
+            self._ds_table_desc[table_name].freeRequest(request_id)
+        if result is None:
+            logging.warning("no result returned")
+        return result
 
-        query = query.replace(f" {table_name} ", f" {table_name}_{req_id} ")
-        logging.debug(f"query_id: {query_id} req_id: {req_id} table:{table_name} "
+    def exec_query_with_req_id(self, sql, connection, query_id, request_id):
+        query = sql.replace('\"', "")
+        query_stats = connection['properties']['queryStats']
+        table_name = connection['properties']['tableName']
+
+        query = query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
+        logging.debug(f"query_id: {query_id} req_id: {request_id} table:{table_name} "
                      f"query: {query} ")
         df = self._spark.sql(query)
         df_pandas = df.toPandas()
         num_rows = len(df_pandas.index)
         logging.debug(f"query toPandas() done rows:{num_rows}")
+        logging.debug(f"schema: {df.schema}")
         df_schema = df.schema
         binary_rows = []
         col_type_bytes = []
@@ -196,46 +224,8 @@ class QflockThriftJdbcHandler:
         comp_rows = []
         col_comp_bytes = []
         if num_rows > 0:
-            columns = df.columns
-            for col_idx in range(0, len(columns)):
-                # data = np_array[:,col_idx]
-                data = df_pandas[columns[col_idx]].to_numpy()
-                col_name = df_schema.fields[col_idx].name
-                data_type = df_schema.fields[col_idx].dataType
-                if isinstance(data_type, StringType):
-                    new_data1 = data.astype(str)
-                    new_data = np.char.encode(new_data1, encoding='utf-8')
-                    item_size = new_data.dtype.itemsize
-                    num_bytes = len(new_data) * item_size
-                    col_bytes.append(num_bytes)
-                    if self._compression is True:
-                        # logging.debug(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
-                        new_data = zstd.ZstdCompressor().compress(new_data)
-                        col_comp_bytes.append(len(new_data))
-                        # logging.debug(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
-                        raw_bytes = new_data
-                        comp_rows.append(raw_bytes)
-                    else:
-                        raw_bytes = new_data.tobytes()
-                        col_comp_bytes.append(len(raw_bytes))
-                        binary_rows.append(raw_bytes)
-                    col_type_bytes.append(item_size)
-                else:
-                    new_data = data.byteswap().newbyteorder().tobytes()
-                    # new_data = data.tobytes()
-                    num_bytes = len(new_data)
-                    col_bytes.append(num_bytes)
-                    if self._compression is True:
-                        # logging.debug(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
-
-                        new_data = zstd.ZstdCompressor().compress(new_data)
-                        col_comp_bytes.append(len(new_data))
-                        comp_rows.append(new_data)
-                        # logging.debug(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
-                    else:
-                        col_comp_bytes.append(len(new_data))
-                        binary_rows.append(new_data)
-                    col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
+            self.format_data(binary_rows, col_bytes, col_comp_bytes, col_type_bytes, comp_rows, df, df_pandas,
+                             df_schema)
 
         stats = query_stats.split(" ")
         if query_stats != "" and len(stats) > 0:
@@ -248,14 +238,53 @@ class QflockThriftJdbcHandler:
                          f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
                          f"query: {query}")
         else:
-            logging.debug(f"query-done rows:{num_rows} " +
-                         f"query: {query}")
-        self._ds_table_desc[table_name].freeRequest(req_id)
-        # logging.info(f"query-done rows:{num_rows} query: {query}")
+            logging.debug(f"query-done rows:{num_rows} query: {query}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnTypeBytes=col_type_bytes,
                                   columnBytes=col_bytes, compressedColumnBytes=col_comp_bytes,
                                   compressedRows=comp_rows)
+
+    def format_data(self, binary_rows, col_bytes, col_comp_bytes, col_type_bytes, comp_rows, df, df_pandas, df_schema):
+        columns = df.columns
+        for col_idx in range(0, len(columns)):
+            # data = np_array[:,col_idx]
+            data = df_pandas[columns[col_idx]].to_numpy()
+            col_name = df_schema.fields[col_idx].name
+            data_type = df_schema.fields[col_idx].dataType
+            if isinstance(data_type, StringType):
+                new_data1 = data.astype(str)
+                new_data = np.char.encode(new_data1, encoding='utf-8')
+                item_size = new_data.dtype.itemsize
+                num_bytes = len(new_data) * item_size
+                col_bytes.append(num_bytes)
+                if self._compression is True:
+                    # logging.debug(f"compressing col:{col_name} type_size:{item_size} rows:{num_rows} bytes: {num_bytes}")
+                    new_data = zstd.ZstdCompressor().compress(new_data)
+                    col_comp_bytes.append(len(new_data))
+                    # logging.debug(f"compressing rows:{num_rows}.  bytes: {num_bytes}:{len(new_data)} Done")
+                    raw_bytes = new_data
+                    comp_rows.append(raw_bytes)
+                else:
+                    raw_bytes = new_data.tobytes()
+                    col_comp_bytes.append(len(raw_bytes))
+                    binary_rows.append(raw_bytes)
+                col_type_bytes.append(item_size)
+            else:
+                new_data = data.byteswap().newbyteorder().tobytes()
+                # new_data = data.tobytes()
+                num_bytes = len(new_data)
+                col_bytes.append(num_bytes)
+                if self._compression is True:
+                    # logging.debug(f"compressing col:{col_name} rows:{num_rows} bytes: {num_bytes}")
+
+                    new_data = zstd.ZstdCompressor().compress(new_data)
+                    col_comp_bytes.append(len(new_data))
+                    comp_rows.append(new_data)
+                    # logging.debug(f"compressing rows:{num_rows} bytes: {num_bytes}:{len(new_data)} Done")
+                else:
+                    col_comp_bytes.append(len(new_data))
+                    binary_rows.append(new_data)
+                col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
 
     def get_connection_id(self):
         current_id = self._connection_id
@@ -488,8 +517,17 @@ class QflockThriftJdbcHandler:
          - connection
 
         """
+
         if connection.id in self._connections:
             del self._connections[connection.id]
+            self._lock.acquire()
+            num_connections = len(self._connections.keys())
+            if len(self._connections.keys()) == 0:
+                # self._clean_spark_temp_dir()
+                pass
+            else:
+                logging.debug(f"connections: {num_connections}")
+            self._lock.release()
             logging.debug(f"successfully closed connection {connection.id}")
         else:
             logging.warning(f"connection id {connection.id} not found")

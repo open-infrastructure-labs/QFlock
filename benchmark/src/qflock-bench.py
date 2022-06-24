@@ -1,4 +1,4 @@
-#! /usr/bin/python3
+#!/usr/bin/env python3
 #
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
@@ -18,6 +18,7 @@
 import sys
 import os
 import time
+import subprocess
 import argparse
 from argparse import RawTextHelpFormatter
 import yaml
@@ -129,10 +130,10 @@ class QflockBench:
                                  "Valid values are OFF, ERROR, WARN, INFO, DEBUG, TRACE")
         parser.add_argument("--file", "-f", default="config.yaml",
                             help="config file to use, defaults to spark_bench.yaml")
-        parser.add_argument("--queries", "-q",
+        parser.add_argument("--queries", "-q", default=None,
                             help="queries to run by spark_bench.py\n"
                                  "ex. -q 1,2,3,5-9,16-19,21,*")
-        parser.add_argument("--query_range", "-qr",
+        parser.add_argument("--query_range", "-qr", default=None,
                             help="queries to run directly by bench.py\n"
                                  "ex. -q 1,2,3,5-9,16-19,21,*")
         parser.add_argument("--view_columns",
@@ -156,8 +157,24 @@ class QflockBench:
                             help="cause every row from every table to be generated as output.")
         parser.add_argument("--output_path", default=None,
                             help="root folder to output results.")
+        parser.add_argument("--results_path", default=None,
+                            help="directory for perf results.")
+        parser.add_argument("--results_file", default=None,
+                            help="file for perf results.")
+        parser.add_argument("--restart_jdbc", action="store_true",
+                            help="Restart the jdbc server.")
         return parser
 
+    def _terse_command(self):
+        # If we are logging then we should not invoke terse mode.
+        if self._args.log_level != "OFF":
+            return False
+        elif self._args.queries is not None or self._args.query_range is not None:
+            # If we are using certain commands, allow terse mode.
+            return True
+        else:
+            return False
+        
     def _parse_args(self):
         b = bench.BenchmarkApp()
         parent_parser = b.get_parser(parent_parser=True)
@@ -172,11 +189,14 @@ class QflockBench:
         self._args, self._remaining_args = parser.parse_known_args()
         self._parse_workers_list()
         self._wait_for_string = None
-        if not self._args.verbose:
-            # IF we are not verbose Then we are terse by default.
+        if not self._args.verbose and self._terse_command():
+            # IF we are not verbose Then we are terse by default for certain commands.
             self._args.terse = True
         if not self._args.terse:
-            self._wait_for_string = "bench.py starting" if self._args.log_level == "OFF" else None
+            if self._args.log_level == "OFF":
+                self._wait_for_string = "bench.py starting"
+            else:
+                self._wait_for_string = None
         if "--capture_log_level" in self._remaining_args:
             self._wait_for_string = None
         return True
@@ -204,6 +224,16 @@ class QflockBench:
         minutes, seconds = divmod(rem, 60)
         print("elapsed time: {:2}:{:02}:{:02}".format(int(hours), int(minutes), int(seconds)))
 
+    def restart_jdbc(self):
+        ssh_cmd = "ssh qflock-jdbc-dc2 /scripts/restart_jdbc.sh"
+        result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                shell=True)
+        if result.returncode != 0:
+            print("failed to restart jdbc")
+        print("restarted jdbc")
+        # TODO We should really poll the server to check it is up.
+        time.sleep(60)
+
     def run_query(self):
         # timestr = time.strftime("%Y%m%d-%H%M%S")
         failure_count = 0
@@ -211,9 +241,15 @@ class QflockBench:
         for w in self._workers_list:
             idx = 0
             for q in self._query_list:
+                if idx != 0 and self._args.restart_jdbc and (idx % 10) == 0:
+                    self.restart_jdbc()
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)} ' + \
                       f'--test_num {idx} '
+                if self._args.results_path:
+                    cmd += f'--results_path {self._args.results_path} '
+                if self._args.results_file:
+                    cmd += f'--results_file {self._args.results_file} '
                 if self._args.extensions == "explain":
                     # Auto enable explain on this query if we are using explain extension.
                     cmd += '--explain --ext explain'
@@ -245,6 +281,10 @@ class QflockBench:
         cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} '
         if self._args.output_path:
             cmd += f'--output_path {self._args.output_path} '
+        if self._args.results_path:
+            cmd += f'--results_path {self._args.results_path} '
+        if self._args.results_file:
+            cmd += f'--results_file {self._args.results_file} '
         if self._args.query_range:
             cmd += f'--query_range "{self._args.query_range}" '
         if self._args.query_text:

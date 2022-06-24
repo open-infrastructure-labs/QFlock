@@ -33,7 +33,9 @@ import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Count, Max, Min, Sum}
 import org.apache.spark.sql.catalyst.util.DateFormatter
+import org.apache.spark.sql.execution.datasources.PushableColumnWithoutNestedColumn
 import org.apache.spark.sql.types._
 
 
@@ -163,11 +165,11 @@ class PushdownSQL(schema: StructType,
       case Contains(attr, value) =>
         val attrStr = buildFilterExpression(attr).getOrElse("")
         Option(s"$attrStr LIKE '%$value%'")
-      case AttributeReference(name, dataType, nullable, meta) =>
+      case AttributeReference(name, _, _, _) =>
         buildAttributeReference(name)
       case Literal(value, dataType) =>
         buildLiteral(value, dataType)
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case Cast(expression, _, _, _) =>
         buildFilterExpression(expression)
       case In(value, list) =>
         buildInExpression(value, list)
@@ -230,6 +232,16 @@ class PushdownSQL(schema: StructType,
     val jsonString = stringWriter.getBuffer.toString
     jsonString
   }
+//  private def getGroupByClause(aggregation: Option[AggregateExpression]): String = {
+//    if ((aggregation != None) &&
+//      (aggregation.get.groupByColumns.length > 0)) {
+//      val quotedColumns =
+//        aggregation.get.groupByColumns.map(c => s"${getColString(c.fieldNames.head)}")
+//      s"GROUP BY ${quotedColumns.mkString(", ")}"
+//    } else {
+//      ""
+//    }
+//  }
 }
 
 object PushdownSQL {
@@ -273,21 +285,21 @@ object PushdownSQL {
                                     checkHandleFilterExpression(right, depth + 1)
       case Contains(left, right) => checkHandleFilterExpression(left, depth + 1) &&
                                     checkHandleFilterExpression(right, depth + 1)
-      case AttributeReference(name, dataType, nullable, meta) =>
+      case _: AttributeReference =>
         true
-      case Literal(value, dataType) =>
+      case _: Literal =>
         true
-      case Cast(expression, dataType, _, _) =>
+      case _: Cast =>
         true
-      case In(_, _) =>
+      case _: In =>
         true
-      case InSet(_, _) =>
+      case _: InSet =>
         true
-      case ScalarSubquery(plan, outerAttrs, exprId, joinCond) =>
+      case _: ScalarSubquery =>
         false
-      case Divide(left, right, failOnError) =>
+      case _: Divide =>
         true
-      case Substring(str, pos, len) =>
+      case _: Substring =>
         true
       case other@_ => logger.warn("unknown checkHandle filter:" + other)
         true
@@ -339,19 +351,19 @@ object PushdownSQL {
                                     validateFilterExpression(right, depth + 1)
       case Contains(left, right) => validateFilterExpression(left, depth + 1) &&
                                     validateFilterExpression(right, depth + 1)
-      case AttributeReference(name, dataType, nullable, meta) =>
+      case _: AttributeReference =>
         true
-      case Literal(value, dataType) =>
+      case _: Literal =>
         true
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case _: Cast =>
         true
-      case In(value, list) =>
+      case _: In =>
         true
-      case InSet(child, hset) =>
+      case _: InSet =>
         true
-      case Divide(left, right, _) =>
+      case _: Divide =>
         true
-      case Substring(str, pos, len) =>
+      case _: Substring =>
         true
       case other@_ => logger.warn("unknown filter:" + other)
         /* Reached an unknown node, return validation failed. */
@@ -376,6 +388,148 @@ object PushdownSQL {
       PushdownSqlStatus.FullyValid
     } else {
       PushdownSqlStatus.Invalid
+    }
+  }
+
+  def getAggregateSchema(aggregates: Seq[AggregateExpression],
+                         groupingExpressions: Seq[Expression]): StructType = {
+    var schema = new StructType()
+    for (e <- groupingExpressions) {
+      e match {
+        case AttributeReference(name, dataType, _, _) =>
+          schema = schema.add(StructField(name, dataType))
+      }
+    }
+    for (a <- aggregates) {
+      a.aggregateFunction match {
+        case min @ Min(PushableColumnWithoutNestedColumn(_)) =>
+          schema = schema.add(StructField(s"min(name)", min.dataType))
+        case max @ Max(PushableColumnWithoutNestedColumn(_)) =>
+          schema = schema.add(StructField(s"max(name)", max.dataType))
+        case count: aggregate.Count if count.children.length == 1 =>
+          count.children.head match {
+            // SELECT COUNT(*) FROM table is translated to SELECT 1 FROM table
+            case Literal(_, _) =>
+              schema = schema.add(StructField("count(*)", LongType))
+            case PushableColumnWithoutNestedColumn(name) =>
+              schema = schema.add(StructField(s"count($name)", LongType))
+          }
+        case sum @ Sum(PushableColumnWithoutNestedColumn(name), _) =>
+          schema = schema.add(StructField(s"sum($name)", sum.dataType))
+        case sum @ Sum(child: Expression, _) =>
+          schema = schema.add(StructField(s"sum(${getAggregateString(child)})", sum.dataType))
+      }
+    }
+    schema
+  }
+
+  def getAggregateString(e: Expression): String = {
+    e match {
+      case AttributeReference(name, _, _, _) =>
+        name
+      case Literal(value, _) =>
+        value.toString
+      case Multiply(left, right, _) =>
+        s"(${getAggregateString(left)} * ${getAggregateString(right)})"
+      case Divide(left, right, _) =>
+        s"(${getAggregateString(left)} / ${getAggregateString(right)})"
+      case Add(left, right, _) =>
+        s"(${getAggregateString(left)} + ${getAggregateString(right)})"
+      case Subtract(left, right, _) =>
+        s"(${getAggregateString(left)} - ${getAggregateString(right)})"
+    }
+  }
+  def buildAggregateExpression(aggregate: AggregateExpression): Option[String] = {
+    def buildAggComp(left: Expression, right: Expression, comparisonOp: String): String = {
+      s"${buildAggExpr(left)} $comparisonOp ${buildAggExpr(right)}"
+    }
+    def buildAggExpr(e: Expression) : String = {
+      e match {
+        case AttributeReference(name, _, _, _) =>
+          name
+        case Literal(value, _) =>
+          value.toString
+        case Multiply(left, right, _) =>
+          buildAggComp(left, right, "*")
+        case Divide(left, right, _) =>
+          buildAggComp(left, right, "/")
+        case Add(left, right, _) =>
+          buildAggComp(left, right, "+")
+        case Subtract(left, right, _) =>
+          buildAggComp(left, right, "-")
+      }
+    }
+    def buildCount(value: Any,
+                   isDistinct: Boolean = false): String = {
+      if (isDistinct) {
+        s"COUNT(DISTINCT $value)"
+      } else {
+        s"COUNT($value)"
+      }
+    }
+    if (aggregate.filter.isEmpty) {
+      aggregate.aggregateFunction match {
+        case Min(PushableColumnWithoutNestedColumn(name)) =>
+          Some("MIN(" + name + ")")
+        case Max(PushableColumnWithoutNestedColumn(name)) =>
+          Some("MAX(" + name + ")")
+        case count: Count if count.children.length == 1 =>
+          count.children.head match {
+            // SELECT COUNT(*) FROM table is translated to SELECT 1 FROM table
+            case Literal(_, _) =>
+              Some(buildCount("*",
+                              isDistinct = aggregate.isDistinct))
+            case PushableColumnWithoutNestedColumn(name) =>
+              Some(buildCount(name,
+                              isDistinct = aggregate.isDistinct))
+            case _ => None
+          }
+        case Sum(PushableColumnWithoutNestedColumn(name), _) =>
+          Some("SUM(" + name + ")")
+        case Sum(child: Expression, _) =>
+          Some("SUM(" + buildAggExpr(child) + ")")
+        case _ => None
+      }
+    } else {
+      None
+    }
+  }
+  def getAggregateExpressionSql(aggregateExpressions: Seq[AggregateExpression]): String = {
+    var sql: String = ""
+    for (f <- aggregateExpressions) {
+      val a = buildAggregateExpression(f)
+      if (a.isDefined) {
+        if (sql != "") {
+          sql += "," + a.get
+        } else {
+          sql += a.get
+        }
+      }
+    }
+    sql
+  }
+  def getGroupbyExpression(groupingExpressions: Seq[Expression]): String = {
+    var groupbySql = ""
+    for (e <- groupingExpressions) {
+      val expr = {
+        e match {
+          case PushableColumnWithoutNestedColumn(name) =>
+            Some(name)
+        }
+      }
+      groupbySql += s"${expr.get} "
+    }
+    groupbySql
+  }
+  def getAggregateSql(aggregateExpressions: Seq[AggregateExpression],
+                      groupingExpressions: Seq[Expression],
+                      query: String): String = {
+    val aggregateSql = getAggregateExpressionSql(aggregateExpressions)
+    if (groupingExpressions.isEmpty) {
+      s"SELECT $aggregateSql FROM $query"
+    } else {
+      val groupby = getGroupbyExpression(groupingExpressions)
+      s"SELECT $groupby,$aggregateSql FROM $query GROUP BY $groupby"
     }
   }
 }

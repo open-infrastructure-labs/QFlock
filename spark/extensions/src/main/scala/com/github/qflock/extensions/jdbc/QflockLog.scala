@@ -19,11 +19,11 @@ package com.github.qflock.extensions.jdbc
 import java.io.FileWriter
 
 object QflockLog {
-  def log(message: String): Unit = {
+  def log(message: String, path: String = "data"): Unit = {
     this.synchronized {
-      val fw = new FileWriter("data/qflock_log.txt", true)
+      val fw = new FileWriter(s"$path/qflock_log.txt", true)
       try {
-        fw.write(message.toString + "\n")
+        fw.write(message + "\n")
       }
       finally fw.close()
     }

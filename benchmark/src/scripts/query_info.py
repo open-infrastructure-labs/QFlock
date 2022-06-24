@@ -7,11 +7,12 @@ import glob
 
 class QueryInfo:
 
-    def __init__(self, root_path):
+    def __init__(self, root_path, dest_path):
         self._root_path = root_path
+        self._dest_path = dest_path
         self._queries = {}
         self._table_counts = {}
-        self._table_info = self.get_table_metadata("data/tables.csv")
+        self._table_info = self.get_table_metadata(os.path.join(self._dest_path, "tables.csv"))
         self._tables = [f['name'] for f in self._table_info]
         self._table_data_center = {f['name']: f['datacenter'] for f in self._table_info}
         for t in self._tables:
@@ -50,9 +51,9 @@ class QueryInfo:
 
     def run(self):
         self.process_files()
-        if not os.path.exists("data"):
-            os.mkdir("data")
-        with open("data/queries.csv", "w") as fd:
+        if not os.path.exists(self._dest_path):
+            os.mkdir(self._dest_path)
+        with open(os.path.join(self._dest_path, "queries.csv"), "w") as fd:
             print("query,dc1 tables,dc2 tables", file=fd)
             for q, t in self._queries.items():
                 query_text = q.replace("queries/tpcds/", "").replace(".sql", "")
@@ -63,6 +64,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("need argument of path to queries")
         exit(1)
+    if len(sys.argv) < 3:
+        print("need argument of path to results folder")
+        exit(1)
     path = sys.argv[1]
-    table_info = QueryInfo(path)
+    dest = sys.argv[2]
+    table_info = QueryInfo(path, dest)
     table_info.run()

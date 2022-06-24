@@ -14,11 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.common
+package com.github.qflock.extensions.rules
 
-object PushdownJsonStatus extends Enumeration {
-  type PushdownJsonStatus = Value
-  val FullyValid = Value(1)
-  val PartiallyValid = Value(2)
-  val Invalid = Value(3)
+import java.util
+
+import org.apache.spark.sql.catalyst.expressions.{AttributeReference, Expression, NamedExpression}
+
+case class QflockStatsParameters(project: Seq[NamedExpression],
+                                 filterCondition: Option[Expression],
+                                 relationArgs: QflockRelationArgs,
+                                 attrReferences: Seq[AttributeReference],
+                                 filterReferences: Seq[AttributeReference],
+                                 opt: util.HashMap[String, String],
+                                 references: Seq[AttributeReference]) {
+
 }

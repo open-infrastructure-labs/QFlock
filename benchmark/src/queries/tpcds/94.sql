@@ -14,11 +14,11 @@
  and ca_state = 'IL'
  and ws1.ws_web_site_sk = web_site_sk
  and web_company_name = 'pri'
- and exists (select *
+ and exists (select ws2.ws_order_number
              from web_sales ws2
              where ws1.ws_order_number = ws2.ws_order_number
                and ws1.ws_warehouse_sk <> ws2.ws_warehouse_sk)
- and not exists(select *
+ and not exists(select wr1.wr_order_number
                 from web_returns wr1
                 where ws1.ws_order_number = wr1.wr_order_number)
  order by count(distinct ws_order_number)

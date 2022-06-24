@@ -79,10 +79,8 @@ class SparkLauncher:
                     output_text = str(output, 'utf-8')
                     if logfile:
                         print(output_text.rstrip('\n'), file=fd)
-                    if self._args.terse and 'qflock:: ' in output_text:
+                    if 'qflock:: ' in output_text:
                         print(output_text.rstrip('\n').lstrip('qflock:: '))
-                    elif not self._args.terse and 'qflock::' in output_text:
-                        print(output_text.rstrip('\n'))
                     elif wait_text is not None:
                         if enable_tracing:
                             print(output_text.rstrip('\n'))

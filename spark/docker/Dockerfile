@@ -36,11 +36,6 @@ ENV LC_ALL en_US.UTF-8
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata \
  && apt-get install -y wget curl unzip nano sudo vim htop iproute2 iputils-ping \
-   python3 python3-setuptools python3.8-venv\
- && ln -s /usr/bin/python3 /usr/bin/python \
- && apt install -y python3-pip \
- && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml hive-metastore-client \
-                          docker zstandard \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
@@ -57,12 +52,15 @@ RUN apt-get update \
  && ln -s /usr/lib/jvm/java-8-openjdk-amd64/bin /usr/lib/jvm/bin \
  && update-java-alternatives --set /usr/lib/jvm/java-1.8.0-openjdk-amd64
 
-# sbt
-RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list \
-&& echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list \
-&& curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo apt-key add  \
-&& sudo apt-get update \
-&& sudo apt-get install sbt
+# sbt from: https://www.scala-sbt.org/1.x/docs/Installing-sbt-on-Linux.html
+RUN sudo apt-get update\
+  && sudo apt-get install apt-transport-https curl gnupg -yqq\
+  && echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | sudo tee /etc/apt/sources.list.d/sbt.list\
+  && echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | sudo tee /etc/apt/sources.list.d/sbt_old.list\
+  && curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | sudo -H gpg --no-default-keyring --keyring gnupg-ring:/etc/apt/trusted.gpg.d/scalasbt-release.gpg --import\
+  && sudo chmod 644 /etc/apt/trusted.gpg.d/scalasbt-release.gpg\
+  && sudo apt-get update\
+  && sudo apt-get install sbt
 
 # Setup Hadoop
 ARG HADOOP_VERSION=
@@ -92,6 +90,20 @@ ENV echo "export PYSPARK_PYTHON=/usr/bin/python3" >> ~/.profile
 
 ADD /${SPARK_PACKAGE} /opt
 RUN mv /opt/${SPARK_PACKAGE_FOLDER} ${SPARK_HOME}
+
+# ssh and ssh server
+RUN apt-get -q update \
+  && apt-get -q install -y --no-install-recommends \
+  keychain  ssh  openssh-server
+
+# Python and its dependencies
+RUN sudo apt-get install -y python3 python3-setuptools python3.8-venv\
+  && ln -s /usr/bin/python3 /usr/bin/python \
+  && apt install -y python3-pip \
+  && python3 -mpip install py4j pyarrow pandas pyfiglet pyyaml hive-metastore-client \
+  docker zstandard
+
+# pyspark.
 RUN sudo python3 -mpip install pyspark==${SPARK_VERSION}
 WORKDIR $SPARK_HOME
 

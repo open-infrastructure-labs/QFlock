@@ -19,15 +19,12 @@ package org.apache.spark.sql
 
 import java.sql.ResultSet
 
-import scala.util.control.NonFatal
-
 import com.github.qflock.extensions.QflockJdbcDialect
 
-import org.apache.spark.{InterruptibleIterator, TaskContext}
+import org.apache.spark.TaskContext
 import org.apache.spark.executor.InputMetrics
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.execution.datasources.jdbc.JdbcUtils
-import org.apache.spark.util.CompletionIterator
 
 
 object QflockJdbcUtil {

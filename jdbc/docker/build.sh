@@ -68,6 +68,8 @@ USER ${USER_NAME}
 RUN ssh-keygen -t rsa -P '' -f ~/.ssh/id_rsa
 RUN cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys
 RUN chmod 0600 ~/.ssh/authorized_keys
+RUN env | grep _  > /home/${USER_NAME}/env.txt
+RUN sudo bash -c 'cat /home/${USER_NAME}/env.txt >> /etc/environment'
 
 EXPOSE 22
 

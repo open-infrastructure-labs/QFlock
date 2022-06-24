@@ -5,6 +5,11 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HADOOP_HOME/lib/native
 
 export CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath --glob)
 #export HADOOP_ROOT_LOGGER=DEBUG,console
+if [ $# -eq 0 ]; then
+  echo "Starting SSH Server"
+  sudo service ssh start
+  echo "Starting SSH Server.  Done."
+fi
 pushd /jdbc/server
 ./jdbc_server.py > /opt/volume/logs/jdbc.log 2>&1 &
 
