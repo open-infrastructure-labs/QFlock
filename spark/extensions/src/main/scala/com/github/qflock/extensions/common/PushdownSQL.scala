@@ -165,11 +165,11 @@ class PushdownSQL(schema: StructType,
       case Contains(attr, value) =>
         val attrStr = buildFilterExpression(attr).getOrElse("")
         Option(s"$attrStr LIKE '%$value%'")
-      case AttributeReference(name, dataType, nullable, meta) =>
+      case AttributeReference(name, _, _, _) =>
         buildAttributeReference(name)
       case Literal(value, dataType) =>
         buildLiteral(value, dataType)
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case Cast(expression, _, _, _) =>
         buildFilterExpression(expression)
       case In(value, list) =>
         buildInExpression(value, list)
@@ -285,21 +285,21 @@ object PushdownSQL {
                                     checkHandleFilterExpression(right, depth + 1)
       case Contains(left, right) => checkHandleFilterExpression(left, depth + 1) &&
                                     checkHandleFilterExpression(right, depth + 1)
-      case AttributeReference(name, dataType, nullable, meta) =>
+      case _: AttributeReference =>
         true
-      case Literal(value, dataType) =>
+      case _: Literal =>
         true
-      case Cast(expression, dataType, _, _) =>
+      case _: Cast =>
         true
-      case In(_, _) =>
+      case _: In =>
         true
-      case InSet(_, _) =>
+      case _: InSet =>
         true
-      case ScalarSubquery(plan, outerAttrs, exprId, joinCond) =>
+      case _: ScalarSubquery =>
         false
-      case Divide(left, right, failOnError) =>
+      case _: Divide =>
         true
-      case Substring(str, pos, len) =>
+      case _: Substring =>
         true
       case other@_ => logger.warn("unknown checkHandle filter:" + other)
         true
@@ -351,19 +351,19 @@ object PushdownSQL {
                                     validateFilterExpression(right, depth + 1)
       case Contains(left, right) => validateFilterExpression(left, depth + 1) &&
                                     validateFilterExpression(right, depth + 1)
-      case AttributeReference(name, dataType, nullable, meta) =>
+      case _: AttributeReference =>
         true
-      case Literal(value, dataType) =>
+      case _: Literal =>
         true
-      case Cast(expression, dataType, timeZoneId, _) =>
+      case _: Cast =>
         true
-      case In(value, list) =>
+      case _: In =>
         true
-      case InSet(child, hset) =>
+      case _: InSet =>
         true
-      case Divide(left, right, _) =>
+      case _: Divide =>
         true
-      case Substring(str, pos, len) =>
+      case _: Substring =>
         true
       case other@_ => logger.warn("unknown filter:" + other)
         /* Reached an unknown node, return validation failed. */
@@ -396,15 +396,15 @@ object PushdownSQL {
     var schema = new StructType()
     for (e <- groupingExpressions) {
       e match {
-        case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+        case AttributeReference(name, dataType, _, _) =>
           schema = schema.add(StructField(name, dataType))
       }
     }
     for (a <- aggregates) {
       a.aggregateFunction match {
-        case min @ Min(PushableColumnWithoutNestedColumn(name)) =>
+        case min @ Min(PushableColumnWithoutNestedColumn(_)) =>
           schema = schema.add(StructField(s"min(name)", min.dataType))
-        case max @ Max(PushableColumnWithoutNestedColumn(name)) =>
+        case max @ Max(PushableColumnWithoutNestedColumn(_)) =>
           schema = schema.add(StructField(s"max(name)", max.dataType))
         case count: aggregate.Count if count.children.length == 1 =>
           count.children.head match {
@@ -425,46 +425,46 @@ object PushdownSQL {
 
   def getAggregateString(e: Expression): String = {
     e match {
-      case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+      case AttributeReference(name, _, _, _) =>
         name
-      case Literal(value, dataType) =>
+      case Literal(value, _) =>
         value.toString
-      case mult @ Multiply(left, right, failOnError) =>
+      case Multiply(left, right, _) =>
         s"(${getAggregateString(left)} * ${getAggregateString(right)})"
-      case div @ Divide(left, right, failOnError) =>
+      case Divide(left, right, _) =>
         s"(${getAggregateString(left)} / ${getAggregateString(right)})"
-      case add @ Add(left, right, failOnError) =>
+      case Add(left, right, _) =>
         s"(${getAggregateString(left)} + ${getAggregateString(right)})"
-      case subtract @ Subtract(left, right, failOnError) =>
+      case Subtract(left, right, _) =>
         s"(${getAggregateString(left)} - ${getAggregateString(right)})"
     }
   }
   def buildAggregateExpression(aggregate: AggregateExpression): Option[String] = {
     def buildAggComp(left: Expression, right: Expression, comparisonOp: String): String = {
-      s"${buildAggExpr(left)} ${comparisonOp} ${buildAggExpr(right)}"
+      s"${buildAggExpr(left)} $comparisonOp ${buildAggExpr(right)}"
     }
     def buildAggExpr(e: Expression) : String = {
       e match {
-        case attrib @ AttributeReference(name, dataType, nullable, meta) =>
+        case AttributeReference(name, _, _, _) =>
           name
-        case Literal(value, dataType) =>
+        case Literal(value, _) =>
           value.toString
-        case mult @ Multiply(left, right, failOnError) =>
+        case Multiply(left, right, _) =>
           buildAggComp(left, right, "*")
-        case div @ Divide(left, right, failOnError) =>
+        case Divide(left, right, _) =>
           buildAggComp(left, right, "/")
-        case add @ Add(left, right, failOnError) =>
+        case Add(left, right, _) =>
           buildAggComp(left, right, "+")
-        case subtract @ Subtract(left, right, failOnError) =>
+        case Subtract(left, right, _) =>
           buildAggComp(left, right, "-")
       }
     }
     def buildCount(value: Any,
                    isDistinct: Boolean = false): String = {
       if (isDistinct) {
-        s"COUNT(DISTINCT ${value})"
+        s"COUNT(DISTINCT $value)"
       } else {
-        s"COUNT(${value})"
+        s"COUNT($value)"
       }
     }
     if (aggregate.filter.isEmpty) {
@@ -484,9 +484,9 @@ object PushdownSQL {
                               isDistinct = aggregate.isDistinct))
             case _ => None
           }
-        case sum @ Sum(PushableColumnWithoutNestedColumn(name), _) =>
+        case Sum(PushableColumnWithoutNestedColumn(name), _) =>
           Some("SUM(" + name + ")")
-        case sum @ Sum(child: Expression, _) =>
+        case Sum(child: Expression, _) =>
           Some("SUM(" + buildAggExpr(child) + ")")
         case _ => None
       }
@@ -525,11 +525,11 @@ object PushdownSQL {
                       groupingExpressions: Seq[Expression],
                       query: String): String = {
     val aggregateSql = getAggregateExpressionSql(aggregateExpressions)
-    if (groupingExpressions.length == 0) {
-      s"SELECT ${aggregateSql} FROM ${query}"
+    if (groupingExpressions.isEmpty) {
+      s"SELECT $aggregateSql FROM $query"
     } else {
       val groupby = getGroupbyExpression(groupingExpressions)
-      s"SELECT ${groupby},${aggregateSql} FROM ${query} GROUP BY ${groupby}"
+      s"SELECT $groupby,$aggregateSql FROM $query GROUP BY $groupby"
     }
   }
 }
