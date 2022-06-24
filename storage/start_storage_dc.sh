@@ -32,6 +32,12 @@ mkdir -p ${ROOT_DIR}/volume/${DC}/logs
 # Create Hive metastore directory
 mkdir -p ${ROOT_DIR}/volume/${DC}/metastore
 
+# Create QFlock metastore directory
+mkdir -p ${ROOT_DIR}/volume/${DC}/metastore/qflock
+
+# Create QFlock default catalog directory
+mkdir -p ${ROOT_DIR}/volume/${DC}/metastore/qflock/catalog/default
+
 mkdir -p ${ROOT_DIR}/volume/${DC}/status
 rm -f ${ROOT_DIR}/volume/${DC}/status/*
 

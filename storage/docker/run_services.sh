@@ -6,7 +6,7 @@ rm -f /opt/volume/status/HADOOP_STATE
 
 if [ ! -f /opt/volume/namenode/current/VERSION ]; then
     "${HADOOP_HOME}/bin/hdfs" namenode -format
-    $HIVE_HOME/bin/schematool -dbType derby -initSchema
+    # $HIVE_HOME/bin/schematool -dbType derby -initSchema
 fi
 
 # Start ssh service
@@ -24,12 +24,12 @@ export CLASSPATH=$(bin/hadoop classpath)
 sleep 1
 
 # Hive setup
-export PATH=$PATH:$HIVE_HOME/bin
+# export PATH=$PATH:$HIVE_HOME/bin
+# $HIVE_HOME/bin/hive --service metastore &> /opt/volume/metastore/metastore.log &
+# sleep 1
 
-$HIVE_HOME/bin/hive --service metastore &> /opt/volume/metastore/metastore.log &
-sleep 1
-
-python3 ${HADOOP_HOME}/bin/metastore/hive_metastore_proxy.py &
+# python3 ${HADOOP_HOME}/bin/metastore/hive_metastore_proxy.py &
+python3 ${HADOOP_HOME}/bin/metastore/qflock_metastore_server.py &
 
 echo "HADOOP_READY"
 echo "HADOOP_READY" > /opt/volume/status/HADOOP_STATE
