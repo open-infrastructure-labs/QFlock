@@ -157,6 +157,11 @@ class ThriftHiveMetastoreHandler:
                     self.write_table(args[0], args[1], args[2])
                     return None
 
+                if attr == 'alter_table':
+                    self.add_qflock_statistics(args[2])
+                    self.write_table(args[0], args[1], args[2])
+                    return None
+
                 if attr == 'get_databases':
                     databases = list()
                     # args[0] is a string to filter databases '*' is used by Spark
