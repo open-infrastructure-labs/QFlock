@@ -36,12 +36,13 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  * @param dataSchema full schema
  * @param readSchema read column schema
  * @param options options for data source
+ * @param statsParam statistics parameters for additional pushdown.
  * @param catalogTable catalog table (optional)
  */
 case class QflockRelationArgs(relation: Any, scan: Any, output: Seq[AttributeReference],
                               dataSchema: StructType, readSchema: StructType,
                               options: CaseInsensitiveStringMap,
-                              statsParam: Option[QflockStatsParameters],
+                              statsParam: Option[Any],
                               catalogTable: Option[CatalogTable])
 
 object QflockRelationArgs {
@@ -54,7 +55,20 @@ object QflockRelationArgs {
   def apply(child: Any): Option[QflockRelationArgs] = {
     val (relation, scan, output, catalogTable) = child match {
       case DataSourceV2ScanRelation(relation, scan, output) =>
-        (relation, scan, output, None)
+        val catalogTable = scan match {
+          case QflockJdbcScan(_, _, statsParam, _) =>
+            if (statsParam.isDefined) {
+              statsParam.get match {
+                case s: QflockStatsParameters =>
+                  s.relationArgs.catalogTable
+                case s: QflockJoinStatsParameters =>
+                  s.relationArgs.catalogTable
+              }
+            } else {
+              None
+            }
+        }
+        (relation, scan, output, catalogTable)
       case LogicalRelation(relation, output, table, _) =>
         (relation, relation, output, table)
     }

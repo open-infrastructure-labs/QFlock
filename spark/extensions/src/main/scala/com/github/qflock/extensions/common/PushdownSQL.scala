@@ -52,13 +52,21 @@ class PushdownSQL(schema: StructType,
     filters.filter(f => PushdownSQL.validateFilterExpression(f))
 
   /**
+   * Build a string for a set of filters.
+   *
+   */
+  def getFilterString(): String = {
+    validFilters.flatMap(f => buildFilterExpression(f)).mkString(" AND ")
+  }
+
+  /**
    * Build a SQL WHERE clause for the given filters. If a filter cannot be pushed down then no
    * condition will be added to the WHERE clause. If none of the filters can be pushed down then
    * an empty string will be returned.
    *
    */
   def buildWhereClause(): String = {
-    val filterExpressions = validFilters.flatMap(f => buildFilterExpression(f)).mkString(" AND ")
+    val filterExpressions = getFilterString()
     if (filterExpressions.isEmpty) "" else "WHERE " + filterExpressions
   }
   /**

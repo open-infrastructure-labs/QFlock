@@ -36,7 +36,7 @@ import org.apache.spark.sql.types._
  */
 case class QflockJdbcScan(schema: StructType,
                           options: util.Map[String, String],
-                          statsParams: Option[QflockStatsParameters],
+                          statsParams: Option[Any] = None,
                           stats: Statistics = Statistics(0, Some(0)))
   extends Scan with Batch with SupportsReportStatistics {
 

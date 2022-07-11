@@ -127,6 +127,10 @@ object QflockLogicalRelation {
     val qflockRelation = QflockRelation(references.toStructType,
       Array.empty[Partition], scalaOpts)(spark)
     val planStats = {
+      /* We need to visit the plan in order to generate the stats, even when
+       * stats is disabled.  In this case we will generate a plan with our
+       * project and filter, and then visit it to gather the Statistics.
+       */
       val qLogRel = new QflockLogicalRelationWithStats(
         relationArgs.relation.asInstanceOf[BaseRelation],
         relationArgs.output,
