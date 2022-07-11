@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import sys
 import os
 import csv
 import re
 import argparse
 from argparse import RawTextHelpFormatter
-from parse_qflock_log import ParseQflockLog
 from combined_result import GenerateCombinedResult
+from parse_qflock_join_log import ParseQflockJoinLog
+from parse_qflock_log import ParseQflockLog
 
 
 class Table:
@@ -30,6 +30,7 @@ class Query:
         self.dc1_tables = dict()
         self.dc2_tables = dict()
 
+
 class CombinedResult:
     def __init__(self, d: dict):
         self.name = d['query']
@@ -46,6 +47,7 @@ class CombinedResult:
 
         self.query = dict()
 
+
 class Result:
     def __init__(self, d: dict):
         self.name = d['query']
@@ -60,22 +62,34 @@ class AnalyzeData:
     functions = ["best_fit", "remote_table_filter", "top_10g", "compare"]
 
     def __init__(self):
-        self._args = None
-        self._data_dir = None
+        self._data_dir = ""
         self._tables = None
         self._queries = None
         self._combined_results = None
         self._jdbc_results = None
-        self._spark_results = None
+        self._jdbc_results2 = None
+        self._baseline_results = None
         self._qflock_log = None
         self._qflock_log_by_test = None
+        self._args = self.parse_args()
+        self._data_dir = self._args.dir
+        self._combined_path = os.path.join(self._data_dir, 'combined_results.csv')
+        self._jdbc_path = os.path.join(self._data_dir, self._args.results_file)
+        self._jdbc_path2 = os.path.join(self._data_dir, self._args.results_file2)
+        self._baseline_path = os.path.join(self._data_dir, self._args.baseline_file)
+        self.generate_results()
 
     def load_data(self):
         self.load_tables(os.path.join(self._data_dir, 'tables.csv'))
         self.load_queries(os.path.join(self._data_dir, 'queries.csv'))
-        self._combined_results = self.load_combined_results(os.path.join(self._data_dir, 'combined_results.csv'))
-        self._jdbc_results = self.load_results(os.path.join(self._data_dir, 'jdbc_results.csv'))
-        self._spark_results = self.load_results(os.path.join(self._data_dir, 'spark_results.csv'))
+        if os.path.exists(self._combined_path):
+            self._combined_results = self.load_combined_results(self._combined_path)
+        if os.path.exists(self._jdbc_path):
+            self._jdbc_results = self.load_results(self._jdbc_path)
+        if os.path.exists(self._jdbc_path2):
+            self._jdbc_results2 = self.load_results(self._jdbc_path2)
+        if os.path.exists(self._baseline_path):
+            self._baseline_results = self.load_results(self._baseline_path)
         qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
         self._qflock_log = qflock_log.log
         self._qflock_log_by_test = qflock_log.log_by_test
@@ -87,10 +101,10 @@ class AnalyzeData:
 
             for t in q.dc2_table_names:
                 q.dc2_tables[t] = self._tables[t]
-
-        for k, r in self._combined_results.items():
-            if r.name in self._queries.keys():
-                r.query = self._queries[r.name]
+        if self._combined_results:
+            for k, r in self._combined_results.items():
+                if r.name in self._queries.keys():
+                    r.query = self._queries[r.name]
 
     def load_tables(self, file_name: str):
         tables = dict()
@@ -210,7 +224,7 @@ class AnalyzeData:
         print("test index,test number,10g gain,100g gain,gain difference")
         for k in results_10g_sorted:
             if index > 54:
-                 break
+                break
             diff = self._combined_results[k[0]].gain - k[1]
             print(index, k[0], k[1], self._combined_results[k[0]].gain, diff, sep=",")
             # if (diff < 0.0):
@@ -222,26 +236,115 @@ class AnalyzeData:
     def compare(self):
         print("query,jdbc seconds,spark seconds,gain time,jdbc bytes,spark bytes,gain bytes")
         for query, jdbc_result in self._jdbc_results.items():
-            spark_result = self._spark_results[query]
+            spark_result = self._baseline_results[query]
 
             gain_time = (spark_result.seconds - jdbc_result.seconds) / spark_result.seconds
             gain_bytes = (spark_result.spark_bytes - jdbc_result.jdbc_bytes) / spark_result.spark_bytes
             self._jdbc_results[query].gain_time = gain_time
             self._jdbc_results[query].gain_bytes = gain_bytes
-            print(query, jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
+            print(query.replace(".sql", ""),
+                  jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
                   jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(gain_bytes * 100, 4),
                   sep=",")
 
-        # results_sorted = \
-        #     [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_time, reverse=True)]
-        #
-        # for query in results_sorted:
-        #     spark_result = self._spark_results[query]
-        #     jdbc_result = self._jdbc_results[query]
-        #     print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
-        #           jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
-        #           sep=",")
+        results_sorted = \
+            [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_bytes, reverse=False)]
 
+        for query in results_sorted:
+            spark_result = self._baseline_results[query]
+            jdbc_result = self._jdbc_results[query]
+            print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
+                  jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
+                  sep=",")
+
+    def join_stats(self):
+        join_log = ParseQflockJoinLog(os.path.join(self._data_dir, "qflock_log.txt"))
+
+        all_remote = []
+        results = {}
+        for name, info in join_log.log.items():
+            results[name] = {}
+            for tables, join_info in info['joins'].items():
+                results[name][tables] = []
+                result = {'local_count': 0,
+                          'remote_count': 0,
+                          'small_local_count': 0}
+                for t in join_info['tables']:
+                    if self._tables[t].location == 'dc1':
+                        result['local_count'] += 1
+                        if int(self._tables[t].bytes) < (1024 * 1024 * 10):
+                            result['small_local_count'] += 1
+                            # if join_info['join_type'] != "Inner":
+                            #     print(f"{name} small_local join_type:{join_info['join_type']}")
+                    else:
+                        # if join_info['join_type'] != "Inner":
+                        #     print(f"{name} remote join_type:{join_info['join_type']}")
+                        result['remote_count'] += 1
+
+                if result['remote_count'] == 2:
+                    all_remote.append(name)
+                results[name][tables].append(result)
+        stats = {'small_local_count': 0,
+                 'all_remote': 0}
+        for name, results_dict in results.items():
+            query_stats = {'small_local_count': 0,
+                           'all_remote': 0}
+            for t, join in results_dict.items():
+                for j in join:
+                    if j['small_local_count'] == 1 and j['remote_count'] == 1:
+                        stats['small_local_count'] += 1
+                        query_stats['small_local_count'] += 1
+                    if j['remote_count'] == 2:
+                        stats['all_remote'] += 1
+                        query_stats['all_remote'] += 1
+
+            print(f"query:{name} all_remote:{query_stats['all_remote']} " +
+                  f"small_local:{query_stats['small_local_count']}")
+        print("totals")
+        print(80*"-")
+        print(f"all_remote:{stats['all_remote']} " +
+              f"small_local:{stats['small_local_count']}")
+        print(f"all_remote: {','.join(sorted(set(all_remote)))}")
+
+    def jdbc_compare(self):
+        print("query,jdbc seconds,jdbc base seconds,spark seconds," +
+              "jdbc spark gain time,jdbc base spark gain time,jdbc gain time," +
+              "jdbc bytes,jdbc base bytes,spark bytes," +
+              "jdbc spark gain bytes,jdbc base spark gain bytes,jdbc gain bytes")
+        for query, jdbc_result in self._jdbc_results.items():
+            spark_result = self._baseline_results[query]
+            jdbc_base_result = self._jdbc_results2[query]
+
+            jdbc_gain_time = (jdbc_base_result.seconds - jdbc_result.seconds) / jdbc_base_result.seconds
+            jdbc_gain_bytes = (spark_result.jdbc_bytes - jdbc_result.jdbc_bytes) / jdbc_base_result.jdbc_bytes
+
+            jdbc_spark_gain_time = (spark_result.seconds - jdbc_result.seconds) / spark_result.seconds
+            jdbc_spark_gain_bytes = (spark_result.spark_bytes - jdbc_result.jdbc_bytes) / spark_result.spark_bytes
+
+            jdbc_base_spark_gain_time = (spark_result.seconds - jdbc_base_result.seconds) / spark_result.seconds
+            jdbc_base_spark_gain_bytes = (spark_result.spark_bytes - jdbc_base_result.jdbc_bytes) \
+                / spark_result.spark_bytes
+
+            print(query.replace(".sql", ""),
+                  jdbc_result.seconds, jdbc_base_result.seconds, spark_result.seconds,
+                  round(jdbc_spark_gain_time, 4), round(jdbc_base_spark_gain_time, 4), round(jdbc_gain_time, 4),
+                  jdbc_result.jdbc_bytes, jdbc_base_result.jdbc_bytes, spark_result.spark_bytes,
+                  round(jdbc_gain_bytes, 4), round(jdbc_spark_gain_bytes, 4), round(jdbc_base_spark_gain_bytes, 4),
+                  sep=",")
+
+    def jdbc_compare_old(self):
+        print("query,jdbc seconds,spark seconds,gain time,jdbc bytes,spark bytes,gain bytes")
+        for query, jdbc_result in self._jdbc_results.items():
+            spark_result = self._baseline_results[query]
+
+            gain_time = (spark_result.seconds - jdbc_result.seconds) / spark_result.seconds
+            gain_bytes = (spark_result.jdbc_bytes - jdbc_result.jdbc_bytes) / spark_result.jdbc_bytes
+            self._jdbc_results[query].gain_time = gain_time
+            self._jdbc_results[query].gain_bytes = gain_bytes
+            print(query.replace(".sql", ""),
+                  jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
+                  jdbc_result.jdbc_bytes, spark_result.jdbc_bytes, round(gain_bytes * 100, 4),
+                  sep=",")
 
     def parse_args(self):
         parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -250,24 +353,27 @@ class AnalyzeData:
                             help="folder for data files")
         parser.add_argument("--func", default=None, required=True,
                             help="analysis function. \"--func list\" for list of functions.")
-        self._args = parser.parse_args()
-
-        if not os.path.exists(self._args.dir):
-            print(f"--dir requires a valid folder. {self._args.dir} is not valid")
+        parser.add_argument("--baseline_file", default="spark_results.csv",
+                            help="The .csv file with the baseline data.")
+        parser.add_argument("--results_file", default="jdbc_results.csv",
+                            help="The .csv file with the data to analyze.")
+        parser.add_argument("--results_file2", default="baseline_results.csv",
+                            help="The .csv file to compare against results_file.")
+        args = parser.parse_args()
+        if not os.path.exists(args.dir):
+            print(f"--dir requires a valid folder. {args.dir} is not valid")
             exit(1)
-        else:
-            self._data_dir = self._args.dir
+        return args
 
     def generate_results(self):
         if not os.path.exists(os.path.join(self._args.dir, "combined_results.csv")):
-            cr = GenerateCombinedResult(os.path.join(self._args.dir, "spark_results.csv"),
-                                        os.path.join(self._args.dir, "jdbc_results.csv"),
-                                        self._args.dir)
-            cr.run()
+            if os.path.exists(self._baseline_path) and os.path.exists(self._jdbc_path):
+                cr = GenerateCombinedResult(self._baseline_path,
+                                            self._jdbc_path,
+                                            self._args.dir)
+                cr.run()
 
     def run(self):
-        self.parse_args()
-        self.generate_results()
         if self._args.func == "list":
             print("available functions:")
             for f in AnalyzeData.functions:
@@ -283,6 +389,10 @@ class AnalyzeData:
                 self.top_10g()
             elif self._args.func == "compare":
                 self.compare()
+            elif self._args.func == "join_stats":
+                self.join_stats()
+            elif self._args.func == "jdbc_compare":
+                self.jdbc_compare()
             else:
                 print(f"Unknown function {self._args.func}")
 
