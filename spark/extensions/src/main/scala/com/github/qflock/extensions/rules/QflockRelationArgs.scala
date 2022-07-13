@@ -19,12 +19,14 @@ package com.github.qflock.extensions.rules
 import scala.collection.JavaConverters._
 
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
+import org.apache.hadoop.hive.metastore.api.Table
 
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.catalyst.expressions.AttributeReference
 import org.apache.spark.sql.execution.datasources.{HadoopFsRelation, LogicalRelation}
 import org.apache.spark.sql.execution.datasources.v2.DataSourceV2ScanRelation
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -43,7 +45,15 @@ case class QflockRelationArgs(relation: Any, scan: Any, output: Seq[AttributeRef
                               dataSchema: StructType, readSchema: StructType,
                               options: CaseInsensitiveStringMap,
                               statsParam: Option[Any],
-                              catalogTable: Option[CatalogTable])
+                              catalogTable: Option[CatalogTable]) {
+
+  def getTable: Table = {
+    val catTable = catalogTable.get
+    val tableName = catTable.identifier.table
+    val dbName = catTable.identifier.database.getOrElse("")
+    ExtHiveUtils.getTable(dbName, tableName)
+  }
+}
 
 object QflockRelationArgs {
   /** Parses the input child node and extracts all the relevant fields

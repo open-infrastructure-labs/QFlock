@@ -42,10 +42,16 @@ import org.apache.spark.sql.types._
 /** Provides pushdown capabilities aimed at
  *  generating information needed for pushdown
  *  from the inputs that Spark provides.
+ *
+ * @param schema - StructType of fields in query.
+ * @param filters - Filters list.
+ * @param queryCols - Array of column names.
+ * @param referenceMap [Optional] maps an attribute to a prefix to be used when referencing.
  */
 class PushdownSQL(schema: StructType,
                   filters: Seq[Expression],
-                  queryCols: Array[String]) {
+                  queryCols: Array[String],
+                  referenceMap: Map[String, Seq[AttributeReference]]) {
 
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val validFilters: Seq[Expression] =
@@ -104,7 +110,16 @@ class PushdownSQL(schema: StructType,
       val f = filter.getOrElse("")
       Option(s"""NOT ( $f )""")
     }
-    def buildAttributeReference(attr: String): Option[String] = Option(attr)
+    def buildAttributeReference(attr: String, exprId: ExprId): Option[String] = {
+      if (referenceMap.isEmpty) {
+        Option(attr)
+      } else {
+        // Search the referenceMap for the entry that matches this expression id.
+        // Then return back the map key (._1) to generate the prefix to use.
+        val referenceName = referenceMap.find(_._2.find(x => x.exprId == exprId).isDefined).get._1
+        Option(s"$referenceName.$attr")
+      }
+    }
     def buildInExpression(value: Expression, list: Seq[Expression]): Option[String] = {
       val arg1 = buildFilterExpression(value).getOrElse("")
       val inStr = s"$arg1 IN ${list.mkString("('", "', '", "')")}"
@@ -173,8 +188,8 @@ class PushdownSQL(schema: StructType,
       case Contains(attr, value) =>
         val attrStr = buildFilterExpression(attr).getOrElse("")
         Option(s"$attrStr LIKE '%$value%'")
-      case AttributeReference(name, _, _, _) =>
-        buildAttributeReference(name)
+      case a@AttributeReference(name, _, _, _) =>
+        buildAttributeReference(name, a.exprId)
       case Literal(value, dataType) =>
         buildLiteral(value, dataType)
       case Cast(expression, _, _, _) =>
@@ -257,8 +272,10 @@ object PushdownSQL {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(schema: StructType,
             filters: Seq[Expression],
-            queryCols: Array[String]): PushdownSQL = {
-    new PushdownSQL(schema, filters, queryCols)
+            queryCols: Array[String],
+            referenceMap: Map[String, Seq[AttributeReference]] =
+           Map[String, Seq[AttributeReference]]()): PushdownSQL = {
+    new PushdownSQL(schema, filters, queryCols, referenceMap)
   }
 
   private val filterMaxDepth = 100

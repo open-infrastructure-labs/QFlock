@@ -34,6 +34,7 @@ import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftOuter, LeftSemi
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.plans.logical.Join
+import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
@@ -466,6 +467,42 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       withFilter
     }
   }
+  def getFilterString(project: Seq[NamedExpression],
+                      filters: Seq[Expression]): String = {
+    val attrReferencesEither = getAttributeReferences(project)
+    val attrReferences = attrReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val filterReferencesEither = getFilterAttributes(filters)
+    val filterReferences = filterReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val filtersStatus = PushdownSQL.validateFilters(filters)
+    val references = {
+      filtersStatus match {
+        case PushdownSqlStatus.Invalid =>
+          (attrReferences ++ filterReferences).distinct
+        case PushdownSqlStatus.PartiallyValid =>
+          (attrReferences ++ filterReferences).distinct
+        case PushdownSqlStatus.FullyValid =>
+          attrReferences.distinct
+      }
+    }
+    val allRefs = attrReferences ++ filterReferences
+    val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
+    // For now we always push down
+    if (filtersStatus != PushdownSqlStatus.Invalid) {
+      val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
+      val query = pushdownSql.getFilterString()
+      // logger.info("Pushdown query " + query)
+      query
+    } else {
+      // logger.info("No Pushdown " + filters.toString)
+      ""
+    }
+  }
   private def updateJoinProject(project: Seq[NamedExpression],
                                 filters: Seq[Expression],
                                 child: LogicalPlan)
@@ -480,7 +517,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val query = opt.get("query")
     val trimmedQuery = query.split("FROM").drop(1).mkString("FROM")
     val newSelect = project.map(x => x.name).mkString(",")
-    val newQuery = s"SELECT $newSelect FROM $trimmedQuery"
+    val filterString = getFilterString(project, filters)
+    val newQuery = s"SELECT $newSelect FROM ($trimmedQuery) WHERE $filterString"
     opt.put("query", newQuery)
     val updateType = if (query.contains("JOIN")) "updatejoin," else "updateproject,"
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + updateType)
@@ -709,9 +747,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     newPlan
   }
-  private def getProjectQuery(project: Seq[NamedExpression],
-                              filters: Seq[Expression],
-                              child: LogicalPlan)
+  private def getProjectQueryOrig(project: Seq[NamedExpression],
+                                  filters: Seq[Expression],
+                                  child: LogicalPlan)
   : String = {
     val relationArgs = QflockRelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
@@ -756,6 +794,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
   }
+  private def getProjectQuery(child: LogicalPlan): String =
+    QflockRelationArgs(child).get.options.get("query")
   // Copied from Spark's PredicateHelper trait in predicates.scala
   def splitAndExpression(condition: Expression): Seq[Expression] = {
     condition match {
@@ -784,12 +824,22 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       if (expression.isEmpty) {
         s"SELECT $colsString FROM ($queryLeft) ${joinType.sql} JOIN ($queryRight)"
       } else {
+        /* Create a map that we will use to reference fields in the expression.
+         * This helps disambiguate the cases where both left and right sides
+         * of the join have fields with the same name.
+         */
+        val referenceMap = Map("a" -> left.output, "b" -> right.output)
         val expressions = splitAndExpression(expression.get)
-        val pushdownSql = PushdownSQL(references.toStructType, expressions, queryCols)
+        val pushdownSql = PushdownSQL(references.toStructType, expressions, queryCols,
+          referenceMap.asInstanceOf[Map[String, Seq[AttributeReference]]])
         val expressionString = pushdownSql.getFilterString()
 
-        s"SELECT $colsString FROM ($queryLeft) ${joinType.sql} " +
-          s"JOIN ($queryRight) ON ($expressionString)"
+        /* Note that the a and be here are used to identify the left and right
+         * sides of the join.  All references in the join condition will
+         * be prefixed by a. and b. respectively.
+         */
+        s"SELECT $colsString FROM ($queryLeft) a ${joinType.sql} " +
+          s"JOIN ($queryRight) b ON ($expressionString)"
       }
     }
     query
@@ -928,12 +978,29 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         j
     }
   }
-
-  def joinValid(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Boolean = {
+  def isJoinSizeValid(join: LogicalPlan,
+                      left: LogicalPlan, right: LogicalPlan): Boolean = {
+    // Check if at least one size of the join is small enough to fit in memory.
+    // This ensures that our join can be partitioned by the "large" size
+    //  of the join
+    val joinLimit = (1024 * 1024 * 1024) // 1 gig
+    val relationArgsLeft = QflockRelationArgs(left).get
+    val relationArgsRight = QflockRelationArgs(right).get
+    val leftTable = relationArgsLeft.getTable
+    val leftBytes = leftTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
+    val rightTable = relationArgsRight.getTable
+    val rightBytes = rightTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
+    // If at least one side of join is over the limit, we will
+    // partition by that side of the join.
+    (rightBytes < joinLimit || leftBytes < joinLimit)
+    true
+  }
+  def joinValid(join: LogicalPlan,
+                left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Boolean = {
     val (lValid, _) = checkJoinChild(left)
     val (rValid, _) = checkJoinChild(right)
-    val joinValid = isJoinTypeValid(joinType)
-    if (rValid && lValid && joinValid) {
+    val jValid = isJoinTypeValid(joinType)
+    if (rValid && lValid && jValid && isJoinSizeValid(join, left, right)) {
       true
     } else {
       false
@@ -942,7 +1009,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def pushJoin(plan: LogicalPlan): LogicalPlan = {
     plan.transform {
       case j@Join(left, right, joinType, condition, joinHint)
-        if joinValid(left, right, joinType) =>
+        if joinValid(j, left, right, joinType) =>
         transformJoin(j, left, right, joinType, condition)
     }
   }
