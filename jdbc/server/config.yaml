@@ -9,7 +9,7 @@
   spark:
     log-level: "OFF"
     master: local[1]
-    hive-metastore: "qflock-storage-dc1"
+    hive-metastore: "qflock-storage-dc2"
     hive-metastore-port: "9084"
     conf:
     - spark.driver.maxResultSize=2g
@@ -18,7 +18,7 @@
     - spark.sql.execution.arrow.pyspark.enabled=true
     - spark.sql.catalogImplementation=hive
     - spark.sql.warehouse.dir=hdfs://qflock-storage-dc1:9000/user/hive/warehouse3
-    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=172.24.0.3:5006'
+    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.1/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=192.168.48.3:5006'
     jars:
     - /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar
 
