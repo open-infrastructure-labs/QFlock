@@ -34,7 +34,6 @@ import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftOuter, LeftSemi
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
 import org.apache.spark.sql.catalyst.plans.logical.Join
-import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
@@ -808,15 +807,13 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                    joinType: JoinType,
                    expression: Option[Expression]): String = {
     val references = join.output
-    val relationArgsLeft = QflockRelationArgs(left).get
-    val relationArgsRight = QflockRelationArgs(right).get
     val queryLeft = left match {
-      case s@ScanOperation(project, filters, child: DataSourceV2ScanRelation) =>
-        getProjectQuery(project, filters, child)
+      case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
+        getProjectQuery(child)
     }
     val queryRight = right match {
-      case s@ScanOperation(project, filters, child: DataSourceV2ScanRelation) =>
-        getProjectQuery(project, filters, child)
+      case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
+        getProjectQuery(child)
     }
     val queryCols = references.distinct.toStructType.fields.map(x => s"${x.name}")
     val colsString = queryCols.mkString(",")
@@ -844,7 +841,24 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     query
   }
-
+  def setupJoinPartitionInfo(left: LogicalPlan, right: LogicalPlan,
+                             opt: util.HashMap[String, String]): Unit = {
+    val relationArgsLeft = QflockRelationArgs(left).get
+    val relationArgsRight = QflockRelationArgs(right).get
+    val leftTable = relationArgsLeft.getTable
+    val leftBytes = leftTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
+    val rightTable = relationArgsRight.getTable
+    val rightBytes = rightTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
+    // We will use the larger table as the table to partition by.
+    // This guarantees the partition result will always be reasonable.
+    val table = if (leftBytes >= rightBytes) leftTable else rightTable
+    val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
+    val numRowGroups = table.getParameters.get(rgParamName)
+    opt.put("numrowgroups", numRowGroups)
+    opt.put("tablename", table.getTableName)
+    opt.put("numrows",
+             table.getParameters.get("spark.sql.statistics.numRows"))
+  }
   def transformJoin(join: LogicalPlan, left: LogicalPlan, right: LogicalPlan,
                     joinType: JoinType,
                     expression: Option[Expression]): LogicalPlan = {
@@ -869,16 +883,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
     val query = getJoinQuery(join, left, right, joinType, expression)
     opt.put("query", query)
-    val catalogTable = relationArgsLeft.catalogTable.get
-    val tableName = catalogTable.identifier.table
-    val dbName = catalogTable.identifier.database.getOrElse("")
-    val table = ExtHiveUtils.getTable(dbName, tableName)
-    val rgParamName = s"spark.qflock.statistics.tableStats.$tableName.row_groups"
-    opt.put("numrows",
-      table.getParameters.get("spark.sql.statistics.numRows"))
-    val numRowGroups = 1 // table.getParameters.get(rgParamName)
-    opt.put("numrowgroups", numRowGroups.toString)
-    opt.put("tablename", tableName)
+
+    setupJoinPartitionInfo(left, right, opt)
 
     val schemaStr = referencesStructType.fields.map(s =>
       s.dataType match {
@@ -914,9 +920,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
   def checkJoinChild(plan: LogicalPlan): (Boolean, Option[String]) = {
     plan match {
-      case s@ScanOperation(project,
-      filters,
-      child: DataSourceV2ScanRelation) =>
+      case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
         child match {
           case DataSourceV2ScanRelation(_, scan, output) =>
             if (scan.isInstanceOf[QflockJdbcScan]) {
@@ -938,9 +942,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
             }
           case _ => (false, None)
         }
-      case s@ScanOperation(project, filters, child: LogicalRelation) =>
+      case ScanOperation(_, _, child: LogicalRelation) =>
         child match {
-          case LogicalRelation(relation, output, table, _) =>
+          case LogicalRelation(_, _, table, _) =>
             (false, Some(table.get.identifier.table))
           case _ => (false, None)
         }
@@ -951,7 +955,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     joinType match {
       case Inner => true
       case LeftSemi => true
-      case LeftOuter => true
+      // We do not yet support left outer.
+      case LeftOuter => false
+      // All other joins not yet supported.
       case _ => false
     }
   }
@@ -983,7 +989,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // Check if at least one size of the join is small enough to fit in memory.
     // This ensures that our join can be partitioned by the "large" size
     //  of the join
-    val joinLimit = (1024 * 1024 * 1024) // 1 gig
+    val joinLimit = 1024 * 1024 * 1024 // 1 gig
     val relationArgsLeft = QflockRelationArgs(left).get
     val relationArgsRight = QflockRelationArgs(right).get
     val leftTable = relationArgsLeft.getTable
@@ -992,7 +998,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rightBytes = rightTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
     // If at least one side of join is over the limit, we will
     // partition by that side of the join.
-    (rightBytes < joinLimit || leftBytes < joinLimit)
+    rightBytes < joinLimit || leftBytes < joinLimit
     true
   }
   def joinValid(join: LogicalPlan,
@@ -1008,7 +1014,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   def pushJoin(plan: LogicalPlan): LogicalPlan = {
     plan.transform {
-      case j@Join(left, right, joinType, condition, joinHint)
+      case j@Join(left, right, joinType, condition, _)
         if joinValid(j, left, right, joinType) =>
         transformJoin(j, left, right, joinType, condition)
     }

@@ -209,8 +209,7 @@ class QflockThriftJdbcHandler:
         query_stats = connection['properties']['queryStats']
         table_name = connection['properties']['tableName']
 
-        if "JOIN" not in query:
-            query = query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
+        query = query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
         logging.debug(f"query_id: {query_id} req_id: {request_id} table:{table_name} "
                      f"query: {query} ")
         df = self._spark.sql(query)
