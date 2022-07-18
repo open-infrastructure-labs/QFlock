@@ -883,8 +883,20 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
     val query = getJoinQuery(join, left, right, joinType, expression)
     opt.put("query", query)
-
+    opt.remove("tablename")
+    opt.remove("numrowgroups")
+    opt.remove("numrows")
     setupJoinPartitionInfo(left, right, opt)
+
+    val catalogTable = relationArgsLeft.catalogTable.get
+    val tableName = opt.get("tablename")
+    val dbName = catalogTable.identifier.database.getOrElse("")
+    val table = ExtHiveUtils.getTable(dbName, tableName)
+    opt.put("numrows",
+        table.getParameters.get("spark.sql.statistics.numRows"))
+    val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
+    val rowGroups = table.getParameters.get(rgParamName).toInt
+    opt.put("numrowgroups", rowGroups.toString)
 
     val schemaStr = referencesStructType.fields.map(s =>
       s.dataType match {
@@ -908,9 +920,31 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       Some(statsParameters), relationArgsLeft.catalogTable)
     val relationForStats = QflockJoinRelation.apply(relationArgs,
       join, opt, references, spark)
+    val relationStats = relationForStats.toPlanStats(relationArgsLeft.catalogTable.get.stats.get)
+    val relationBytes = relationStats.sizeInBytes.toLong
+    val rowGroupBatchSize = {
+      val maxResultBytes = (1024L * 1024L * 200L)
+//      val batches = (relationBytes / maxResultBytes) +
+//        (if ((relationBytes % maxResultBytes) > 0) 1 else 0)
+      val batches = 4
+      if (batches <= 1) {
+        // Not big enough to have batches just use one partition
+        // where each partition has all row groups.
+        rowGroups
+      } else if (batches >= rowGroups) {
+        // Too many batches needed, just limit partitions to row groups.
+        // In other words, one partition per row group.
+        1
+      } else {
+        // Reasonable number of batches, break row groups up into batches.
+        rowGroups / batches +
+          (if ((rowGroups % batches) > 0) 1 else 0)
+      }
+    }
+    opt.put("rowgroupbatchsize", rowGroupBatchSize.toString)
     val hdfsScanObject = QflockJdbcScan(referencesStructType, opt,
       Some(statsParameters),
-      relationForStats.toPlanStats(relationArgsLeft.catalogTable.get.stats.get))
+      relationStats)
     val ndpRel = getNdpRelation(opt.get("path"), schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
       references,
@@ -998,6 +1032,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     plan.transform {
       case j@Join(left, right, joinType, condition, _)
         if joinValid(left, right, joinType) =>
+        // Enable the below line to generate join stats logs.
+        // checkJoin(plan)
         transformJoin(j, left, right, joinType, condition)
     }
   }

@@ -58,23 +58,36 @@ case class QflockJdbcScan(schema: StructType,
   }
   private def createPartitions(): Array[InputPartition] = {
     val path = options.get("path")
-    var partitions = options.get("numrowgroups").toInt
+    val rowGroups = options.get("numrowgroups").toInt
+    val batchSize = options.getOrDefault("rowgroupbatchsize", "0").toInt
     val numRows = options.get("numrows").toInt
-    val rowsPerPartition = numRows / partitions
     // Set below to true to do a 1 partition test.
     val partitionArray = new ArrayBuffer[InputPartition](0)
 //    if (path.contains("store_sales")) {
 //      throw new Exception("fake exception")
 //    }
-    if (false) {
-      partitions = 1
-      partitionArray += new QflockJdbcPartition(index = 0,
-        offset = 0,
-        length = options.get("numrowgroups").toInt,
-        name = path)
-    } else {
-      // Generate one partition per row Group.
+    var partitions = 0
+    if (batchSize > 1) {
+      partitions = {
+        rowGroups / batchSize + (if ((rowGroups % batchSize) > 0) 1 else 0)
+      }
+      // generate one partition per batch.
+      // last partition gets any remainder row groups
       for (i <- 0 until partitions) {
+        val currentRowGroups = {
+          if (i == partitions - 1) rowGroups - (batchSize * i)
+          else batchSize
+        }
+        partitionArray += new QflockJdbcPartition(index = i,
+          offset = i * batchSize,
+          length = currentRowGroups,
+          name = path)
+      }
+    } else {
+      val rowsPerPartition = numRows / rowGroups
+      partitions = rowGroups
+      // Generate one partition per row Group.
+      for (i <- 0 until rowGroups) {
         partitionArray += new QflockJdbcPartition(index = i,
           offset = i,
           length = 1,
