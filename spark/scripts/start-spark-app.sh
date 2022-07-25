@@ -54,6 +54,7 @@ if [ ${START_LOCAL} == "YES" ]; then
   --mount type=bind,source=$ROOT_DIR,target=/qflock \
   --mount type=bind,source=$SPARK_DIR/spark,target=/spark \
   --mount type=bind,source=$SPARK_DIR/extensions/,target=/extensions \
+  --mount type=bind,source=${SPARK_DIR}/spark_rd,target=/spark_rd \
   -v $ROOT_DIR/conf/spark:/opt/spark-$SPARK_VERSION/conf  \
   -v $ROOT_DIR/conf/hdfs-site.xml:/opt/spark-$SPARK_VERSION/conf/hdfs-site.xml  \
   -v $ROOT_DIR/conf/hive-site.xml:/opt/spark-$SPARK_VERSION/conf/hive-site.xml  \

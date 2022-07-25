@@ -48,6 +48,7 @@ DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   --mount type=bind,source=$(pwd)/scripts,target=/scripts \
   --mount type=bind,source=$ROOT_DIR/storage,target=/storage \
   --mount type=bind,source=$ROOT_DIR/spark/extensions,target=/extensions \
+  --mount type=bind,source=${JDBC_DIR}/spark_rd,target=/spark_rd \
   -w /jdbc/server \
   -v $ROOT_DIR/conf/spark:/opt/spark-$SPARK_VERSION/conf  \
   -v $ROOT_DIR/conf/hdfs-site.xml:/opt/spark-$SPARK_VERSION/conf/hdfs-site.xml  \

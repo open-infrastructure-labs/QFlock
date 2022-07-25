@@ -16,8 +16,7 @@
  */
 package com.github.qflock.jdbc;
 
-import java.io.InputStream;
-import java.io.Reader;
+import java.io.*;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.ByteBuffer;
@@ -38,9 +37,11 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
@@ -57,11 +58,12 @@ public class QflockResultSet implements ResultSet {
     private Queue<SQLWarning> warnings = new LinkedList<SQLWarning>();
 
     private QFResultSet resultset;
+    private String tempDir;
 
     private QflockResultSetMetaData metadata;
     
     private QflockStatement statement;
-    
+    private ArrayList<ArrayList<Integer>> strOffsetVector = new ArrayList<ArrayList<Integer>>();
     private int rowIndex;
     
     private final int type = ResultSet.TYPE_SCROLL_INSENSITIVE;
@@ -70,17 +72,50 @@ public class QflockResultSet implements ResultSet {
 
     private boolean isClosed;
 
-    public QflockResultSet(QFResultSet resultset) throws SQLException {
+    public QflockResultSet(QFResultSet resultset,
+                           String tempDir) throws SQLException {
         this.resultset = resultset;
+        this.tempDir = tempDir;
         this.metadata = new QflockResultSetMetaData(resultset.metadata);
         this.rowIndex = 0;
 
-        getColumnResults();
-
+        // getColumnResults();
+        writeResultsToPartitions();
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
+    }
+    private void writeResultsToPartitions() throws SQLException {
+        Integer partitions = resultset.parquet.size();
+        Iterator<ByteBuffer> parquetIterator = this.resultset.getParquetIterator();
+        Integer index = 0;
+        logger.info("start write");
+        File directory = new File(this.tempDir);
+        if (! directory.exists()) {
+            directory.mkdir();
+        }
+        while (parquetIterator.hasNext()) {
+            String filename = this.tempDir + "/part-" + index + ".parquet";
+            try {
+                logger.info("start " + index);
+                ByteBuffer bb = parquetIterator.next();
+                byte[] b = new byte[bb.remaining()];
+                bb.get(b);
+                FileOutputStream fos = new FileOutputStream(filename);
+                logger.info("start write " + filename);
+                org.apache.commons.io.IOUtils.write(b, fos);
+            } catch (FileNotFoundException e) {
+                throw new SQLException("file not found " + filename);
+            }catch (IOException e) {
+                throw new SQLException("file not found " + filename);
+            }
+            index += 1;
+        }
+        logger.info("end write partitions:" + partitions);
+    }
+    public Integer getResultFileCount() {
+        return this.resultset.parquet.size();
     }
     public Integer getSize() {
         Integer totalColBytes = 0;
@@ -106,11 +141,27 @@ public class QflockResultSet implements ResultSet {
         Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
         Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
         Iterator<ByteBuffer> compRowsIterator = this.resultset.getCompressedRowsIterator();
+        Iterator<List<Integer>> strLenListIterator = this.resultset.getStrLenVectorIterator();
         Integer columnIndex = 0;
+        strOffsetVector = new ArrayList<ArrayList<Integer>>(resultset.columnBytes.size());
         while (compRowsIterator.hasNext()) {
             int colBytes = colBytesIterator.next();
             int compColBytes = compColBytesIterator.next();
             ByteBuffer compRow = compRowsIterator.next();
+
+            logger.info("Col " + columnIndex + "create index start");
+            // Generate list of Indexes to be used when accessing strings.
+            List<Integer> currentStrLen = strLenListIterator.next();
+            Iterator<Integer> strLenIterator = currentStrLen.iterator();
+            ArrayList<Integer> strLenArray = new ArrayList<Integer>(currentStrLen.size());
+            strOffsetVector.add(strLenArray);
+            Integer index = 0;
+            while (strLenIterator.hasNext()) {
+                int strLen = strLenIterator.next();
+                strLenArray.add(index);
+                index += strLen;
+            }
+            logger.info("Col " + columnIndex + "create index end");
             if (colBytes != compColBytes) {
                 // decompress requires a direct buffer for both source and destination.
                 ByteBuffer decompressedBuffer = ByteBuffer.allocateDirect(colBytes);
@@ -642,12 +693,12 @@ public class QflockResultSet implements ResultSet {
     @Override
     public String getString(int columnIndex) throws SQLException {
         try {
-            Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
+            // Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
+            Integer stringLen = this.resultset.strLenVector.get(columnIndex - 1).get(rowIndex - 1);
+            Integer offset = this.strOffsetVector.get(columnIndex - 1).get(rowIndex - 1);
             byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
                     .array();
-            return new String(buffer, (rowIndex - 1) * stringLen,
-                    stringLen,
-                    StandardCharsets.UTF_8);
+            return new String(buffer, offset, stringLen, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new SQLException(
                     "Cannot convert column " + columnIndex + " to string: " + e,
@@ -656,12 +707,12 @@ public class QflockResultSet implements ResultSet {
     }
     public String getString(int columnIndex, int rIndex) throws SQLException {
         try {
-            Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
+//            Integer stringLen = this.resultset.columnTypeBytes.get(columnIndex - 1);
+            Integer stringLen = this.resultset.strLenVector.get(columnIndex - 1).get(rIndex - 1);
+            Integer offset = this.strOffsetVector.get(columnIndex - 1).get(rIndex - 1);
             byte [] buffer = this.resultset.getBinaryRows().get(columnIndex - 1)
                     .array();
-            return new String(buffer, (rIndex - 1) * stringLen,
-                    stringLen,
-                    StandardCharsets.UTF_8);
+            return new String(buffer, offset, stringLen, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new SQLException(
                     "Cannot convert column " + columnIndex + " to string: " + e,

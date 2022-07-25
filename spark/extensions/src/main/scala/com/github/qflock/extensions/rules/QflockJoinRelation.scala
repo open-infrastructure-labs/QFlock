@@ -80,10 +80,15 @@ class QflockJoinRelation(override val relation: BaseRelation,
       QflockLogicalRelation.getColSize(getTableForColumn(y.name), y.name) * rows}.asInstanceOf[Int])
 //     stats.sizeInBytes.longValue().asInstanceOf[Int]
   }
-  def toPlanStats(catStat: CatalogStatistics): Statistics = {
+  def toPlanStats(): Statistics = {
+    val left = statsParam.catalogTables.get(0).stats.get
+    val right = statsParam.catalogTables.get(1).stats.get
     if (rowCount.isDefined) {
-      val attrStats = AttributeMap(output
-        .flatMap(a => catStat.colStats.get(a.name).map(a -> _.toPlanStat(a.name, a.dataType))))
+      val planStats1 = output.flatMap(a =>
+        left.colStats.get(a.name).map(a -> _.toPlanStat(a.name, a.dataType)))
+      val planStats2 = output.flatMap(a =>
+                       right.colStats.get(a.name).map(a -> _.toPlanStat(a.name, a.dataType)))
+      val attrStats = AttributeMap(planStats1 ++ planStats2)
       // Estimate size as number of rows * row size.
       // val size = EstimationUtils.getOutputSize(planOutput, rowCount.get, attrStats)
       val size = BigDecimal.valueOf(colsBytes * rowCount.get.toDouble).toBigInt()
@@ -91,13 +96,11 @@ class QflockJoinRelation(override val relation: BaseRelation,
     } else {
       // When plan statistics are disabled or the table doesn't have other statistics,
       // we apply the size-only estimation strategy and only propagate sizeInBytes in statistics.
-      Statistics(sizeInBytes = catStat.sizeInBytes)
+      Statistics(sizeInBytes = left.sizeInBytes)
     }
   }
   override def computeStats(): Statistics = {
-    toPlanStats(CatalogStatistics(sizeInBytes,
-                rowCount,
-                colStats))
+    toPlanStats()
 //    catalogTable
 //      .flatMap(_.stats.map(x =>
 //        new CatalogStatistics(x.sizeInBytes,

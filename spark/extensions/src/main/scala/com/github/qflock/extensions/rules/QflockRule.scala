@@ -538,9 +538,11 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     //    opt.put("queryStats", relationForStats.toString)
     val hdfsScanObject = QflockJdbcScan(references.toStructType, opt,
       Some(statsParameters),
-      relationForStats.toPlanStats(relationArgsJoin.catalogTable.get.stats.get))
+      relationForStats.toPlanStats())
     val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
-    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
+    val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
+      references,
+      relationArgs.catalogTable.get)
     scanRelation
   }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
@@ -920,7 +922,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       Some(statsParameters), relationArgsLeft.catalogTable)
     val relationForStats = QflockJoinRelation.apply(relationArgs,
       join, opt, references, spark)
-    val relationStats = relationForStats.toPlanStats(relationArgsLeft.catalogTable.get.stats.get)
+    val relationStats = relationForStats.toPlanStats()
     val relationBytes = relationStats.sizeInBytes.toLong
     val rowGroupBatchSize = {
       val maxResultBytes = (1024L * 1024L * 200L)
@@ -1033,7 +1035,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case j@Join(left, right, joinType, condition, _)
         if joinValid(left, right, joinType) =>
         // Enable the below line to generate join stats logs.
-        // checkJoin(plan)
+        checkJoin(plan)
         transformJoin(j, left, right, joinType, condition)
     }
   }

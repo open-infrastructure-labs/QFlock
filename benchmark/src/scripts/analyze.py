@@ -90,9 +90,9 @@ class AnalyzeData:
             self._jdbc_results2 = self.load_results(self._jdbc_path2)
         if os.path.exists(self._baseline_path):
             self._baseline_results = self.load_results(self._baseline_path)
-        qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
-        self._qflock_log = qflock_log.log
-        self._qflock_log_by_test = qflock_log.log_by_test
+        # qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
+        # self._qflock_log = qflock_log.log
+        # self._qflock_log_by_test = qflock_log.log_by_test
 
     def curate_data(self):
         for k, q in self._queries.items():
@@ -138,8 +138,9 @@ class AnalyzeData:
         with open(file_name, newline='') as csv_file:
             reader = csv.DictReader(csv_file, delimiter=',')
             for row in reader:
-                r = Result(row)
-                results[r.name] = r
+                if row['status'] == 'PASSED':
+                    r = Result(row)
+                    results[r.name] = r
         return results
 
     def best_fit(self):
@@ -250,12 +251,12 @@ class AnalyzeData:
         results_sorted = \
             [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_bytes, reverse=False)]
 
-        for query in results_sorted:
-            spark_result = self._baseline_results[query]
-            jdbc_result = self._jdbc_results[query]
-            print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
-                  jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
-                  sep=",")
+        # for query in results_sorted:
+        #     spark_result = self._baseline_results[query]
+        #     jdbc_result = self._jdbc_results[query]
+        #     print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
+        #           jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
+        #           sep=",")
 
     def join_stats(self):
         join_log = ParseQflockJoinLog(os.path.join(self._data_dir, "qflock_log.txt"))
@@ -268,11 +269,16 @@ class AnalyzeData:
                 results[name][tables] = []
                 result = {'local_count': 0,
                           'remote_count': 0,
-                          'small_local_count': 0}
+                          'small_local_count': 0,
+                          'small_remote_count': 0}
+                # if "Outer" in join_info['join_type']:
+                #     print(f"{name} found join_type {join_info['join_type']}")
+                #     continue
+                # print(join_info)
                 for t in join_info['tables']:
                     if self._tables[t].location == 'dc1':
                         result['local_count'] += 1
-                        if int(self._tables[t].bytes) < (1024 * 1024 * 10):
+                        if int(self._tables[t].bytes) < (1024 * 1024 * 50):
                             result['small_local_count'] += 1
                             # if join_info['join_type'] != "Inner":
                             #     print(f"{name} small_local join_type:{join_info['join_type']}")
@@ -280,8 +286,11 @@ class AnalyzeData:
                         # if join_info['join_type'] != "Inner":
                         #     print(f"{name} remote join_type:{join_info['join_type']}")
                         result['remote_count'] += 1
-
+                        if int(self._tables[t].bytes) < (1024 * 1024 * 10):
+                            result['small_remote_count'] += 1
+                # if result['remote_count'] == 2:
                 if result['remote_count'] == 2:
+                    print(f"{name} {join_info['tables']} {join_info['join_type']}")
                     all_remote.append(name)
                 results[name][tables].append(result)
         stats = {'small_local_count': 0,

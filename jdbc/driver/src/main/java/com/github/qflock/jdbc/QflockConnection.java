@@ -59,6 +59,7 @@ public class QflockConnection implements Connection {
     private Client client_free;
     private Client client_locked;
     private ReentrantLock transportLock = new ReentrantLock(true);
+    private Properties info;
         
     public Client lockClient() {
         transportLock.lock();
@@ -76,6 +77,7 @@ public class QflockConnection implements Connection {
                             QFConnection conn, String url, Properties info) {
         this.transport = transport;
         this.client_free = client;
+        this.info = info;
         connection = conn;
 
         this.isClosed = false;
@@ -429,7 +431,7 @@ public class QflockConnection implements Connection {
     }
 
     public String getClientInfo(String name) throws SQLException {
-        throw new SQLException("Method not supported");
+        return this.info.getProperty(name);
     }
 
     public Properties getClientInfo() throws SQLException {

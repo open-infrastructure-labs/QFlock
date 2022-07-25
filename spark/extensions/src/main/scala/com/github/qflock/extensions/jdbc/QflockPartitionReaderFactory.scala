@@ -20,15 +20,19 @@ import java.util
 
 import org.slf4j.LoggerFactory
 
+import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.vectorized.ColumnarBatch
 
 /** Creates a factory for creating QflockPartitionReaderFactory objects
  *
  * @param options the options including "path"
  */
-class QflockPartitionReaderFactory(options: util.Map[String, String])
+class QflockPartitionReaderFactory(options: util.Map[String, String],
+  sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration],
+  sqlConf: SQLConf)
   extends PartitionReaderFactory {
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -41,8 +45,10 @@ class QflockPartitionReaderFactory(options: util.Map[String, String])
   override def createColumnarReader(partition: InputPartition): PartitionReader[ColumnarBatch] = {
     val part = partition.asInstanceOf[QflockJdbcPartition]
     val schema = QflockJdbcDatasource.getSchema(options)
-    val reader = new QflockJdbcVectorReader(schema, part, options)
+    // val reader = new QflockJdbcVectorReader(schema, part, options)
     logger.debug("QflockPartitionReaderFactory created row group " + part.index)
+    val reader = new QflockJdbcParquetVectorReader(schema, part, options,
+      sharedConf, sqlConf)
     new QflockJdbcColumnarPartitionReader(reader)
     // This alternate factory below is identical to the above, but
     // provides more verbose progress tracking.
