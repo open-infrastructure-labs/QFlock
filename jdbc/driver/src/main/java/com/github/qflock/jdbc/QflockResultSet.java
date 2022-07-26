@@ -58,7 +58,7 @@ public class QflockResultSet implements ResultSet {
     private Queue<SQLWarning> warnings = new LinkedList<SQLWarning>();
 
     private QFResultSet resultset;
-    private String tempDir;
+    public String tempDir;
 
     private QflockResultSetMetaData metadata;
     
@@ -90,15 +90,22 @@ public class QflockResultSet implements ResultSet {
         Integer partitions = resultset.parquet.size();
         Iterator<ByteBuffer> parquetIterator = this.resultset.getParquetIterator();
         Integer index = 0;
-        logger.info("start write");
         File directory = new File(this.tempDir);
         if (! directory.exists()) {
             directory.mkdir();
+            logger.info("create dir " + this.tempDir);
+        } else {
+            logger.info("exists " + this.tempDir);
+        }
+        if (!parquetIterator.hasNext()) {
+            logger.info(this.tempDir + " has no files");
+        } else {
+            logger.info(this.tempDir + " files:" + partitions);
         }
         while (parquetIterator.hasNext()) {
             String filename = this.tempDir + "/part-" + index + ".parquet";
             try {
-                logger.info("start " + index);
+                logger.info("start " + filename);
                 ByteBuffer bb = parquetIterator.next();
                 byte[] b = new byte[bb.remaining()];
                 bb.get(b);
@@ -229,7 +236,20 @@ public class QflockResultSet implements ResultSet {
         // TODO Auto-generated method stub
 
     }
-
+    @Override
+    protected void finalize() {
+        File directory = new File(this.tempDir);
+        if (directory.exists()) {
+            logger.info("remove dir " + this.tempDir);
+            File[] files = directory.listFiles();
+            if (files != null) {
+                for (File f : files) {
+                    f.delete();
+                }
+                directory.delete();
+            }
+        }
+    }
     @Override
     public void clearWarnings() {
         // TODO Provide warnings in ResultSet

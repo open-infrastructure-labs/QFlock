@@ -22,6 +22,7 @@ import logging
 import time
 import shutil
 import glob
+import traceback
 import pyspark
 from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType, ShortType
 import numpy as np
@@ -196,16 +197,18 @@ class QflockThriftJdbcHandler:
         request_id = self._ds_table_desc[table_name].fillRequestInfo(int(rg_offset), int(rg_count))
         result = None
         try:
-            result = self.exec_query_with_req_id(sql, connection, query_id, request_id)
-        except BaseException as err:
-            logging.warning(f"Unexpected {err=}, {type(err)=}")
+            result = self.exec_query_with_req_id(sql, connection, query_id,
+                                                 request_id, table_name)
+        except Exception as ex:
+            logging.warning("exception hit in query")
+            traceback.print_exception(type(ex), ex, ex.__traceback__)
         finally:
             self._ds_table_desc[table_name].freeRequest(request_id)
         if result is None:
             logging.warning("no result returned")
         return result
 
-    def exec_query_with_req_id(self, sql, connection, query_id, request_id):
+    def exec_query_with_req_id(self, sql, connection, query_id, request_id, table_name):
         rg_offset = connection['properties']['rowGroupOffset']
         rg_count = connection['properties']['rowGroupCount']
         query = sql.replace('\"', "")
@@ -218,15 +221,16 @@ class QflockThriftJdbcHandler:
                      f"query: {query} " +
                      f"off/cnt: {rg_offset}/{rg_count} ")
         df = self._spark.sql(query)
-        logging.info("save to disk start")
+        path = f'/spark_rd/output_{table_name}_{request_id}.parquet'
+        logging.info(f"save to disk start {path}")
         # repartition(1) \
-        path = f'/spark_rd/output_{request_id}.parquet'
         df.write.mode("overwrite") \
           .format("parquet") \
           .option("partitions", "1") \
           .save(path)
-        rows = df.count()
-        logging.info("save to disk end")
+        #rows = df.count()
+        rows = 0
+        logging.info(f"save to disk end {path}")
         logging.info("read data start")
         parquet = []
         files = glob.glob(f"{path}" + os.sep + "part-*.parquet")
@@ -241,9 +245,9 @@ class QflockThriftJdbcHandler:
         # num_rows = len(df_pandas.index)
         # logging.info(f"query toPandas() done rows:{num_rows} " +
         #              f"off/cnt: {rg_offset}/{rg_count} ")
-        logging.info(f"get schema start")
+        #logging.info(f"get schema start")
         df_schema = df.schema
-        logging.info(f"get schema end schema: {df.schema}")
+        #logging.info(f"get schema end schema: {df.schema}")
         binary_rows = []
         col_type_bytes = []
         col_bytes = []

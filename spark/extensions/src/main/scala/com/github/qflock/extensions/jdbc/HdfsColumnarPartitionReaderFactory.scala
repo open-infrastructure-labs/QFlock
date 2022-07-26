@@ -134,13 +134,22 @@ class HdfsColumnarPartitionReaderFactory(options: util.Map[String, String],
                                                convertTz,
                                                datetimeRebaseSpec,
                                                int96RebaseMode)
+    if (true) {
       // For this case we use a split (one split per partition)
       val file = new File(filePathStr)
       val fileBytes = file.length
       val split = new FileSplit(filePath, 0, fileBytes,
-                                Array.empty[String])
+        Array.empty[String])
       // val inputFile = HadoopInputFile.fromPath(new Path(file.filePath), conf)
       reader.initialize(split, hadoopAttemptContext)
+    } else {
+      // Eventually we could remove the use of a file were it not for the
+      // readFooter call above.
+      val inputFile = new QflockBufferInputFile(Array.empty[Byte])
+      if (inputFile.length != 0) {
+        reader.initialize(inputFile.asInstanceOf[InputFile], hadoopAttemptContext)
+      }
+    }
     reader
   }
   private def createParquetVectorizedReader(

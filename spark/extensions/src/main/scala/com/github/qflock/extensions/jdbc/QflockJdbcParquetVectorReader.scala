@@ -74,7 +74,8 @@ class QflockJdbcParquetVectorReader(schema: StructType,
   private var resultIndex = 0
 
   def getCurrentFile(): String = {
-    s"$resultPath/part-$resultIndex.parquet"
+    val qfResultSet = results.get.asInstanceOf[QflockResultSet]
+    s"${qfResultSet.tempDir}/part-$resultIndex.parquet"
   }
   private var reader: Option[VectorizedParquetRecordReader] = None
   /** Fetches the next set of columns from the stream, returning the
