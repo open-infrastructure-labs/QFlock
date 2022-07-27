@@ -59,7 +59,8 @@ class Result:
 
 
 class AnalyzeData:
-    functions = ["best_fit", "remote_table_filter", "top_10g", "compare"]
+    functions = ["best_fit", "remote_table_filter", "top_10g", "compare",
+                 "join_stats", "jdbc_compare"]
 
     def __init__(self):
         self._data_dir = ""

@@ -296,7 +296,8 @@ object HdfsColumnarReaderFactory {
      */
     conf.value.value.set(ParquetInputFormat.READ_SUPPORT_CLASS,
                           classOf[ParquetReadSupport].getName)
-    val schemaAsJson = schema.json
+    // When saving the parquet, the column names are restricted to exclude certain chars.
+    val schemaAsJson = schema.json.replaceAll("[)(*]", "_")
     conf.value.value.set(
       ParquetReadSupport.SPARK_ROW_REQUESTED_SCHEMA,
       schemaAsJson)

@@ -29,6 +29,8 @@ import java.sql.Timestamp
 import javax.json.Json
 import javax.json.JsonArrayBuilder
 
+import scala.util.matching.Regex
+
 import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -524,10 +526,18 @@ object PushdownSQL {
     for (f <- aggregateExpressions) {
       val a = buildAggregateExpression(f)
       if (a.isDefined) {
-        if (sql != "") {
-          sql += "," + a.get
+        // If we decide to save as parquet, we need the column names to not contain
+        // any invalid characters.
+        val regex = "[()*]".r
+        val aliasStr = if (regex.findFirstMatchIn(a.get).isDefined) {
+          s"${a.get} as ${a.get.replaceAll("[)(*]", "_")}"
         } else {
-          sql += a.get
+          a.get
+        }
+        if (sql != "") {
+          sql += "," + aliasStr
+        } else {
+          sql += aliasStr
         }
       }
     }
