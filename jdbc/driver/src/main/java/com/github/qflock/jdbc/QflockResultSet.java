@@ -79,8 +79,12 @@ public class QflockResultSet implements ResultSet {
         this.metadata = new QflockResultSetMetaData(resultset.metadata);
         this.rowIndex = 0;
 
-        // getColumnResults();
-        writeResultsToPartitions();
+        Integer partitions = resultset.parquet.size();
+        if (partitions > 0) {
+            writeResultsToPartitions();
+        } else {
+            getColumnResults();
+        }
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
         this.warnings.offer(new SQLWarning("Test!"));
@@ -156,7 +160,7 @@ public class QflockResultSet implements ResultSet {
             int compColBytes = compColBytesIterator.next();
             ByteBuffer compRow = compRowsIterator.next();
 
-            logger.info("Col " + columnIndex + "create index start");
+//            logger.info("Col " + columnIndex + "create index start");
             // Generate list of Indexes to be used when accessing strings.
             List<Integer> currentStrLen = strLenListIterator.next();
             Iterator<Integer> strLenIterator = currentStrLen.iterator();
@@ -168,7 +172,7 @@ public class QflockResultSet implements ResultSet {
                 strLenArray.add(index);
                 index += strLen;
             }
-            logger.info("Col " + columnIndex + "create index end");
+//            logger.info("Col " + columnIndex + "create index end");
             if (colBytes != compColBytes) {
                 // decompress requires a direct buffer for both source and destination.
                 ByteBuffer decompressedBuffer = ByteBuffer.allocateDirect(colBytes);

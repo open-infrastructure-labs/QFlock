@@ -45,10 +45,13 @@ class QflockPartitionReaderFactory(options: util.Map[String, String],
   override def createColumnarReader(partition: InputPartition): PartitionReader[ColumnarBatch] = {
     val part = partition.asInstanceOf[QflockJdbcPartition]
     val schema = QflockJdbcDatasource.getSchema(options)
-    // val reader = new QflockJdbcVectorReader(schema, part, options)
     logger.debug("QflockPartitionReaderFactory created row group " + part.index)
-    val reader = new QflockJdbcParquetVectorReader(schema, part, options,
-      sharedConf, sqlConf)
+    val reader = if (options.getOrDefault("resultapi", "default") == "parquet") {
+      new QflockJdbcParquetVectorReader(schema, part, options,
+        sharedConf, sqlConf)
+    } else {
+      new QflockJdbcVectorReader(schema, part, options)
+    }
     new QflockJdbcColumnarPartitionReader(reader)
     // This alternate factory below is identical to the above, but
     // provides more verbose progress tracking.

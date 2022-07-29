@@ -50,7 +50,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  */
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
-
+  protected val resultApi: String = "default" // parquet"
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -360,6 +360,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       table.getParameters.get("spark.sql.statistics.numRows"))
     val numRowGroups = table.getParameters.get(rgParamName)
     opt.put("numrowgroups", numRowGroups)
+    opt.put("resultapi", resultApi)
     opt.put("tablename", tableName)
     val schemaStr = catalogTable.schema.fields.map(s =>
       s.dataType match {
@@ -857,6 +858,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
     val numRowGroups = table.getParameters.get(rgParamName)
     opt.put("numrowgroups", numRowGroups)
+    opt.put("resultapi", resultApi)
     opt.put("tablename", table.getTableName)
     opt.put("numrows",
              table.getParameters.get("spark.sql.statistics.numRows"))
@@ -899,6 +901,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
     val rowGroups = table.getParameters.get(rgParamName).toInt
     opt.put("numrowgroups", rowGroups.toString)
+    opt.put("resultapi", resultApi)
 
     val schemaStr = referencesStructType.fields.map(s =>
       s.dataType match {

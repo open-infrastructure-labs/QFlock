@@ -60,6 +60,7 @@ class QflockJdbcPartitionReader(options: util.Map[String, String],
       properties.setProperty("rowGroupCount", partition.length.toString)
       properties.setProperty("tableName", options.get("tableName"))
       properties.setProperty("queryStats", options.get("queryStats"))
+      properties.setProperty("resultApi", "default")
       val con = DriverManager.getConnection(url, properties)
       logger.debug(s"connected to $url")
       val select = con.prepareStatement(query)

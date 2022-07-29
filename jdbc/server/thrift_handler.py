@@ -209,54 +209,54 @@ class QflockThriftJdbcHandler:
         return result
 
     def exec_query_with_req_id(self, sql, connection, query_id, request_id, table_name):
-        rg_offset = connection['properties']['rowGroupOffset']
-        rg_count = connection['properties']['rowGroupCount']
-        query = sql.replace('\"', "")
-        query_stats = connection['properties']['queryStats']
-        table_name = connection['properties']['tableName']
-        #if "JOIN" not in query:
-        query = query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
-        logging.info(f"query_id: {query_id} " +
-                     f"req_id: {request_id} table:{table_name} "
-                     f"query: {query} " +
-                     f"off/cnt: {rg_offset}/{rg_count} ")
-        df = self._spark.sql(query)
-        path = f'/spark_rd/output_{table_name}_{request_id}.parquet'
-        logging.info(f"save to disk start {path}")
-        # repartition(1) \
-        df.write.mode("overwrite") \
-          .format("parquet") \
-          .option("partitions", "1") \
-          .save(path)
-        #rows = df.count()
-        rows = 0
-        logging.info(f"save to disk end {path}")
-        logging.info("read data start")
-        parquet = []
-        files = glob.glob(f"{path}" + os.sep + "part-*.parquet")
-        bytes = 0
-        for file in files:
-            with open(file, "rb") as fd:
-                data = np.fromfile(file, dtype=np.dtype('byte'))
-                bytes += len(data)
-                parquet.append(data.tobytes())
-        logging.info(f"read data end size: {bytes} rows: {rows}")
-        # df_pandas = df.toPandas()
-        # num_rows = len(df_pandas.index)
-        # logging.info(f"query toPandas() done rows:{num_rows} " +
-        #              f"off/cnt: {rg_offset}/{rg_count} ")
-        #logging.info(f"get schema start")
-        df_schema = df.schema
-        #logging.info(f"get schema end schema: {df.schema}")
         binary_rows = []
         col_type_bytes = []
         col_bytes = []
         comp_rows = []
         col_comp_bytes = []
         str_len_vect = []
-        # if num_rows > 0:
-        #     self.format_data(binary_rows, col_bytes, col_comp_bytes, col_type_bytes, comp_rows, df, df_pandas,
-        #                      df_schema, str_len_vect)
+        parquet = []
+        num_rows = 0
+        rg_offset = connection['properties']['rowGroupOffset']
+        rg_count = connection['properties']['rowGroupCount']
+        query = sql.replace('\"', "")
+        query_stats = connection['properties']['queryStats']
+        table_name = connection['properties']['tableName']
+        api = connection['properties']['resultApi']
+        query = query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
+        logging.info(f"query_id: {query_id} " +
+                     f"req_id: {request_id} table:{table_name} "
+                     f"query: {query} " +
+                     f"off/cnt: {rg_offset}/{rg_count} ")
+        df = self._spark.sql(query)
+        df_schema = df.schema
+        if api == "parquet":
+            path = f'/spark_rd/output_{table_name}_{request_id}.parquet'
+            logging.info(f"save to disk start {path}")
+            df.write.mode("overwrite") \
+              .format("parquet") \
+              .option("partitions", "1") \
+              .save(path)
+            logging.info(f"save to disk end {path}")
+            logging.info("read data start")
+            files = glob.glob(f"{path}" + os.sep + "part-*.parquet")
+            comp_bytes = 0
+            for file in files:
+                with open(file, "rb") as fd:
+                    data = np.fromfile(file, dtype=np.dtype('byte'))
+                    comp_bytes += len(data)
+                    parquet.append(data.tobytes())
+            logging.info(f"read data end size: {comp_bytes}")
+        else:
+            df_pandas = df.toPandas()
+            num_rows = len(df_pandas.index)
+            logging.info(f"query toPandas() done rows:{num_rows} " +
+                         f"off/cnt: {rg_offset}/{rg_count} ")
+            if num_rows > 0:
+                self.format_data(binary_rows, col_bytes, col_comp_bytes, col_type_bytes,
+                                 comp_rows, df, df_pandas,
+                                 df_schema, str_len_vect)
+            comp_bytes = sum(col_comp_bytes)
 
         stats = query_stats.split(" ")
         if query_stats != "" and len(stats) > 0:
@@ -270,14 +270,13 @@ class QflockThriftJdbcHandler:
                          f"query: {query}")
         else:
             logging.info(f"query-done " +
-                         f"bytes: {bytes} " +
+                         f"comp bytes: {comp_bytes} " +
                          f"off/cnt: {rg_offset}/{rg_count}")
             #     comp_bytes = sum(col_comp_bytes)
             #     bytes = sum(col_bytes)
             #     logging.info(f"query-done rows:{num_rows} " +
             #                  f"comp_bytes: {comp_bytes} bytes: {bytes} " +
             #                  f"off/cnt: {rg_offset}/{rg_count}")
-        num_rows = 0
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnTypeBytes=col_type_bytes,
                                   columnBytes=col_bytes, compressedColumnBytes=col_comp_bytes,
