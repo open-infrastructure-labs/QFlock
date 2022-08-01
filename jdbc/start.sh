@@ -28,10 +28,11 @@ LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py 
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
 echo "Storage ${STORAGE_HOST2}"
 
+SPARK_RAMDISK=${JDBC_DIR}/spark_rd
 if [ ! -d $SPARK_RAMDISK ]; then
-    mkdir -p ${JDBC_DIR}/spark_rd
+    mkdir -p $SPARK_RAMDISK
 fi
-#sudo mount -t tmpfs -o size=64G tmpfs ${JDBC_DIR}/jdbc_rd
+#sudo mount -t tmpfs -o size=64G tmpfs $SPARK_RAMDISK{JDBC_DIR}/jdbc_rd
 
 DOCKER_ID=""
 if [ $RUNNING_MODE = "interactive" ]; then
