@@ -30,6 +30,11 @@ STORAGE_HOST1="--add-host=qflock-storage-dc1:$($SCRIPTS_DIR/get-docker-ip.py qfl
 LOCAL_DOCKER_HOST="--add-host=local-docker-host:$($SCRIPTS_DIR/get-docker-ip.py qflock-net-dc1 qflock-net-dc1)"
 # JDBC_DOCKER="--add-host=qflock-jdbc-dc2:$($SCRIPTS_DIR/get-docker-ip.py qflock-jdbc-dc2)"
 
+if [ ! -d $SPARK_RAMDISK ]; then
+    mkdir -p ${SPARK_DIR}/spark_rd
+fi
+#sudo mount -t tmpfs -o size=64G tmpfs ${SPARK_DIR}/spark_rd
+
 echo "Local docker host ${LOCAL_DOCKER_HOST}"
 echo "Storage ${STORAGE_HOST1} ${STORAGE_HOST1}"
 
