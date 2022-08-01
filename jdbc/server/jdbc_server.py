@@ -124,7 +124,7 @@ class QflockJdbcServer:
             pass
 
     def filter_config(self, conf):
-        if "agentlib" in conf and ("debug" not in self._args or not self._args.debug_spark):
+        if "agentlib" in conf and (not self._args.debug_spark):
             return False
         else:
             return True
@@ -135,7 +135,7 @@ class QflockJdbcServer:
         workers = spark_conf.get("workers")
         if workers is not None and int(workers) > 0:
             spark_cmd += f"--total-executor-cores {workers} "
-
+        print(spark_conf["conf"])
         # Filter out any conf items that are not enabled by arguments.
         conf = list(filter(self.filter_config, spark_conf["conf"]))
         spark_cmd += " ".join([f'--conf \"{arg}\" ' for arg in conf])
@@ -150,6 +150,7 @@ class QflockJdbcServer:
 
     def spark_submit(self):
         spark_cmd = self.get_spark_cmd(f"{sys.argv[0]} --mode local")
+        print(spark_cmd)
         logging.info(80*"*")
         logging.info(spark_cmd)
         logging.info(80*"*")

@@ -24,7 +24,7 @@ class GenerateCombinedResult:
         results = {}
         with open(file, 'r') as fd:
             for line in fd.readlines():
-                if "query" not in line:
+                if "query" not in line and 'PASSED' in line:
                     items = line.split(",")
                     result = {'status': items[0],
                               'rows': items[2],
@@ -45,7 +45,8 @@ class GenerateCombinedResult:
         with open(os.path.join(self._data_dir, "combined_results.csv"), "w") as fd:
             fd.write("query,Jdbc Seconds,Spark Seconds\n")
             for r in self._qflock_results:
-                if r in self._spark_results:
+                if self._qflock_results[r].status == 'PASSED' and \
+                   r in self._spark_results:
                     name = r.replace(".sql", "")
                     fd.write(f"{name},{self._qflock_results[r].seconds},"
                              f"{self._spark_results[r].seconds}\n")

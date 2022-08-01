@@ -21,7 +21,7 @@ class ParseQflockLog:
         self.log = {}
         with open(self._file, 'r') as fd:
             for line in fd.readlines():
-                if "queryName" in line:
+                if "appId" in line:
                     items = line.split(" ")
                     name = items[0].split(":")[1].replace(".sql", "")
                     app_id_full = items[1].split(":")[1]

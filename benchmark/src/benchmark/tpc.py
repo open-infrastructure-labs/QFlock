@@ -18,6 +18,7 @@ import os
 import shutil
 import time
 import logging
+import glob
 
 from benchmark.command import shell_cmd
 from benchmark.benchmark import Benchmark
@@ -212,6 +213,13 @@ class TpcBenchmark(Benchmark):
             # collect the result in memory.
             self._framework.query(f"analyze table {table} COMPUTE STATISTICS FOR ALL COLUMNS",
                                   collect_only=True)
+
+    def cleanup(self):
+        dirs = glob.glob("/qflock/spark/spark_rd/*")
+        for d in dirs:
+            logging.info(f"qflock::remove dir: {d}")
+            shutil.rmtree(d)
+
 
 
 class TpchBenchmark(TpcBenchmark):

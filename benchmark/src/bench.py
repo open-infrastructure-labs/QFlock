@@ -253,6 +253,7 @@ class BenchmarkApp:
                     benchmark.query_range(qc, self._args.explain)
                 if self._args.explain:
                     logging.info("see logs/explain.txt for output of explain")
+                benchmark.cleanup()
 
 
 if __name__ == "__main__":

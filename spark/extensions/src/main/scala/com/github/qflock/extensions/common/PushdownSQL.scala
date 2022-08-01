@@ -29,6 +29,8 @@ import java.sql.Timestamp
 import javax.json.Json
 import javax.json.JsonArrayBuilder
 
+import scala.util.matching.Regex
+
 import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -42,14 +44,28 @@ import org.apache.spark.sql.types._
 /** Provides pushdown capabilities aimed at
  *  generating information needed for pushdown
  *  from the inputs that Spark provides.
+ *
+ * @param schema - StructType of fields in query.
+ * @param filters - Filters list.
+ * @param queryCols - Array of column names.
+ * @param referenceMap [Optional] maps an attribute to a prefix to be used when referencing.
  */
 class PushdownSQL(schema: StructType,
                   filters: Seq[Expression],
-                  queryCols: Array[String]) {
+                  queryCols: Array[String],
+                  referenceMap: Map[String, Seq[AttributeReference]]) {
 
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val validFilters: Seq[Expression] =
     filters.filter(f => PushdownSQL.validateFilterExpression(f))
+
+  /**
+   * Build a string for a set of filters.
+   *
+   */
+  def getFilterString(): String = {
+    validFilters.flatMap(f => buildFilterExpression(f)).mkString(" AND ")
+  }
 
   /**
    * Build a SQL WHERE clause for the given filters. If a filter cannot be pushed down then no
@@ -58,7 +74,7 @@ class PushdownSQL(schema: StructType,
    *
    */
   def buildWhereClause(): String = {
-    val filterExpressions = validFilters.flatMap(f => buildFilterExpression(f)).mkString(" AND ")
+    val filterExpressions = getFilterString()
     if (filterExpressions.isEmpty) "" else "WHERE " + filterExpressions
   }
   /**
@@ -96,7 +112,16 @@ class PushdownSQL(schema: StructType,
       val f = filter.getOrElse("")
       Option(s"""NOT ( $f )""")
     }
-    def buildAttributeReference(attr: String): Option[String] = Option(attr)
+    def buildAttributeReference(attr: String, exprId: ExprId): Option[String] = {
+      if (referenceMap.isEmpty) {
+        Option(attr)
+      } else {
+        // Search the referenceMap for the entry that matches this expression id.
+        // Then return back the map key (._1) to generate the prefix to use.
+        val referenceName = referenceMap.find(_._2.find(x => x.exprId == exprId).isDefined).get._1
+        Option(s"$referenceName.$attr")
+      }
+    }
     def buildInExpression(value: Expression, list: Seq[Expression]): Option[String] = {
       val arg1 = buildFilterExpression(value).getOrElse("")
       val inStr = s"$arg1 IN ${list.mkString("('", "', '", "')")}"
@@ -165,8 +190,8 @@ class PushdownSQL(schema: StructType,
       case Contains(attr, value) =>
         val attrStr = buildFilterExpression(attr).getOrElse("")
         Option(s"$attrStr LIKE '%$value%'")
-      case AttributeReference(name, _, _, _) =>
-        buildAttributeReference(name)
+      case a@AttributeReference(name, _, _, _) =>
+        buildAttributeReference(name, a.exprId)
       case Literal(value, dataType) =>
         buildLiteral(value, dataType)
       case Cast(expression, _, _, _) =>
@@ -249,8 +274,10 @@ object PushdownSQL {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(schema: StructType,
             filters: Seq[Expression],
-            queryCols: Array[String]): PushdownSQL = {
-    new PushdownSQL(schema, filters, queryCols)
+            queryCols: Array[String],
+            referenceMap: Map[String, Seq[AttributeReference]] =
+           Map[String, Seq[AttributeReference]]()): PushdownSQL = {
+    new PushdownSQL(schema, filters, queryCols, referenceMap)
   }
 
   private val filterMaxDepth = 100
@@ -499,10 +526,18 @@ object PushdownSQL {
     for (f <- aggregateExpressions) {
       val a = buildAggregateExpression(f)
       if (a.isDefined) {
-        if (sql != "") {
-          sql += "," + a.get
+        // If we decide to save as parquet, we need the column names to not contain
+        // any invalid characters.
+        val regex = "[()*]".r
+        val aliasStr = if (regex.findFirstMatchIn(a.get).isDefined) {
+          s"${a.get} as ${a.get.replaceAll("[)(*]", "_")}"
         } else {
-          sql += a.get
+          a.get
+        }
+        if (sql != "") {
+          sql += "," + aliasStr
+        } else {
+          sql += aliasStr
         }
       }
     }

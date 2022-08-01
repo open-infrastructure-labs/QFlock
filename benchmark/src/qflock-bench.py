@@ -230,7 +230,7 @@ class QflockBench:
                                 shell=True)
         if result.returncode != 0:
             print("failed to restart jdbc")
-        print("restarted jdbc")
+        print("restarted jdbc.  Waiting 60 seconds for server to come up.")
         # TODO We should really poll the server to check it is up.
         time.sleep(60)
 
