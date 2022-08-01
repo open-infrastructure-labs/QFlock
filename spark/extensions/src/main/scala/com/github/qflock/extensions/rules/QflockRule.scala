@@ -50,7 +50,8 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  */
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
-  protected val resultApi: String = "default" // parquet"
+//  protected val resultApi: String = "default"
+  protected val resultApi: String = "parquet"
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -285,7 +286,37 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case _ => None
     }
   }
-
+  private def determineApi(references: Seq[AttributeReference]): String = {
+    // For now we use the parquet format for any results that include strings,
+    // as this api is faster for strings.
+    if (references.toStructType.fields.exists(x => x.dataType == StringType)) {
+      "parquet"
+    } else {
+      "default"
+    }
+  }
+  private def getBatchSize(rowGroups: Int): Long = {
+    val rowGroupBatchSize = {
+      val maxResultBytes = 1024L * 1024L * 200L
+      //      val batches = (relationBytes / maxResultBytes) +
+      //        (if ((relationBytes % maxResultBytes) > 0) 1 else 0)
+      val batches = 4
+      if (batches <= 1) {
+        // Not big enough to have batches just use one partition
+        // where each partition has all row groups.
+        rowGroups
+      } else if (batches >= rowGroups) {
+        // Too many batches needed, just limit partitions to row groups.
+        // In other words, one partition per row group.
+        1
+      } else {
+        // Reasonable number of batches, break row groups up into batches.
+        rowGroups / batches +
+          (if ((rowGroups % batches) > 0) 1 else 0)
+      }
+    }
+    rowGroupBatchSize
+  }
   private def transformProject(project: Seq[NamedExpression],
                                filters: Seq[Expression],
                                child: LogicalPlan)
@@ -359,8 +390,10 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("numrows",
       table.getParameters.get("spark.sql.statistics.numRows"))
     val numRowGroups = table.getParameters.get(rgParamName)
+//    val rowGroupBatchSize = getBatchSize(numRowGroups.toInt)
+//    opt.put("rowgroupbatchsize", rowGroupBatchSize.toString)
     opt.put("numrowgroups", numRowGroups)
-    opt.put("resultapi", resultApi)
+    opt.put("resultapi", determineApi(references))
     opt.put("tablename", tableName)
     val schemaStr = catalogTable.schema.fields.map(s =>
       s.dataType match {
@@ -620,6 +653,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("query", newQuery)
     opt.put("aggregatequery", "true")
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "aggregate,")
+    opt.put("resultapi", determineApi(output))
     val hdfsScanObject = QflockJdbcScan(output.toStructType, opt,
                                         relationArgs.statsParam)
     val scanRelation = DataSourceV2ScanRelation(
@@ -901,7 +935,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
     val rowGroups = table.getParameters.get(rgParamName).toInt
     opt.put("numrowgroups", rowGroups.toString)
-    opt.put("resultapi", resultApi)
+    opt.put("resultapi", determineApi(references))
 
     val schemaStr = referencesStructType.fields.map(s =>
       s.dataType match {
@@ -928,7 +962,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val relationStats = relationForStats.toPlanStats()
     val relationBytes = relationStats.sizeInBytes.toLong
     val rowGroupBatchSize = {
-      val maxResultBytes = (1024L * 1024L * 200L)
+      val maxResultBytes = 1024L * 1024L * 200L
 //      val batches = (relationBytes / maxResultBytes) +
 //        (if ((relationBytes % maxResultBytes) > 0) 1 else 0)
       val batches = 4
