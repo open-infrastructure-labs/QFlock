@@ -28,7 +28,7 @@ from pyspark.sql.types import StringType, DoubleType, IntegerType, LongType, Sho
 import numpy as np
 
 import pyarrow
-import pyarrow.parquet
+import pyarrow.parquet as pq
 import zstandard as zstd
 
 from com.github.qflock.jdbc.api import QflockJdbcService
@@ -154,7 +154,7 @@ class QflockThriftJdbcHandler:
         self._table_paths[table.tableName] = file_path
         schema = self._get_schema(table)
         f = fs.open_input_file(file_path)
-        reader = pyarrow.parquet.ParquetFile(f)
+        reader = pq.ParquetFile(f)
         # Even when the number of row groups is small, a query can generate multiple
         # queries to the same table.  So we must limit to at least the number of
         # requests that will be arriving to us, which is at least the level of parallelism
@@ -216,67 +216,67 @@ class QflockThriftJdbcHandler:
         col_comp_bytes = []
         str_len_vect = []
         parquet = []
-        num_rows = 0
         rg_offset = connection['properties']['rowGroupOffset']
         rg_count = connection['properties']['rowGroupCount']
-        query = sql.replace('\"', "")
+        orig_query = sql.replace('\"', "")
         query_stats = connection['properties']['queryStats']
         table_name = connection['properties']['tableName']
         api = connection['properties']['resultApi']
-        query = query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
-        logging.info(f"query_id: {query_id} " +
-                     f"req_id: {request_id} table:{table_name} "
-                     f"query: {query} " +
-                     f"off/cnt: {rg_offset}/{rg_count} ")
+        query_name = connection['properties']['queryName']
+        app_id = connection['properties']['appId']
+        query = orig_query.replace(f" {table_name} ", f" {table_name}_{request_id} ")
+        logging.info(f"query:{query_name} app_id:{app_id} " +
+                     f"req_id:{request_id} table:{table_name} " +
+                     f"off/cnt: {rg_offset}/{rg_count} " +
+                     f"query:{query} ")
         df = self._spark.sql(query)
         df_schema = df.schema
         if api == "parquet":
             path = f'/spark_rd/output_{table_name}_{request_id}.parquet'
-            logging.info(f"save to disk start {path}")
+            #logging.info(f"save to disk start {path}")
             df.write.mode("overwrite") \
               .format("parquet") \
               .option("partitions", "1") \
               .save(path)
-            logging.info(f"save to disk end {path}")
-            logging.info("read data start")
+            #logging.info(f"save to disk end {path}")
+            # logging.info("read data start")
             files = glob.glob(f"{path}" + os.sep + "part-*.parquet")
             comp_bytes = 0
+            num_rows = 0
             for file in files:
                 with open(file, "rb") as fd:
                     data = np.fromfile(file, dtype=np.dtype('byte'))
                     comp_bytes += len(data)
                     parquet.append(data.tobytes())
-            logging.info(f"read data end size: {comp_bytes}")
+                    r = pq.ParquetFile(file)
+                    num_rows += r.metadata.num_rows
+            # logging.info(f"read data end size: {comp_bytes}")
+            logging.info(f"query:{query_name} done " +
+                         f"appId:{app_id} rows:{num_rows} " +
+                         f"off/cnt:{rg_offset}/{rg_count} " +
+                         f"query:{orig_query}")
         else:
             df_pandas = df.toPandas()
             num_rows = len(df_pandas.index)
-            logging.info(f"query toPandas() done rows:{num_rows} " +
-                         f"off/cnt: {rg_offset}/{rg_count} ")
+            # logging.info(f"query toPandas() done rows:{num_rows} " +
+            #              f"off/cnt: {rg_offset}/{rg_count} ")
+            logging.info(f"query:{query_name} done " +
+                         f"appId:{app_id} rows:{num_rows} " +
+                         f"off/cnt:{rg_offset}/{rg_count} " +
+                         f"query:{orig_query}")
             if num_rows > 0:
                 self.format_data(binary_rows, col_bytes, col_comp_bytes, col_type_bytes,
                                  comp_rows, df, df_pandas,
                                  df_schema, str_len_vect)
             comp_bytes = sum(col_comp_bytes)
-
-        stats = query_stats.split(" ")
-        if query_stats != "" and len(stats) > 0:
-            prevBytes = stats[1].split(":")[1]
-            prevRows = stats[2].split(":")[1]
-            currentBytes = stats[3].split(":")[1]
-            currentRows = stats[4].split(":")[1]
-            logging.debug(f"query-done rows:{num_rows} estRows:{currentRows} " +
-                         f"estBytes:{currentBytes} " +
-                         f"estNoPushBytes:{prevBytes} estNoPushRows:{prevRows} " +
-                         f"query: {query}")
-        else:
-            logging.info(f"query-done " +
-                         f"comp bytes: {comp_bytes} " +
-                         f"off/cnt: {rg_offset}/{rg_count}")
-            #     comp_bytes = sum(col_comp_bytes)
-            #     bytes = sum(col_bytes)
-            #     logging.info(f"query-done rows:{num_rows} " +
-            #                  f"comp_bytes: {comp_bytes} bytes: {bytes} " +
-            #                  f"off/cnt: {rg_offset}/{rg_count}")
+        # logging.info(f"query-done " +
+        #              f"comp bytes: {comp_bytes} " +
+        #              f"off/cnt: {rg_offset}/{rg_count}")
+        #     comp_bytes = sum(col_comp_bytes)
+        #     bytes = sum(col_bytes)
+        #     logging.info(f"query-done rows:{num_rows} " +
+        #                  f"comp_bytes: {comp_bytes} bytes: {bytes} " +
+        #                  f"off/cnt: {rg_offset}/{rg_count}")
         return ttypes.QFResultSet(id=query_id, metadata=self.get_metadata(df_schema),
                                   numRows=num_rows, binaryRows=binary_rows, columnTypeBytes=col_type_bytes,
                                   columnBytes=col_bytes, compressedColumnBytes=col_comp_bytes,
@@ -288,34 +288,34 @@ class QflockThriftJdbcHandler:
                     str_len_vect):
         calc_len = np.vectorize(len)
         columns = df.columns
-        start_time = time.time()
+        # start_time = time.time()
         for col_idx in range(0, len(columns)):
             # data = np_array[:,col_idx]
-            logging.info("start to_numpy()")
+            # logging.info("start to_numpy()")
             data = df_pandas[columns[col_idx]].to_numpy()
-            logging.info("done to_numpy()")
+            # logging.info("done to_numpy()")
             col_name = df_schema.fields[col_idx].name
             data_type = df_schema.fields[col_idx].dataType
             if isinstance(data_type, StringType):
-                logging.info("start arr_len()")
+                # logging.info("start arr_len()")
                 #arr_len = [int(len(i)) for i in data]
                 arr_len = calc_len(data)
-                logging.info(f"end arr_len() {len(arr_len)}")
-                logging.info("start encode()")
+                # logging.info(f"end arr_len() {len(arr_len)}")
+                # logging.info("start encode()")
                 # new_data1 = data.astype(str)
                 # new_data = np.char.encode(new_data1, encoding='utf-8')
                 new_data = (''.join(data)).encode()
-                logging.info("done encode()")
+                # logging.info("done encode()")
                 #item_size = new_data.dtype.itemsize
                 #num_bytes = len(new_data) * item_size
                 num_bytes = len(new_data)
                 str_len_vect.append(arr_len)
                 col_bytes.append(num_bytes)
                 if self._compression is True:
-                    logging.info(f"compressing col:{col_name} bytes: {num_bytes}")
+                    # logging.info(f"compressing col:{col_name} bytes: {num_bytes}")
                     new_data = zstd.ZstdCompressor().compress(new_data)
                     col_comp_bytes.append(len(new_data))
-                    logging.info(f"compressing bytes: {num_bytes}:{len(new_data)} Done")
+                    # logging.info(f"compressing bytes: {num_bytes}:{len(new_data)} Done")
                     raw_bytes = new_data
                     comp_rows.append(raw_bytes)
                 else:
@@ -326,26 +326,26 @@ class QflockThriftJdbcHandler:
                 col_type_bytes.append(0)
             else:
                 str_len_vect.append([])
-                logging.info("start tobytes")
+                # logging.info("start tobytes")
                 new_data = data.byteswap().newbyteorder().tobytes()
-                logging.info("done tobytes")
+                # logging.info("done tobytes")
                 # new_data = data.tobytes()
                 num_bytes = len(new_data)
                 col_bytes.append(num_bytes)
                 if self._compression is True:
-                    logging.info(f"compressing col:{col_name} bytes: {num_bytes}")
+                    # logging.info(f"compressing col:{col_name} bytes: {num_bytes}")
                     new_data = zstd.ZstdCompressor().compress(new_data)
                     col_comp_bytes.append(len(new_data))
                     comp_rows.append(new_data)
-                    logging.info(f"compressing bytes: {num_bytes}:{len(new_data)} Done")
+                    # logging.info(f"compressing bytes: {num_bytes}:{len(new_data)} Done")
                 else:
                     col_comp_bytes.append(len(new_data))
                     binary_rows.append(new_data)
                 col_type_bytes.append(QflockThriftJdbcHandler.data_type_size(data_type))
-        duration = time.time() - start_time
+        # duration = time.time() - start_time
         bytes = sum(col_bytes)
         comp_bytes = sum(col_comp_bytes)
-        logging.info(f"total_time:{duration} bytes:{bytes} comp_bytes:{comp_bytes}")
+        # logging.info(f"total_time:{duration} bytes:{bytes} comp_bytes:{comp_bytes}")
 
     def get_connection_id(self):
         current_id = self._connection_id

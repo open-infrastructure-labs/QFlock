@@ -152,6 +152,8 @@ class QflockJdbcParquetVectorReader(schema: StructType,
     properties.setProperty("tableName", options.get("tablename"))
     properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
     properties.setProperty("resultApi", "parquet")
+    properties.setProperty("queryName", options.get("queryname"))
+    properties.setProperty("appId", options.get("appid"))
     val startTime = System.nanoTime()
     connection = Some(DriverManager.getConnection(url, properties))
     logger.debug(s"connected to $url")

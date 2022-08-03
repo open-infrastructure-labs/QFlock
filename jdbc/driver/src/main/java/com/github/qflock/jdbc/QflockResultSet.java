@@ -71,7 +71,7 @@ public class QflockResultSet implements ResultSet {
     private final boolean wasNull = false;
 
     private boolean isClosed;
-
+    private Integer partitionsBytes = 0;
     public QflockResultSet(QFResultSet resultset,
                            String tempDir) throws SQLException {
         this.resultset = resultset;
@@ -97,24 +97,25 @@ public class QflockResultSet implements ResultSet {
         File directory = new File(this.tempDir);
         if (! directory.exists()) {
             directory.mkdir();
-            logger.info("create dir " + this.tempDir);
+            logger.trace("create dir " + this.tempDir);
         } else {
-            logger.info("exists " + this.tempDir);
+            logger.trace("exists " + this.tempDir);
         }
         if (!parquetIterator.hasNext()) {
-            logger.info(this.tempDir + " has no files");
+            logger.trace(this.tempDir + " has no files");
         } else {
-            logger.info(this.tempDir + " files:" + partitions);
+            logger.trace(this.tempDir + " files:" + partitions);
         }
         while (parquetIterator.hasNext()) {
             String filename = this.tempDir + "/part-" + index + ".parquet";
             try {
-                logger.info("start " + filename);
+                logger.trace("start " + filename);
                 ByteBuffer bb = parquetIterator.next();
                 byte[] b = new byte[bb.remaining()];
+                partitionsBytes += bb.remaining();
                 bb.get(b);
                 FileOutputStream fos = new FileOutputStream(filename);
-                logger.info("start write " + filename);
+                logger.trace("start write " + filename);
                 org.apache.commons.io.IOUtils.write(b, fos);
             } catch (FileNotFoundException e) {
                 throw new SQLException("file not found " + filename);
@@ -123,12 +124,18 @@ public class QflockResultSet implements ResultSet {
             }
             index += 1;
         }
-        logger.info("end write partitions:" + partitions);
+        logger.trace("end write partitions:" + partitions);
     }
     public Integer getResultFileCount() {
         return this.resultset.parquet.size();
     }
     public Integer getSize() {
+        /* If we are using parquet API, return the size of all the partitions
+         * which we calculated previously.
+         */
+        if (this.resultset.parquet.size() > 0) {
+            return partitionsBytes;
+        }
         Integer totalColBytes = 0;
         Iterator<Integer> colBytesIterator = this.resultset.getColumnBytesIterator();
         Iterator<Integer> compColBytesIterator = this.resultset.getCompressedColumnBytesIterator();
@@ -244,7 +251,7 @@ public class QflockResultSet implements ResultSet {
     protected void finalize() {
         File directory = new File(this.tempDir);
         if (directory.exists()) {
-            logger.info("remove dir " + this.tempDir);
+            logger.trace("remove dir " + this.tempDir);
             File[] files = directory.listFiles();
             if (files != null) {
                 for (File f : files) {

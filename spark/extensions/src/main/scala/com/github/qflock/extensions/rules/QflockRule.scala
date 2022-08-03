@@ -367,7 +367,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     val opt = new util.HashMap[String, String](relationArgs.options)
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "projectfilter,")
-    if (filters.nonEmpty) {
+    if (filters.nonEmpty &&
+        filters.filter(f => !f.isInstanceOf[IsNotNull]).nonEmpty) {
       opt.put("rulelog", opt.getOrDefault("rulelog", "") + "hasfilters,")
     }
     val path = opt.get("path")
@@ -393,7 +394,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 //    val rowGroupBatchSize = getBatchSize(numRowGroups.toInt)
 //    opt.put("rowgroupbatchsize", rowGroupBatchSize.toString)
     opt.put("numrowgroups", numRowGroups)
-    opt.put("resultapi", determineApi(references))
     opt.put("tablename", tableName)
     val schemaStr = catalogTable.schema.fields.map(s =>
       s.dataType match {
@@ -653,7 +653,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("query", newQuery)
     opt.put("aggregatequery", "true")
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "aggregate,")
-    opt.put("resultapi", determineApi(output))
     val hdfsScanObject = QflockJdbcScan(output.toStructType, opt,
                                         relationArgs.statsParam)
     val scanRelation = DataSourceV2ScanRelation(
@@ -935,7 +934,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
     val rowGroups = table.getParameters.get(rgParamName).toInt
     opt.put("numrowgroups", rowGroups.toString)
-    opt.put("resultapi", determineApi(references))
+    val serverApi = determineApi(references)
+    opt.put("resultapi", serverApi)
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + serverApi + ",")
 
     val schemaStr = referencesStructType.fields.map(s =>
       s.dataType match {
@@ -1057,11 +1058,41 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         j
     }
   }
-  def joinValid(left: LogicalPlan, right: LogicalPlan, joinType: JoinType): Boolean = {
+  def countExpressions(condition: Expression): Integer = {
+    condition match {
+      case And(left, right) =>
+        countExpressions(left) + countExpressions(right)
+      case _: EqualTo => 1
+      case _: GreaterThan => 1
+      case _: GreaterThanOrEqual => 1
+      case _: LessThan => 1
+      case _: LessThanOrEqual => 1
+    }
+  }
+  def joinHasComplexExpression(condition: Option[Expression]): Boolean = {
+    if (condition.isDefined) {
+      val numExpressions = countExpressions(condition.get)
+      numExpressions > 1
+    } else {
+      false
+    }
+  }
+
+  def joinHasFilter(left: LogicalPlan, right: LogicalPlan): Boolean = {
+    val relationArgsLeft = QflockRelationArgs(left)
+    val relationArgsRight = QflockRelationArgs(right)
+    (relationArgsLeft.get.options.get("rulelog").contains("hasfilters") ||
+     relationArgsRight.get.options.get("rulelog").contains("hasfilters"))
+  }
+
+  def joinValid(join: LogicalPlan,
+                left: LogicalPlan, right: LogicalPlan, joinType: JoinType,
+                condition: Option[Expression]): Boolean = {
     val (lValid, _) = checkJoinChild(left)
     val (rValid, _) = checkJoinChild(right)
     val jValid = isJoinTypeValid(joinType)
-    if (rValid && lValid && jValid) {
+    if (rValid && lValid && jValid &&
+      (joinHasComplexExpression(condition) || joinHasFilter(left, right))) {
       true
     } else {
       false
@@ -1070,9 +1101,9 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def pushJoin(plan: LogicalPlan): LogicalPlan = {
     plan.transform {
       case j@Join(left, right, joinType, condition, _)
-        if joinValid(left, right, joinType) =>
+        if joinValid(j, left, right, joinType, condition) =>
         // Enable the below line to generate join stats logs.
-        checkJoin(plan)
+        // checkJoin(plan)
         transformJoin(j, left, right, joinType, condition)
     }
   }

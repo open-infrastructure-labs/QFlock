@@ -131,6 +131,8 @@ class QflockJdbcVectorReader(schema: StructType,
     properties.setProperty("resultApi", "default")
     properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
     properties.setProperty("tableName", options.get("tablename"))
+    properties.setProperty("queryName", options.get("queryname"))
+    properties.setProperty("appId", options.get("appid"))
     val startTime = System.nanoTime()
     connection = Some(DriverManager.getConnection(url, properties))
     logger.debug(s"connected to $url")

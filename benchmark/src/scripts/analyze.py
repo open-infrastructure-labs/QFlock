@@ -60,7 +60,7 @@ class Result:
 
 class AnalyzeData:
     functions = ["best_fit", "remote_table_filter", "top_10g", "compare",
-                 "join_stats", "jdbc_compare"]
+                 "join_stats", "jdbc_compare", "join_runtime_stats"]
 
     def __init__(self):
         self._data_dir = ""
@@ -78,6 +78,7 @@ class AnalyzeData:
         self._jdbc_path = os.path.join(self._data_dir, self._args.results_file)
         self._jdbc_path2 = os.path.join(self._data_dir, self._args.results_file2)
         self._baseline_path = os.path.join(self._data_dir, self._args.baseline_file)
+        self._qflock_path = os.path.join(self._data_dir, "qflock_log.txt")
         self.generate_results()
 
     def load_data(self):
@@ -91,9 +92,10 @@ class AnalyzeData:
             self._jdbc_results2 = self.load_results(self._jdbc_path2)
         if os.path.exists(self._baseline_path):
             self._baseline_results = self.load_results(self._baseline_path)
-        # qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
-        # self._qflock_log = qflock_log.log
-        # self._qflock_log_by_test = qflock_log.log_by_test
+        if os.path.exists(self._qflock_path):
+            qflock_log = ParseQflockLog(self._qflock_path)
+            self._qflock_log = qflock_log.log
+            self._qflock_log_by_test = qflock_log.log_by_test
 
     def curate_data(self):
         for k, q in self._queries.items():
@@ -356,6 +358,30 @@ class AnalyzeData:
                   jdbc_result.jdbc_bytes, spark_result.jdbc_bytes, round(gain_bytes * 100, 4),
                   sep=",")
 
+    def join_runtime_stats(self):
+        print("test,left table,left rows,right table,right rows," +
+              "result rows,result bytes,join_expression,filters,query")
+        for (test, log) in self._qflock_log_by_test.items():
+            # print(f"{test}:{log['app_id']}")
+            for query_info in log['queries'].values():
+                sql = query_info['query']
+                # Remove the IS NOT NULL checks.
+                # sql = re.sub("\w+ IS NOT NULL", "", sql)
+                if "ON" not in sql:
+                    continue
+                items = sql.split("ON")
+                expression = items[1].replace("WHERE", "").lstrip(" ").rstrip(" ")
+                from_items = sql.split("FROM ")
+                tables = [from_items[2].split(" ")[0]]
+                tables.append(from_items[3].split(" ")[0])
+                left = tables[0]
+                right = tables[1]
+                filter = "hasfilters" in query_info['rule_log']
+                print(f'{test},{left},{self._tables[left].rows},' +
+                      f'{right},{self._tables[right].rows},' +
+                      f'{query_info["rows"]},{query_info["bytes"]},' +
+                      f'"{expression}","{filter}","{sql}"')
+
     def parse_args(self):
         parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
                                          description="App to analyze benchmark data.\n")
@@ -403,6 +429,8 @@ class AnalyzeData:
                 self.join_stats()
             elif self._args.func == "jdbc_compare":
                 self.jdbc_compare()
+            elif self._args.func == "join_runtime_stats":
+                self.join_runtime_stats()
             else:
                 print(f"Unknown function {self._args.func}")
 
