@@ -23,21 +23,24 @@ import scala.collection.mutable
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
 import com.github.qflock.extensions.common.{PushdownSQL, PushdownSqlStatus, QflockQueryCache}
-import com.github.qflock.extensions.jdbc.{QflockDataSourceV2ScanRelation, QflockJdbcScan}
+import com.github.qflock.extensions.jdbc.{QflockDataSourceV2ScanRelation, QflockJdbcScan, QflockLog}
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.expressions._
 import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.planning.ScanOperation
+import org.apache.spark.sql.catalyst.plans.{Inner, JoinType, LeftOuter, LeftSemi}
 import org.apache.spark.sql.catalyst.plans.logical.{Aggregate, Filter => LogicalFilter}
 import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project}
+import org.apache.spark.sql.catalyst.plans.logical.Join
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.execution.datasources.v2.{DataSourceV2Relation, DataSourceV2ScanRelation}
 import org.apache.spark.sql.execution.datasources.v2.parquet.ParquetScan
 import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.types._
+import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 
 /** This rule injects our jdbc data source in cases where
@@ -47,7 +50,8 @@ import org.apache.spark.sql.types._
  */
 case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
-
+//  protected val resultApi: String = "default"
+  protected val resultApi: String = "parquet"
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -148,8 +152,42 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     child match {
       case DataSourceV2ScanRelation(_, scan, output) =>
+        val isJoin = scan match {
+          case QflockJdbcScan(_, _, statsParam, _)
+            if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
+              true
+          case _ => false
+        }
+        // Only consider it a match if it is not a join.
         if (scan.isInstanceOf[QflockJdbcScan] &&
-            (output.length != project.length)) {
+            (output.length != project.length) && !isJoin) {
+          true
+        } else {
+          false
+        }
+      case _ => false
+    }
+  }
+  private def needsJoinUpdate(project: Seq[NamedExpression],
+                              child: Any): Boolean = {
+    val projectValid = project.map {
+      case _: AttributeReference => true
+      case _ => false
+    }.exists(a => a)
+    if (!projectValid) {
+      return false
+    }
+    child match {
+      case DataSourceV2ScanRelation(_, scan, output) =>
+        val isJoin = scan match {
+          case QflockJdbcScan(_, _, statsParam, _)
+            if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
+                true
+          case _ => false
+        }
+        // Only consider it a match if it is a join.
+        if (scan.isInstanceOf[QflockJdbcScan] &&
+          (output.length != project.length) && isJoin) {
           true
         } else {
           false
@@ -248,7 +286,37 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case _ => None
     }
   }
-
+  private def determineApi(references: Seq[AttributeReference]): String = {
+    // For now we use the parquet format for any results that include strings,
+    // as this api is faster for strings.
+    if (references.toStructType.fields.exists(x => x.dataType == StringType)) {
+      "parquet"
+    } else {
+      "default"
+    }
+  }
+  private def getBatchSize(rowGroups: Int): Long = {
+    val rowGroupBatchSize = {
+      val maxResultBytes = 1024L * 1024L * 200L
+      //      val batches = (relationBytes / maxResultBytes) +
+      //        (if ((relationBytes % maxResultBytes) > 0) 1 else 0)
+      val batches = 4
+      if (batches <= 1) {
+        // Not big enough to have batches just use one partition
+        // where each partition has all row groups.
+        rowGroups
+      } else if (batches >= rowGroups) {
+        // Too many batches needed, just limit partitions to row groups.
+        // In other words, one partition per row group.
+        1
+      } else {
+        // Reasonable number of batches, break row groups up into batches.
+        rowGroups / batches +
+          (if ((rowGroups % batches) > 0) 1 else 0)
+      }
+    }
+    rowGroupBatchSize
+  }
   private def transformProject(project: Seq[NamedExpression],
                                filters: Seq[Expression],
                                child: LogicalPlan)
@@ -299,7 +367,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     val opt = new util.HashMap[String, String](relationArgs.options)
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "projectfilter,")
-    if (filters.nonEmpty) {
+    if (filters.nonEmpty &&
+        filters.filter(f => !f.isInstanceOf[IsNotNull]).nonEmpty) {
       opt.put("rulelog", opt.getOrDefault("rulelog", "") + "hasfilters,")
     }
     val path = opt.get("path")
@@ -322,6 +391,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("numrows",
       table.getParameters.get("spark.sql.statistics.numRows"))
     val numRowGroups = table.getParameters.get(rgParamName)
+//    val rowGroupBatchSize = getBatchSize(numRowGroups.toInt)
+//    opt.put("rowgroupbatchsize", rowGroupBatchSize.toString)
     opt.put("numrowgroups", numRowGroups)
     opt.put("tablename", tableName)
     val schemaStr = catalogTable.schema.fields.map(s =>
@@ -352,7 +423,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val ndpRel = getNdpRelation(path, schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references,
       relationArgs.catalogTable.get)
-    logger.info(s"CacheQuery appId:$fullAppId query:$query")
 //    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
@@ -387,13 +457,13 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     val opt = new util.HashMap[String, String](relationArgs.options)
     val query = opt.get("query")
-    val trimmedQuery = "FROM " + query.split("FROM").drop(1).mkString(" ")
+    val trimmedQuery = query.split("FROM").drop(1).mkString("FROM")
     val newSelect = project.map(x => x.name).mkString(",")
-    val newQuery = s"SELECT $newSelect $trimmedQuery"
+    val newQuery = s"SELECT $newSelect FROM $trimmedQuery"
     opt.put("query", newQuery)
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "updateproject,")
     val references = attrReferences.distinct
-    val statsParam = relationArgs.statsParam.get
+    val statsParam = relationArgs.statsParam.get.asInstanceOf[QflockStatsParameters]
     val statsParameters = QflockStatsParameters(
       project, statsParam.filterCondition,
       statsParam.relationArgs, attrReferences,
@@ -430,8 +500,94 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       withFilter
     }
   }
+  def getFilterString(project: Seq[NamedExpression],
+                      filters: Seq[Expression]): String = {
+    val attrReferencesEither = getAttributeReferences(project)
+    val attrReferences = attrReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val filterReferencesEither = getFilterAttributes(filters)
+    val filterReferences = filterReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val filtersStatus = PushdownSQL.validateFilters(filters)
+    val references = {
+      filtersStatus match {
+        case PushdownSqlStatus.Invalid =>
+          (attrReferences ++ filterReferences).distinct
+        case PushdownSqlStatus.PartiallyValid =>
+          (attrReferences ++ filterReferences).distinct
+        case PushdownSqlStatus.FullyValid =>
+          attrReferences.distinct
+      }
+    }
+    val allRefs = attrReferences ++ filterReferences
+    val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
+    // For now we always push down
+    if (filtersStatus != PushdownSqlStatus.Invalid) {
+      val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
+      val query = pushdownSql.getFilterString()
+      // logger.info("Pushdown query " + query)
+      query
+    } else {
+      // logger.info("No Pushdown " + filters.toString)
+      ""
+    }
+  }
+  private def updateJoinProject(project: Seq[NamedExpression],
+                                filters: Seq[Expression],
+                                child: LogicalPlan)
+  : LogicalPlan = {
+    val relationArgsProject = QflockRelationArgs(child).get
+    val attrReferencesEither = getAttributeReferences(project)
+    val attrReferences = attrReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val opt = new util.HashMap[String, String](relationArgsProject.options)
+    val query = opt.get("query")
+    val trimmedQuery = query.split("FROM").drop(1).mkString("FROM")
+    val newSelect = project.map(x => x.name).mkString(",")
+    val filterString = getFilterString(project, filters)
+    val newQuery = s"SELECT $newSelect FROM ($trimmedQuery) WHERE $filterString"
+    opt.put("query", newQuery)
+    val updateType = if (query.contains("JOIN")) "updatejoin," else "updateproject,"
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + updateType)
+    val references = attrReferences.distinct
+    val statsParamsOrig = relationArgsProject.statsParam.get.asInstanceOf[QflockJoinStatsParameters]
+    val join = statsParamsOrig.join
+    val relationArgs =
+      relationArgsProject.statsParam.get.asInstanceOf[QflockJoinStatsParameters].relationArgs
+    val statsParameters = QflockJoinStatsParameters(relationArgs, opt, references, join,
+      statsParamsOrig.catalogTables)
+    val relationArgsJoin = new QflockRelationArgs(relationArgs.relation,
+      relationArgs.scan, references,
+      references.toStructType, references.toStructType,
+      new CaseInsensitiveStringMap(opt),
+      Some(statsParameters), relationArgs.catalogTable)
+    val relationForStats = QflockJoinRelation.apply(relationArgsJoin,
+      statsParameters.join, opt, references, spark)
+    //    opt.put("queryStats", relationForStats.toString)
+    val hdfsScanObject = QflockJdbcScan(references.toStructType, opt,
+      Some(statsParameters),
+      relationForStats.toPlanStats())
+    val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
+    val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
+      references,
+      relationArgs.catalogTable.get)
+    scanRelation
+  }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
     val newPlan = plan.transform {
+      case s@ScanOperation(project,
+      filters,
+      child: DataSourceV2ScanRelation) if needsJoinUpdate(project, child) =>
+        val modified = updateJoinProject(project, filters, child)
+        logger.info("before updateJoinProject: \n" + project + "\n" + s)
+        logger.info("after updateJoinProject: \n" + modified)
+        modified
       case s@ScanOperation(project,
       filters,
       child: DataSourceV2ScanRelation) if needsUpdate(project, child) =>
@@ -626,9 +782,335 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     }
     newPlan
   }
+  private def getProjectQueryOrig(project: Seq[NamedExpression],
+                                  filters: Seq[Expression],
+                                  child: LogicalPlan)
+  : String = {
+    val relationArgs = QflockRelationArgs(child).get
+    val attrReferencesEither = getAttributeReferences(project)
+
+    val attrReferences = attrReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val filterReferencesEither = getFilterAttributes(filters)
+    val filterReferences = filterReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val filtersStatus = {
+      if (relationArgs.options.containsKey("ndpdisablefilterpush")) {
+        PushdownSqlStatus.Invalid
+      } else PushdownSQL.validateFilters(filters)
+    }
+    val references = {
+      filtersStatus match {
+        case PushdownSqlStatus.Invalid =>
+          (attrReferences ++ filterReferences).distinct
+        case PushdownSqlStatus.PartiallyValid =>
+          (attrReferences ++ filterReferences).distinct
+        case PushdownSqlStatus.FullyValid =>
+          attrReferences.distinct
+      }
+    }
+    val allRefs = attrReferences ++ filterReferences
+    val queryCols = allRefs.distinct.toStructType.fields.map(x => s"${x.name}")
+    val sqlQuery: String = {
+      // For now we always push down
+      if (filtersStatus != PushdownSqlStatus.Invalid) {
+        val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
+        val query = pushdownSql.query
+        // logger.info("Pushdown query " + query)
+        query
+      } else {
+        // logger.info("No Pushdown " + filters.toString)
+        ""
+      }
+    }
+    sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
+  }
+  private def getProjectQuery(child: LogicalPlan): String =
+    QflockRelationArgs(child).get.options.get("query")
+  // Copied from Spark's PredicateHelper trait in predicates.scala
+  def splitAndExpression(condition: Expression): Seq[Expression] = {
+    condition match {
+      case And(cond1, cond2) =>
+        splitAndExpression(cond1) ++ splitAndExpression(cond2)
+      case other => other :: Nil
+    }
+  }
+  def getJoinQuery(join: LogicalPlan, left: LogicalPlan, right: LogicalPlan,
+                   joinType: JoinType,
+                   expression: Option[Expression]): String = {
+    val references = join.output
+    val queryLeft = left match {
+      case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
+        getProjectQuery(child)
+    }
+    val queryRight = right match {
+      case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
+        getProjectQuery(child)
+    }
+    val queryCols = references.distinct.toStructType.fields.map(x => s"${x.name}")
+    val colsString = queryCols.mkString(",")
+    val query = {
+      if (expression.isEmpty) {
+        s"SELECT $colsString FROM ($queryLeft) ${joinType.sql} JOIN ($queryRight)"
+      } else {
+        /* Create a map that we will use to reference fields in the expression.
+         * This helps disambiguate the cases where both left and right sides
+         * of the join have fields with the same name.
+         */
+        val referenceMap = Map("a" -> left.output, "b" -> right.output)
+        val expressions = splitAndExpression(expression.get)
+        val pushdownSql = PushdownSQL(references.toStructType, expressions, queryCols,
+          referenceMap.asInstanceOf[Map[String, Seq[AttributeReference]]])
+        val expressionString = pushdownSql.getFilterString()
+
+        /* Note that the a and be here are used to identify the left and right
+         * sides of the join.  All references in the join condition will
+         * be prefixed by a. and b. respectively.
+         */
+        s"SELECT $colsString FROM ($queryLeft) a ${joinType.sql} " +
+          s"JOIN ($queryRight) b ON ($expressionString)"
+      }
+    }
+    query
+  }
+  def setupJoinPartitionInfo(left: LogicalPlan, right: LogicalPlan,
+                             opt: util.HashMap[String, String]): Unit = {
+    val relationArgsLeft = QflockRelationArgs(left).get
+    val relationArgsRight = QflockRelationArgs(right).get
+    val leftTable = relationArgsLeft.getTable
+    val leftBytes = leftTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
+    val rightTable = relationArgsRight.getTable
+    val rightBytes = rightTable.getParameters.get(s"spark.sql.statistics.totalSize").toDouble
+    // We will use the larger table as the table to partition by.
+    // This guarantees the partition result will always be reasonable.
+    val table = if (leftBytes >= rightBytes) leftTable else rightTable
+    val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
+    val numRowGroups = table.getParameters.get(rgParamName)
+    opt.put("numrowgroups", numRowGroups)
+    opt.put("resultapi", resultApi)
+    opt.put("tablename", table.getTableName)
+    opt.put("numrows",
+             table.getParameters.get("spark.sql.statistics.numRows"))
+  }
+  def transformJoin(join: LogicalPlan, left: LogicalPlan, right: LogicalPlan,
+                    joinType: JoinType,
+                    expression: Option[Expression]): LogicalPlan = {
+    val generationId = QflockOptimizationRule.getGenerationId
+    val relationArgsLeft = QflockRelationArgs(left).get
+    val relationArgsRight = QflockRelationArgs(right).get
+    val attrReferencesEither = getAttributeReferences(join.output)
+    val references = attrReferencesEither match {
+      case EitherRight(r) => r
+      case EitherLeft(_) => Seq[AttributeReference]()
+    }
+    val referencesStructType = references.toStructType
+    val opt = new util.HashMap[String, String](relationArgsLeft.options)
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + "join,")
+    val testNum = spark.conf.get("qflockTestNum")
+    val fullAppId = s"$appId$testNum-$generationId"
+    opt.put("appid", fullAppId)
+    opt.put("url", spark.conf.get("qflockJdbcUrl"))
+    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("queryname", spark.conf.get("qflockQueryName"))
+    opt.put("format", "parquet")
+    opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
+    val query = getJoinQuery(join, left, right, joinType, expression)
+    opt.put("query", query)
+    opt.remove("tablename")
+    opt.remove("numrowgroups")
+    opt.remove("numrows")
+    setupJoinPartitionInfo(left, right, opt)
+
+    val catalogTable = relationArgsLeft.catalogTable.get
+    val tableName = opt.get("tablename")
+    val dbName = catalogTable.identifier.database.getOrElse("")
+    val table = ExtHiveUtils.getTable(dbName, tableName)
+    opt.put("numrows",
+        table.getParameters.get("spark.sql.statistics.numRows"))
+    val rgParamName = s"spark.qflock.statistics.tableStats.${table.getTableName}.row_groups"
+    val rowGroups = table.getParameters.get(rgParamName).toInt
+    opt.put("numrowgroups", rowGroups.toString)
+    val serverApi = determineApi(references)
+    opt.put("resultapi", serverApi)
+    opt.put("rulelog", opt.getOrDefault("rulelog", "") + serverApi + ",")
+
+    val schemaStr = referencesStructType.fields.map(s =>
+      s.dataType match {
+        case StringType => s"${s.name}:string:${s.nullable}"
+        case IntegerType => s"${s.name}:integer:${s.nullable}"
+        case LongType => s"${s.name}:long:${s.nullable}"
+        case DoubleType => s"${s.name}:double:${s.nullable}"
+        case _ => s""
+      }).mkString(",")
+
+    opt.put("schema", schemaStr)
+
+    val statsParameters = QflockJoinStatsParameters(relationArgsLeft, opt, references,
+      join,
+      Some(Seq(relationArgsLeft.catalogTable.get,
+        relationArgsRight.catalogTable.get)))
+    val relationArgs = new QflockRelationArgs(relationArgsLeft.relation,
+      relationArgsLeft.scan, join.output.asInstanceOf[Seq[AttributeReference]],
+      references.toStructType, references.toStructType,
+      new CaseInsensitiveStringMap(opt),
+      Some(statsParameters), relationArgsLeft.catalogTable)
+    val relationForStats = QflockJoinRelation.apply(relationArgs,
+      join, opt, references, spark)
+    val relationStats = relationForStats.toPlanStats()
+    val relationBytes = relationStats.sizeInBytes.toLong
+    val rowGroupBatchSize = {
+      val maxResultBytes = 1024L * 1024L * 200L
+//      val batches = (relationBytes / maxResultBytes) +
+//        (if ((relationBytes % maxResultBytes) > 0) 1 else 0)
+      val batches = 4
+      if (batches <= 1) {
+        // Not big enough to have batches just use one partition
+        // where each partition has all row groups.
+        rowGroups
+      } else if (batches >= rowGroups) {
+        // Too many batches needed, just limit partitions to row groups.
+        // In other words, one partition per row group.
+        1
+      } else {
+        // Reasonable number of batches, break row groups up into batches.
+        rowGroups / batches +
+          (if ((rowGroups % batches) > 0) 1 else 0)
+      }
+    }
+    opt.put("rowgroupbatchsize", rowGroupBatchSize.toString)
+    val hdfsScanObject = QflockJdbcScan(referencesStructType, opt,
+      Some(statsParameters),
+      relationStats)
+    val ndpRel = getNdpRelation(opt.get("path"), schemaStr)
+    val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
+      references,
+      relationArgsLeft.catalogTable.get)
+    scanRelation
+  }
+
+  def checkJoinChild(plan: LogicalPlan): (Boolean, Option[String]) = {
+    plan match {
+      case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
+        child match {
+          case DataSourceV2ScanRelation(_, scan, _) =>
+            if (scan.isInstanceOf[QflockJdbcScan]) {
+              scan match {
+                case QflockJdbcScan(_, _, params, _ ) =>
+                  if (params.isDefined) {
+                    params.get match {
+                      case s: QflockStatsParameters =>
+                        (true, Some(s.relationArgs.catalogTable.get.identifier.table))
+                      case _ => (false, None)
+                    }
+
+                  } else {
+                    (false, None)
+                  }
+              }
+            } else {
+              (false, None)
+            }
+          case _ => (false, None)
+        }
+      case ScanOperation(_, _, child: LogicalRelation) =>
+        child match {
+          case LogicalRelation(_, _, table, _) =>
+            (false, Some(table.get.identifier.table))
+          case _ => (false, None)
+        }
+      case _ => (false, None)
+    }
+  }
+  def isJoinTypeValid(joinType: JoinType): Boolean = {
+    joinType match {
+      case Inner => true
+      case LeftSemi => true
+      // We do not support left outer.
+      case LeftOuter => false
+      // All other joins not supported.
+      case _ => false
+    }
+  }
+  def checkJoin(plan: LogicalPlan): LogicalPlan = {
+    val queryName = spark.conf.get("qflockQueryName")
+    val resultsPath = spark.conf.get("qflockResultsPath", "data")
+    plan.transform {
+      case j@Join(left, right, joinType, condition, joinHint) =>
+        val (lValid, lTable) = checkJoinChild(left)
+        val (rValid, rTable) = checkJoinChild(right)
+        if (rValid && lValid) {
+          QflockLog.log(s"queryName:$queryName joinStatus:valid " +
+                        s"tables:${rTable.get},${lTable.get} " +
+                        s"type:$joinType " + s"hint:$joinHint " +
+                        s"condition:$condition " + s"plan:${j.toString}",
+                        path = resultsPath)
+        } else if (lTable.isDefined && rTable.isDefined) {
+          QflockLog.log(s"queryName:$queryName joinStatus:invalid " +
+                        s"tables:${rTable.get},${lTable.get} " +
+                        s"type:$joinType " + s"hint:$joinHint " +
+                        s"condition:$condition " + s"plan:${j.toString}",
+                        path = resultsPath)
+        }
+        j
+    }
+  }
+  def countExpressions(condition: Expression): Integer = {
+    condition match {
+      case And(left, right) =>
+        countExpressions(left) + countExpressions(right)
+      case _: EqualTo => 1
+      case _: GreaterThan => 1
+      case _: GreaterThanOrEqual => 1
+      case _: LessThan => 1
+      case _: LessThanOrEqual => 1
+    }
+  }
+  def joinHasComplexExpression(condition: Option[Expression]): Boolean = {
+    if (condition.isDefined) {
+      val numExpressions = countExpressions(condition.get)
+      numExpressions > 1
+    } else {
+      false
+    }
+  }
+
+  def joinHasFilter(left: LogicalPlan, right: LogicalPlan): Boolean = {
+    val relationArgsLeft = QflockRelationArgs(left)
+    val relationArgsRight = QflockRelationArgs(right)
+    (relationArgsLeft.get.options.get("rulelog").contains("hasfilters") ||
+     relationArgsRight.get.options.get("rulelog").contains("hasfilters"))
+  }
+
+  def joinValid(join: LogicalPlan,
+                left: LogicalPlan, right: LogicalPlan, joinType: JoinType,
+                condition: Option[Expression]): Boolean = {
+    val (lValid, _) = checkJoinChild(left)
+    val (rValid, _) = checkJoinChild(right)
+    val jValid = isJoinTypeValid(joinType)
+    if (rValid && lValid && jValid &&
+      (joinHasComplexExpression(condition) || joinHasFilter(left, right))) {
+      true
+    } else {
+      false
+    }
+  }
+  def pushJoin(plan: LogicalPlan): LogicalPlan = {
+    plan.transform {
+      case j@Join(left, right, joinType, condition, _)
+        if joinValid(j, left, right, joinType, condition) =>
+        // Enable the below line to generate join stats logs.
+        // checkJoin(plan)
+        transformJoin(j, left, right, joinType, condition)
+    }
+  }
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
-    val after = pushAggregate(pushFilterProject(inputPlan))
+    val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
+//    val after = pushAggregate(pushFilterProject(inputPlan))
 //    val after = pushFilterProject(inputPlan)
     after
   }

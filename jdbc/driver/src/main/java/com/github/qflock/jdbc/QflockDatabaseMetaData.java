@@ -142,7 +142,8 @@ public class QflockDatabaseMetaData implements DatabaseMetaData {
         try {
             client = this.qflockConnection.lockClient();
             QFResultSet resultset = client.connection_getCatalogs(connection);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset,
+                    this.qflockConnection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -169,8 +170,9 @@ public class QflockDatabaseMetaData implements DatabaseMetaData {
         Client client = null;
         try {
             client = this.qflockConnection.lockClient();
-            QFResultSet resulset = client.connection_getColumns(connection, catalog, schemaPattern, tableNamePattern, columnNamePattern);
-            return new QflockResultSet(resulset);
+            QFResultSet resultset = client.connection_getColumns(connection, catalog, schemaPattern, tableNamePattern, columnNamePattern);
+            return new QflockResultSet(resultset,
+                    this.qflockConnection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -560,7 +562,8 @@ public class QflockDatabaseMetaData implements DatabaseMetaData {
         try {
             client = this.qflockConnection.lockClient();
             QFResultSet resultset = client.connection_getSchemas(connection, catalog, schemaPattern);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset,
+                    this.qflockConnection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -625,7 +628,8 @@ public class QflockDatabaseMetaData implements DatabaseMetaData {
         try {
             client = this.qflockConnection.lockClient();
             QFResultSet resultset = client.connection_getTableTypes(connection);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset,
+                    this.qflockConnection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -643,7 +647,8 @@ public class QflockDatabaseMetaData implements DatabaseMetaData {
         try {
             client = this.qflockConnection.lockClient();
             QFResultSet resultset = client.connection_getTables(connection, catalog, schemaPattern, tableNamePattern, tabToList(types));
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset,
+                    this.qflockConnection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -672,7 +677,8 @@ public class QflockDatabaseMetaData implements DatabaseMetaData {
         try {
             client = this.qflockConnection.lockClient();
             QFResultSet resultset = client.connection_getTypeInfo(connection);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset,
+                    this.qflockConnection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {

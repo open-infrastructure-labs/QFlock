@@ -24,6 +24,9 @@ import com.github.qflock.extensions.common.QflockQueryCache
 import com.github.qflock.jdbc.QflockResultSet
 import org.slf4j.LoggerFactory
 
+import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.sql.extension.parquet.VectorizedParquetRecordReader
+import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.sql.vectorized.ColumnVector
@@ -36,15 +39,19 @@ import org.apache.spark.sql.vectorized.ColumnVector
  *  @param part the current jdbc partition
  *  @param options data source options.
  */
-class QflockJdbcVectorReader(schema: StructType,
-                             part: QflockJdbcPartition,
-                             options: util.Map[String, String]) extends QflockColumnarVectorReader {
+class QflockJdbcParquetVectorReader(schema: StructType,
+                                    part: QflockJdbcPartition,
+                                    options: util.Map[String, String],
+  sharedConf: Broadcast[org.apache.spark.util.SerializableConfiguration],
+  sqlConf: SQLConf)
+  extends QflockColumnarVectorReader {
   private val logger = LoggerFactory.getLogger(getClass)
   def next(): Boolean = {
     nextBatch()
   }
   def get(): ColumnarBatch = {
-    columnarBatch
+    val batch = reader.get.getCurrentValue.asInstanceOf[ColumnarBatch]
+    batch
   }
   private var connection: Option[Connection] = None
   def close(): Unit = {
@@ -60,31 +67,44 @@ class QflockJdbcVectorReader(schema: StructType,
   private val colVectors = QflockJdbcColumnVector.apply(schema)
   private val columnarBatch = new ColumnarBatch(colVectors.asInstanceOf[Array[ColumnVector]])
   private var results: Option[ResultSet] = None
+
+  // Name the temp dir based on the appid, combined with the
+  // partition index, which makes it unique.
+  private val resultPath = s"/spark_rd/${options.get("appid")}_${part.index}"
+  private var resultIndex = 0
+
+  def getCurrentFile(): String = {
+    val qfResultSet = results.get.asInstanceOf[QflockResultSet]
+    s"${qfResultSet.tempDir}/part-$resultIndex.parquet"
+  }
+  private var reader: Option[VectorizedParquetRecordReader] = None
   /** Fetches the next set of columns from the stream, returning the
    *  number of rows that were returned.
    *  We expect all columns to return the same number of rows.
    *
    *  @return Integer, the number of rows returned for the batch.
    */
-  private def readNextBatch(): Integer = {
-    if (rowsReturned > 0) {
-      // There is only one batch.  So if we have already returned that
-      // batch, then we are done, just return 0 to indicate done.
-      return 0
-    }
-    results = Some(getResults)
-    var rows: Integer = 0
-    for (i <- 0 until numCols) {
-      val currentRows = colVectors(i).setupColumn(i, results.get)
-      if (rows == 0) {
-        logger.trace(s"readNextBatch found rows: $currentRows")
-        rows = currentRows
-      } else if (rows != 0 && currentRows != rows) {
-        // We expect all rows in the batch to be the same size.
-        throw new Exception(s"mismatch in rows $currentRows != $rows")
+  private def readNextBatch(): Boolean = {
+    // If the reader is already defined, just get the next batch from it.
+    if (reader.isDefined && reader.get.nextKeyValue()) {
+      true
+    } else {
+      // Either the reader is not defined yet, or it is defined,
+      // but it is empty so we need the next one.
+      val readerFactory = new HdfsColumnarPartitionReaderFactory(
+        options, sharedConf, sqlConf)
+      val qfResultSet = results.get.asInstanceOf[QflockResultSet]
+      val partitions = qfResultSet.getResultFileCount()
+      if (resultIndex < partitions) {
+        val currentFile = getCurrentFile()
+        reader = Some(readerFactory.createReader(currentFile))
+        resultIndex += 1
+        reader.get.nextKeyValue()
+      } else {
+        // Already ran through all partitions.
+        false
       }
     }
-    rows
   }
   def getResults: ResultSet = {
     val query = options.get("query")
@@ -125,21 +145,22 @@ class QflockJdbcVectorReader(schema: StructType,
 
     logger.debug(s"connecting to $url")
     val properties = new Properties
+    properties.setProperty("tempDir", resultPath)
     properties.setProperty("compression", "true")
     properties.setProperty("rowGroupOffset", part.offset.toString)
     properties.setProperty("rowGroupCount", part.length.toString)
-    properties.setProperty("resultApi", "default")
-    properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
     properties.setProperty("tableName", options.get("tablename"))
+    properties.setProperty("queryStats", options.getOrDefault("queryStats", ""))
+    properties.setProperty("resultApi", "parquet")
     properties.setProperty("queryName", options.get("queryname"))
     properties.setProperty("appId", options.get("appid"))
     val startTime = System.nanoTime()
     connection = Some(DriverManager.getConnection(url, properties))
     logger.debug(s"connected to $url")
     val select = connection.get.prepareStatement(query)
-    logger.info(s"Starting query $query")
+    logger.debug(s"Starting query $query")
     val result = select.executeQuery(query)
-    logger.info(s"Query complete $query")
+    logger.debug(s"Query complete $query")
     val elapsed = System.nanoTime() - startTime
     val qfResultSet = result.asInstanceOf[QflockResultSet]
     val appId = options.get("appid")
@@ -159,34 +180,13 @@ class QflockJdbcVectorReader(schema: StructType,
    * @return Boolean, true if more rows, false if none.
    */
   private def nextBatch(): Boolean = {
-    columnarBatch.setNumRows(0)
-    val rows = readNextBatch()
-    if (rows == 0) {
-      // logger.info(s"nextBatch Done rows: $rows total: $rowsReturned")
+    if (results == None) {
+      // Read the results from jdbc server.
+      // Once we have results we will iterate across the files.
+      results = Some(getResults)
     }
-    rowsReturned += rows
-    columnarBatch.setNumRows(rows.toInt)
-    currentBatchSize = rows
-    batchIdx = 0
-    if (rows > 0) {
-      true
-    } else {
-      false
-    }
+    readNextBatch()
   }
 }
 
-object QflockJdbcVectorReader {
 
-  private val cache = collection.mutable.Map[String, ResultSet]()
-
-  def checkCache(key: String): Option[ResultSet] = {
-    cache.get(key)
-  }
-  def insertCache(cacheKey: String, value: ResultSet): Unit = {
-    cache(cacheKey) = value
-  }
-  def removeCache(cacheKey: String, value: ResultSet): Unit = {
-    cache(cacheKey) = value
-  }
-}

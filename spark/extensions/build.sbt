@@ -22,6 +22,7 @@ scalaVersion := "2.12.10"
 publishTo := Some(Resolver.file("file",  new File( "/build/releases" )) )
 enablePlugins(JavaServerAppPackaging, UniversalDeployPlugin)
 enablePlugins(LinuxPlugin)
+javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
 
 // We want to execute the tests serially.
 Global / concurrentRestrictions += Tags.limit(Tags.Test, 1)

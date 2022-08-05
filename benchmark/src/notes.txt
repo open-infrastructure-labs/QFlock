@@ -37,3 +37,12 @@ for rgi in range(0, reader.num_row_groups):
         print(f"{rgi}:{col_idx} = {col_sizes[col_idx]}")
 
 HADOOP_ROOT_LOGGER=hadoop.root.logger=DEBUG,console
+
+# Join
+SELECT ss_sold_date_sk,ss_item_sk,ss_store_sk,ss_quantity,sr_returned_date_sk,sr_item_sk,sr_customer_sk,sr_return_quantity FROM ( (SELECT ss_sold_date_sk,ss_item_sk,ss_customer_sk,ss_store_sk,ss_ticket_number,ss_quantity FROM store_sales_0 WHERE ss_customer_sk IS NOT NULL AND ss_item_sk IS NOT NULL AND ss_ticket_number IS NOT NULL AND ss_sold_date_sk IS NOT NULL AND ss_store_sk IS NOT NULL ) a INNER JOIN (SELECT sr_returned_date_sk,sr_item_sk,sr_customer_sk,sr_ticket_number,sr_return_quantity FROM store_returns WHERE sr_customer_sk IS NOT NULL AND sr_item_sk IS NOT NULL AND sr_ticket_number IS NOT NULL AND sr_returned_date_sk IS NOT NULL ) b ON (a.ss_customer_sk = b.sr_customer_sk AND a.ss_item_sk = b.sr_item_sk AND a.ss_ticket_number = b.sr_ticket_number))
+SELECT ss_sold_date_sk FROM ( (SELECT * FROM store_sales) a INNER JOIN (SELECT * FROM store_returns  b ON (a.ss_customer_sk = b.sr_customer_sk AND a.ss_item_sk = b.sr_item_sk AND a.ss_ticket_number = b.sr_ticket_number))
+# String query
+
+"select i_item_id,i_rec_start_date,i_rec_end_date,i_item_desc,i_brand,i_class,i_category,i_manufact,i_size,i_formulation,i_color,i_units,i_container,i_product_name from ((select * from store_sales) inner join  (select * from item) ON (ss_item_sk = i_item_sk))"
+"select c_customer_id,c_salutation,c_first_name,c_last_name,c_preferred_cust_flag,c_birth_country,c_login,c_email_address,c_last_review_date from customer"
+"select i_item_id,i_rec_start_date,i_rec_end_date,i_desc,i_brand,i_class,i_category,i_manufact,i_size,i_formulation,i_color,i_units,i_container,i_product_name from item"
