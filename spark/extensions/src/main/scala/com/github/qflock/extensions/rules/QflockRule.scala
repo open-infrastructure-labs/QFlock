@@ -1112,7 +1112,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
 //    val after = pushAggregate(pushFilterProject(inputPlan))
 //    val after = pushFilterProject(inputPlan)
-    after
+   after
   }
 }
 object QflockOptimizationRule extends Rule[LogicalPlan] {

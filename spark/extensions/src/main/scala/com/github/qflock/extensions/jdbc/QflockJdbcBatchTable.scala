@@ -22,6 +22,7 @@ import scala.collection.JavaConverters._
 
 import org.apache.spark.sql.connector.catalog._
 import org.apache.spark.sql.connector.read._
+import org.apache.spark.sql.connector.write.{LogicalWriteInfo, SupportsTruncate, WriteBuilder}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
@@ -37,16 +38,20 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  */
 class QflockJdbcBatchTable(schema: StructType,
                            options: util.Map[String, String])
-  extends Table with SupportsRead {
+  extends Table with SupportsRead with SupportsWrite {
 
   override def name(): String = this.getClass.toString
 
   override def schema(): StructType = schema
 
-  override def capabilities(): util.Set[TableCapability] =
-    Set(TableCapability.BATCH_READ).asJava
+  override def capabilities(): util.Set[TableCapability] = {
+    Set(TableCapability.BATCH_READ, TableCapability.BATCH_WRITE, TableCapability.TRUNCATE).asJava
+  }
 
   override def newScanBuilder(params: CaseInsensitiveStringMap): ScanBuilder =
     new QflockJdbcScanBuilder(schema, options)
+
+  override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder =
+    new QflockJdbcWriteBuilder(info)
 }
 

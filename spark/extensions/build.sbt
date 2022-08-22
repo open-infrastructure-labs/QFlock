@@ -48,6 +48,7 @@ libraryDependencies ++= Seq(
   "org.apache.logging.log4j" % "log4j-core" % "2.14.0",
   "org.json" % "json" % "20210307",
   "javax.json" % "javax.json-api" % "1.1.4",
+  "org.glassfish" % "javax.json" % "1.1.4",
   "com.github.luben" % "zstd-jni" % "1.5.0-4",
 )
 lazy val compileScalastyle = taskKey[Unit]("compileScalastyle")
