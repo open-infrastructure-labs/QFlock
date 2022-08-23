@@ -29,7 +29,8 @@ import org.slf4j.LoggerFactory
 
 class Server(hostName: String, port: Integer) {
   private val logger = LoggerFactory.getLogger(getClass)
-  private val server = HttpServer.create(new InetSocketAddress(hostName, port), 0)
+  // Intentionally leave out the address to cause binding to all local adapters.
+  private val server = HttpServer.create(new InetSocketAddress(port), 0)
   private val threadPoolExecutor = Executors.newFixedThreadPool(10)
   def start(): Unit = {
     server.createContext("/test", new QflockHttpHandler())

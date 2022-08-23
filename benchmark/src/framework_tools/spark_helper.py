@@ -29,9 +29,11 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=None, qflock_ds=False, output_path=None, results_path=None):
+                 jdbc=None, server_path=None,
+                 qflock_ds=False, output_path=None, results_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
+        self._server_path = server_path
         self._app_name = app_name
         self._use_catalog = use_catalog
         self._qflock_ds = qflock_ds
@@ -40,7 +42,7 @@ class SparkHelper:
         self.create_spark()
 
     def create_spark(self, query_name="", test_num="0"):
-        if self._jdbc or self._qflock_ds:
+        if self._jdbc or self._qflock_ds or self._server_path:
             self._use_catalog = False
         if self._use_catalog:
             self._spark = pyspark.sql.SparkSession\
@@ -51,6 +53,15 @@ class SparkHelper:
                 .config("qflockJdbcUrl", self._jdbc)\
                 .config("qflockResultsPath", self._results_path)\
                 .enableHiveSupport()\
+                .getOrCreate()
+        elif self._server_path:
+            self._spark = pyspark.sql.SparkSession\
+                .builder\
+                .appName(self._app_name)\
+                .config("qflockQueryName", query_name)\
+                .config("qflockResultsPath", self._results_path)\
+                .config("qflockTestNum", test_num)\
+                .config("qflockServerUrl", self._server_path)\
                 .getOrCreate()
         else:
             self._spark = pyspark.sql.SparkSession\
@@ -95,8 +106,12 @@ class SparkHelper:
             gw.jvm.com.github.qflock.extensions.rules.QflockExplainRuleBuilder.injectExtraOptimization()
         elif ext == "jdbc":
             # print("Loading jdbc rule")
-            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockRuleBuilder")
-            gw.jvm.com.github.qflock.extensions.rules.QflockRuleBuilder.injectExtraOptimization()
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockJdbcRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockJdbcRuleBuilder.injectExtraOptimization()
+        elif ext == "compact":
+            print("Loading compact rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockCompactRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockCompactRuleBuilder.injectExtraOptimization()
 
     def create_table_view(self, table, db_path, db_name):
         if self._jdbc:

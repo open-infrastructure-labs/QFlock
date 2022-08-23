@@ -17,34 +17,19 @@
 package com.github.qflock.extensions.compact
 
 import java.io.DataInputStream
-import java.nio.ByteBuffer
-import java.util
 
-import scala.collection.JavaConverters._
-
-import com.github.qflock.extensions.jdbc.{QflockColumnarVectorReader, QflockJdbcPartition}
+import com.github.qflock.extensions.jdbc.QflockColumnarVectorReader
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.TaskContext
-import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.util.DateTimeUtils
-import org.apache.spark.sql.connector.read._
-import org.apache.spark.sql.internal.SQLConf
-import org.apache.spark.sql.internal.SQLConf.LegacyBehaviorPolicy
-import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.sql.vectorized.ColumnVector
-import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.util.SerializableConfiguration
 
 
 /** Allows for reading batches of columns from NDP
  *  using the NDP compressed columnar format.
  *
- *  @param schema
+ *  @param schema definition of the columns
  *  @param batchSize the number of rows in a batch
  *  @param stream the data stream attached to server.
  */
@@ -109,7 +94,7 @@ class QflockCompactColVectReader(schema: StructType,
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {
         // We expect all rows in the batch to be the same size.
-        throw new Exception(s"mismatch in rows ${currentRows} != ${rows}")
+        throw new Exception(s"mismatch in rows $currentRows != $rows")
       }
     }
     rows

@@ -58,7 +58,7 @@ object ClientTest {
   val spark = getSparkSession()
   spark.sparkContext.setLogLevel("INFO")
   def runQuery(query: String, schema: StructType): ListBuffer[String] = {
-    val url = new URL("http://192.168.64.3:9860/test")
+    val url = new URL("http://192.168.32.5:9860/test")
     val con = url.openConnection.asInstanceOf[HttpURLConnection]
     con.setRequestMethod("POST")
     con.setRequestProperty("Accept", "application/json")

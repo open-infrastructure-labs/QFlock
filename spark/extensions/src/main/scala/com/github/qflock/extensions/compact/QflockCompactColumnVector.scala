@@ -18,19 +18,13 @@ package com.github.qflock.extensions.compact
 
 import java.io.DataInputStream
 import java.io.EOFException
-import java.io.InputStream
-import java.lang.Thread
 import java.nio.ByteBuffer
-import java.util
-
-import scala.collection.JavaConverters._
 
 // ZSTD support
 import com.github.luben.zstd.Zstd
 import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 
-import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnVector
 import org.apache.spark.unsafe.types.UTF8String

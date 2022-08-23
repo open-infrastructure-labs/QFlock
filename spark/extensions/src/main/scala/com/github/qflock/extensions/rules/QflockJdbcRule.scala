@@ -48,7 +48,7 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  *  that needs to be transferred.
  * @param spark the current SparkSession
  */
-case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
+case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
 //  protected val resultApi: String = "default"
   protected val resultApi: String = "parquet"
@@ -321,7 +321,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                filters: Seq[Expression],
                                child: LogicalPlan)
   : LogicalPlan = {
-    val generationId = QflockOptimizationRule.getGenerationId
+    val generationId = QflockJdbcOptimizationRule.getGenerationId
     val relationArgs = QflockRelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
 
@@ -899,7 +899,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def transformJoin(join: LogicalPlan, left: LogicalPlan, right: LogicalPlan,
                     joinType: JoinType,
                     expression: Option[Expression]): LogicalPlan = {
-    val generationId = QflockOptimizationRule.getGenerationId
+    val generationId = QflockJdbcOptimizationRule.getGenerationId
     val relationArgsLeft = QflockRelationArgs(left).get
     val relationArgsRight = QflockRelationArgs(right).get
     val attrReferencesEither = getAttributeReferences(join.output)
@@ -1115,12 +1115,12 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
    after
   }
 }
-object QflockOptimizationRule extends Rule[LogicalPlan] {
+object QflockJdbcOptimizationRule extends Rule[LogicalPlan] {
   val spark: SparkSession =
     SparkSession.builder().appName("Extra optimization rules")
       .getOrCreate()
   def apply(logicalPlan: LogicalPlan): LogicalPlan = {
-    QflockRule(spark).apply(logicalPlan)
+    QflockJdbcRule(spark).apply(logicalPlan)
   }
   private var generationId: Int = 0
 
@@ -1129,7 +1129,7 @@ object QflockOptimizationRule extends Rule[LogicalPlan] {
     generationId
   }
 }
-object QflockRuleBuilder {
+object QflockJdbcRuleBuilder {
   var injected: Boolean = false
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def injectExtraOptimization(): Unit = {
@@ -1138,6 +1138,6 @@ object QflockRuleBuilder {
         .getOrCreate()
     // import testSparkSession.implicits._
     logger.info(s"added QflockOptimizationRule to session $testSparkSession")
-    testSparkSession.experimental.extraOptimizations = Seq(QflockOptimizationRule)
+    testSparkSession.experimental.extraOptimizations = Seq(QflockJdbcOptimizationRule)
   }
 }

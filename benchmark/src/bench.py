@@ -175,14 +175,19 @@ class BenchmarkApp:
                                            locationUri='/opt/volume/metastore/metastore_db_DBA')
 
     def run(self):
+        print("bench.py starting")
         setup_logger()
         if not self._parse_args():
             return
         self._load_config()
         jdbc_config = None
+        server_path = None
         if self._args.jdbc or self._args.ext == "jdbc":
             jdbc_config = self._config['benchmark']['jdbc-path']
+        if self._args.ext == "compact":
+            server_path = self._config['benchmark']['server-path']
         sh = SparkHelper(verbose=self._args.verbose, jdbc=jdbc_config,
+                         server_path=server_path,
                          qflock_ds=self._args.qflock_ds,
                          output_path=self._args.output_path,
                          results_path=self._args.results_path)
@@ -192,7 +197,6 @@ class BenchmarkApp:
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF
-        print("bench.py starting")
         # if not self._args.no_catalog:
         #     self._create_default_catalog()
         if self._args.log_level:
