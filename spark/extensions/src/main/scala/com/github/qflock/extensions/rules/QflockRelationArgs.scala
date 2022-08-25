@@ -18,6 +18,7 @@ package com.github.qflock.extensions.rules
 
 import scala.collection.JavaConverters._
 
+import com.github.qflock.extensions.compact.QflockCompactScan
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
 import org.apache.hadoop.hive.metastore.api.Table
 
@@ -77,6 +78,17 @@ object QflockRelationArgs {
             } else {
               None
             }
+          case QflockCompactScan(_, _, statsParam, _) =>
+            if (statsParam.isDefined) {
+              statsParam.get match {
+                case s: QflockStatsParameters =>
+                  s.relationArgs.catalogTable
+                case s: QflockJoinStatsParameters =>
+                  s.relationArgs.catalogTable
+              }
+            } else {
+              None
+            }
         }
         (relation, scan, output, catalogTable)
       case LogicalRelation(relation, output, table, _) =>
@@ -90,6 +102,8 @@ object QflockRelationArgs {
       case QflockRelation(schema, _, opts) =>
         (schema, schema, new CaseInsensitiveStringMap(opts.asJava), None)
       case QflockJdbcScan(schema, opts, statsParam, _) =>
+        (schema, schema, new CaseInsensitiveStringMap(opts), statsParam)
+      case QflockCompactScan(schema, opts, statsParam, _) =>
         (schema, schema, new CaseInsensitiveStringMap(opts), statsParam)
     }
     Some(new QflockRelationArgs(relation, scan, output, dataSchema,

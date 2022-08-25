@@ -41,8 +41,8 @@ object QflockQueryHandler {
   spark.sql(s"USE ${dbName}")
   spark.sparkContext.setLogLevel("INFO")
   def handleQuery(query: String, outStream: OutputStream): String = {
-    logger.info(s"Start query: $query")
     val requestId = QflockOutputStreamDescriptor.get.fillRequestInfo(outStream)
+    logger.info(s"Start requestId: $requestId query: $query")
     val df = spark.sql(query)
 
     // Coalesce is slow.  It is temporary until we support double buffering of
@@ -52,8 +52,10 @@ object QflockQueryHandler {
       .write.format("qflockJdbc")
       .mode("overwrite")
       .option("outStreamRequestId", requestId)
+      .option("query", query)
       .save()
-    logger.info(s"Done query: $query")
+    QflockOutputStreamDescriptor.get.freeRequest(requestId)
+    logger.info(s"Done requestId: $requestId query: $query")
     ""
   }
 }

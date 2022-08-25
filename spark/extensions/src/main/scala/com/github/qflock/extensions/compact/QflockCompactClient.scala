@@ -16,15 +16,21 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{BufferedInputStream, DataInputStream, StringWriter}
+import java.io.{BufferedInputStream, ByteArrayInputStream, DataInputStream, InputStream, StringWriter}
 import java.net.{HttpURLConnection, URL}
+import java.nio.ByteBuffer
 import java.util
 import javax.json.Json
+
+import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.types.StructType
 
 
-class QflockCompactClient(options: util.Map[String, String]) {
+
+class QflockCompactClient(query: String, schema: StructType,
+                          urlPath: String) {
+  private val logger = LoggerFactory.getLogger(getClass)
   private def getJson(query: String): String = {
     val queryBuilder = Json.createObjectBuilder()
     queryBuilder.add("query", query)
@@ -34,21 +40,49 @@ class QflockCompactClient(options: util.Map[String, String]) {
     writer.writeObject(queryJson)
     stringWriter.getBuffer().toString()
   }
+  def getEmptyQueryStream(query: String, schema: StructType): DataInputStream = {
+    // Write a header with a column number of 0.
+    val b = ByteBuffer.allocate(4)
+    b.putInt(0)
+    val s = new DataInputStream(new ByteArrayInputStream(b.array()))
+    s
+  }
+  private var connection: Option[HttpURLConnection] = None
+  def close: Unit = {
+    if (connection.isDefined) {
+      logger.info("close start")
+      stream.close()
+      connection.get.disconnect()
+      logger.info("close end")
+    }
+  }
+  val stream = getQueryStream
 
-  def getQueryStream(query: String, schema: StructType): DataInputStream = {
-    val url = new URL(options.get("url"))
+  def getQueryStream: DataInputStream = {
+    val url = new URL(urlPath)
     val con = url.openConnection.asInstanceOf[HttpURLConnection]
+    connection = Some(con)
     con.setRequestMethod("POST")
     con.setRequestProperty("Accept", "application/json")
     con.setDoOutput(true)
+    con.setDoInput(true)
     con.setReadTimeout(0)
     con.setConnectTimeout(0)
-    val jsonString = getJson(query)
-    val os = con.getOutputStream
-    try {
-      val input = jsonString.getBytes("utf-8")
-      os.write(input, 0, input.length)
-    } finally if (os != null) os.close()
-    new DataInputStream(new BufferedInputStream(con.getInputStream))
+    con.connect()
+    val statusCode = 200 // con.getResponseCode
+    if (statusCode == 200) {
+      val jsonString = getJson(query)
+      val os = con.getOutputStream
+      try {
+        val input = jsonString.getBytes("utf-8")
+        os.write(input, 0, input.length)
+      } finally if (os != null) os.close()
+      // Thread.sleep(5000)
+      new DataInputStream(new BufferedInputStream(con.getInputStream))
+//      getEmptyQueryStream(query, schema)
+    } else {
+      logger.error(s"unexpected http status on connect: $statusCode")
+      getEmptyQueryStream(query, schema)
+    }
   }
 }

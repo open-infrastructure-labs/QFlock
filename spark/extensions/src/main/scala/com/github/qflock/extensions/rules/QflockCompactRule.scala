@@ -1107,10 +1107,10 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
-    val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
+//    val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
 //    val after = pushAggregate(pushFilterProject(inputPlan))
-//    val after = pushFilterProject(inputPlan)
-   after
+    val after = pushFilterProject(inputPlan)
+    after
   }
 }
 object QflockCompactOptimizationRule extends Rule[LogicalPlan] {

@@ -61,8 +61,7 @@ class QflockJdbcDataWriter(partId: Int, taskId: Long,
       extends DataWriter[InternalRow] {
 
   private val logger = LoggerFactory.getLogger(getClass)
-  private val tempDir = options.getOrDefault("tempdir", "data/")
-  private val bufferBytes = (8 * 4096)
+  logger.info(s"create partId: $partId taskId: $taskId")
   private var rowIndex: Int = 0
   private val batchSize: Int = 4096
   private def sizeForType(dataType: DataType): Int = {
@@ -79,9 +78,6 @@ class QflockJdbcDataWriter(partId: Int, taskId: Long,
   private val dataBuffers: Array[ByteBuffer] = {
     schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
   }
-  val bufferStreams: Array[ByteArrayOutputStream] = {
-    schema.fields.map(x => new ByteArrayOutputStream(bufferBytes))
-  }
   val stringLengths: Array[ByteBuffer] = {
     schema.fields.map(x => x.dataType match {
       case StringType => ByteBuffer.allocate(4 * batchSize)
@@ -93,13 +89,6 @@ class QflockJdbcDataWriter(partId: Int, taskId: Long,
   private var rootFieldWriters: Array[ValueWriter] = _
   rootFieldWriters = schema.map(_.dataType).map(makeWriter).toArray[ValueWriter]
 
-  val streams: Array[DataOutputStream] = {
-//    schema.fields.zipWithIndex.map(x => new DataOutputStream(
-//      new BufferedOutputStream(
-//      new FileOutputStream(s"$tempDir/${partId}_${x._2}_${x._1.name}")
-    schema.fields.zipWithIndex.map(x => new DataOutputStream(
-                                                  bufferStreams(x._2)))
-  }
   // Client sets outStreamRequestId after calling fillRequestInfo
   private val requestId = options.get("outstreamrequestid").toInt
   // The stream is used to write data back to the client.
@@ -107,7 +96,9 @@ class QflockJdbcDataWriter(partId: Int, taskId: Long,
     QflockOutputStreamDescriptor.get.getRequestInfo(requestId)
       .stream.get.asInstanceOf[DataOutputStream]
   writeDataFormat
+  private val query = options.get("query")
   private def writeDataFormat: Unit = {
+    logger.info(s"write data format $query")
     // The data format consists of an integer for number of columns,
     // followed by an integer for the type of each column.
     val buffer = ByteBuffer.allocate((schema.fields.length + 1) * 4)
@@ -183,56 +174,6 @@ class QflockJdbcDataWriter(partId: Int, taskId: Long,
       i += 1
     }
   }
-  def writeStream(internalRow: InternalRow): Unit = {
-    val row = internalRow.toSeq(schema)
-    schema.fields.zipWithIndex.foreach(x => {
-      x._1.dataType match {
-        case IntegerType =>
-          streams(x._2).writeInt(row(x._2).asInstanceOf[Int])
-        case LongType =>
-          streams(x._2).writeLong(row(x._2).asInstanceOf[Long])
-        case DoubleType =>
-          streams(x._2).writeDouble(row(x._2).asInstanceOf[Double])
-        case FloatType =>
-          streams(x._2).writeFloat(row(x._2).asInstanceOf[Float])
-        case StringType =>
-          row(x._2).asInstanceOf[UTF8String].writeTo(streams(x._2))
-      }
-      if (bufferStreams(x._2).size() > (64 * 1024)) {
-        Zstd.compress(compressBuffers(x._2).array(),
-          bufferStreams(x._2).toByteArray(), 1)
-        bufferStreams(x._2).reset()
-      }
-    })
-  }
-  def writeOld(internalRow: InternalRow): Unit = {
-    val row = internalRow.toSeq(schema)
-    for (x <- Range(0, schema.fields.length)) {
-      schema.fields(x).dataType match {
-        case IntegerType =>
-          dataBuffers(x).putInt(rowIndex * 4, row(x).asInstanceOf[Int])
-        case LongType =>
-          dataBuffers(x).putLong(rowIndex * 8, row(x).asInstanceOf[Long])
-        case DoubleType =>
-          dataBuffers(x).putDouble(rowIndex * 8, row(x).asInstanceOf[Double])
-        case FloatType =>
-          dataBuffers(x).putFloat(rowIndex * 8, row(x).asInstanceOf[Float])
-        //        case StringType =>
-      }
-    }
-    rowIndex += 1
-    if (rowIndex >= batchSize) {
-      for (x <- Range(0, schema.fields.length)) {
-        //        Zstd.compress(compressBuffers(x).array(),
-        //          dataBuffers(x).array(), 1)
-        Zstd.compressDirectByteBuffer(compressBuffers(x),
-          0, bufferBytes,
-          dataBuffers(x),
-          0, bufferBytes, 1)
-      }
-      rowIndex = 0
-    }
-  }
   override def write(internalRow: InternalRow): Unit = {
     writeFields(internalRow, rootFieldWriters)
     rowIndex += 1
@@ -296,7 +237,6 @@ class QflockJdbcDataWriter(partId: Int, taskId: Long,
   }
   override def abort(): Unit = {}
   override def close(): Unit = {
-    streams.foreach(x => x.close())
     writeBuffers
   }
 }

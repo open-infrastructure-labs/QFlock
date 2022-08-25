@@ -43,10 +43,11 @@ class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
   override def createColumnarReader(partition: InputPartition): PartitionReader[ColumnarBatch] = {
     val part = partition.asInstanceOf[QflockCompactPartition]
     val schema = QflockCompactDatasource.getSchema(options)
-    logger.debug("QflockCompactPartitionReaderFactory created row group " + part.index)
-    val client = new QflockCompactClient(options)
-    val stream = client.getQueryStream(options.get("query"), schema)
-    val reader = new QflockCompactColVectReader(schema, batchSize, stream)
+    val query = options.get("query")
+    logger.info("QflockCompactPartitionReaderFactory created partition " + part.index)
+    val client = new QflockCompactClient(query, schema, options.get("url"))
+    logger.info("query: " + options.get("query"))
+    val reader = new QflockCompactColVectReader(schema, batchSize, query, client)
     new QflockCompactColumnarPartitionReader(reader)
   }
 }

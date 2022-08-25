@@ -26,7 +26,7 @@ import javax.json.JsonWriter
 
 import scala.collection.mutable.ListBuffer
 
-import com.github.qflock.extensions.compact.QflockCompactColVectReader
+import com.github.qflock.extensions.compact.{QflockCompactClient, QflockCompactColVectReader}
 import org.apache.log4j.BasicConfigurator
 import org.slf4j.LoggerFactory
 
@@ -58,32 +58,33 @@ object ClientTest {
   val spark = getSparkSession()
   spark.sparkContext.setLogLevel("INFO")
   def runQuery(query: String, schema: StructType): ListBuffer[String] = {
-    val url = new URL("http://192.168.32.5:9860/test")
-    val con = url.openConnection.asInstanceOf[HttpURLConnection]
-    con.setRequestMethod("POST")
-    con.setRequestProperty("Accept", "application/json")
-    con.setDoOutput(true)
-    con.setReadTimeout(0)
-    con.setConnectTimeout(0)
-    val jsonString = getJson(query)
-    val os = con.getOutputStream
-    try {
-      val input = jsonString.getBytes("utf-8")
-      os.write(input, 0, input.length)
-    } finally if (os != null) os.close()
-    val inStream = new DataInputStream(new BufferedInputStream(con.getInputStream))
+    val url = "http://192.168.32.5:9860/test"
+//    val con = url.openConnection.asInstanceOf[HttpURLConnection]
+//    con.setRequestMethod("POST")
+//    con.setRequestProperty("Accept", "application/json")
+//    con.setDoOutput(true)
+//    con.setReadTimeout(0)
+//    con.setConnectTimeout(0)
+//    val jsonString = getJson(query)
+//    val os = con.getOutputStream
+//    try {
+//      val input = jsonString.getBytes("utf-8")
+//      os.write(input, 0, input.length)
+//    } finally if (os != null) os.close()
+//    val inStream = new DataInputStream(new BufferedInputStream(con.getInputStream))
 //    val br = new BufferedReader(new InputStreamReader(inStream, "utf-8"))
+    val client = new QflockCompactClient(query, schema, url)
     var data = ListBuffer.empty[String]
     try {
-      data = readData(schema, 4096, inStream)
-    } finally if (inStream != null) inStream.close()
+      data = readData(schema, 4096, client)
+    } finally client.close
     data
   }
   def readData(schema: StructType,
                batchSize: Int,
-               stream: DataInputStream): ListBuffer[String] = {
+               client: QflockCompactClient): ListBuffer[String] = {
     val data: ListBuffer[String] = ListBuffer.empty[String]
-    val reader = new QflockCompactColVectReader(schema, batchSize, stream)
+    val reader = new QflockCompactColVectReader(schema, batchSize, "", client)
     while (reader.next()) {
       val batch = reader.get()
       val rowIter = batch.rowIterator()

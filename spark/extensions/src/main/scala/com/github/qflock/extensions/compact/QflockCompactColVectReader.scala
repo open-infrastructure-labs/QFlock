@@ -35,7 +35,8 @@ import org.apache.spark.sql.vectorized.ColumnVector
  */
 class QflockCompactColVectReader(schema: StructType,
                                  batchSize: Integer,
-                                 stream: DataInputStream)
+                                 query: String,
+                                 client: QflockCompactClient)
     extends QflockColumnarVectorReader {
   private val logger = LoggerFactory.getLogger(getClass)
   override def next(): Boolean = {
@@ -45,7 +46,10 @@ class QflockCompactColVectReader(schema: StructType,
     columnarBatch
   }
   override def close(): Unit = {
+    logger.info(s"Data Read Close $query")
+    client.close
   }
+  private val stream = client.stream
   private var rowsReturned: Long = 0
   private var currentBatchSize: Int = 0
   private var batchIdx: Long = 0
@@ -55,15 +59,15 @@ class QflockCompactColVectReader(schema: StructType,
      * the the type of each column.  All values are doubles.
      */
     try {
-      // logger.info(s"Data Read Starting ${part.name}")
-      // logger.info("reading cols from stream")
+       logger.info(s"Data Read Starting ${query}")
       val nColsLong = stream.readInt()
       val nCols: Integer = nColsLong
-      // logger.info("nCols : " + String.valueOf(nCols))
+      logger.info("nCols : " + String.valueOf(nCols) + " " + query)
       val dataTypes = new Array[Int](nCols)
       for (i <- 0 until nCols) {
         dataTypes(i) = stream.readInt()
-        // logger.info(String.valueOf(i) + " : " + String.valueOf(dataTypes(i)))
+         logger.info(String.valueOf(i) + " : " + String.valueOf(dataTypes(i))
+         + " " + query)
       }
       (nCols, dataTypes)
     } catch {
@@ -90,6 +94,7 @@ class QflockCompactColVectReader(schema: StructType,
     var rows: Integer = 0
     for (i <- 0 until numCols) {
       val currentRows = colVectors(i).readColumn(stream)
+      logger.info(s"Data Read col $i rows $currentRows totalRows $rowsReturned $query")
       if (rows == 0) {
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {
@@ -107,7 +112,7 @@ class QflockCompactColVectReader(schema: StructType,
     columnarBatch.setNumRows(0)
     val rows = readNextBatch()
     if (rows == 0) {
-      // logger.info(s"Data Read Complete ${part.name}")
+      logger.info(s"Data Read Batch Complete $query")
     }
     rowsReturned += rows
     columnarBatch.setNumRows(rows.toInt)

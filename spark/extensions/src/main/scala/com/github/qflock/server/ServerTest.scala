@@ -25,8 +25,7 @@ object ServerTest {
       args(0)
     } else "server"
     if (mode == "server") {
-      BasicConfigurator.configure
-//      val server = new Server("127.0.0.1", 9860)
+      // BasicConfigurator.configure
       val server = new Server("qflock-jdbc-dc2", 9860)
       server.start()
     } else {
