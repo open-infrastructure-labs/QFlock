@@ -30,9 +30,10 @@ import org.slf4j.LoggerFactory
 class Server(hostName: String, port: Integer) {
   private val logger = LoggerFactory.getLogger(getClass)
   // Intentionally leave out the address to cause binding to all local adapters.
-  private val server = HttpServer.create(new InetSocketAddress(port), 0)
+  private val server = HttpServer.create(new InetSocketAddress(port), 16)
   private val threadPoolExecutor = Executors.newFixedThreadPool(10)
   def start(): Unit = {
+    QflockQueryHandler.init()
     server.createContext("/test", new QflockHttpHandler())
     server.setExecutor(threadPoolExecutor)
     server.start()
@@ -78,7 +79,11 @@ class QflockHttpHandler extends HttpHandler {
     // Set length to 0.  By convention this means that we will used chunked
     // format instead of content-length.  Close will end the response.
     httpExchange.sendResponseHeaders(200, 0)
-    QflockQueryHandler.handleQuery(json("query").toString, outputStream)
+    QflockQueryHandler.handleQuery(json("query").toString,
+                                   json("tableName").toString,
+                                   json("rgOffset").toString.toInt,
+                                   json("rgCount").toString.toInt,
+                                   outputStream)
     outputStream.close()
     ""
   }
@@ -123,9 +128,6 @@ class QflockHttpHandler extends HttpHandler {
     httpExchange.sendResponseHeaders(200, 0)
 
     // outputStream.write(htmlResponse.getBytes())
-
-
-
     outputStream.flush()
     outputStream.close()
   }

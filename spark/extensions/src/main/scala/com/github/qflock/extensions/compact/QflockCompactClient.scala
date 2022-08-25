@@ -28,12 +28,19 @@ import org.apache.spark.sql.types.StructType
 
 
 
-class QflockCompactClient(query: String, schema: StructType,
+class QflockCompactClient(query: String,
+                          tableName: String,
+                          rgOffset: String,
+                          rgCount: String,
+                          schema: StructType,
                           urlPath: String) {
   private val logger = LoggerFactory.getLogger(getClass)
   private def getJson(query: String): String = {
     val queryBuilder = Json.createObjectBuilder()
     queryBuilder.add("query", query)
+    queryBuilder.add("tableName", tableName)
+    queryBuilder.add("rgOffset", rgOffset)
+    queryBuilder.add("rgCount", rgCount)
     val queryJson = queryBuilder.build
     val stringWriter = new StringWriter
     val writer = Json.createWriter(stringWriter)

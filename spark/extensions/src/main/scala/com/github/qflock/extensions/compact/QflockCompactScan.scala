@@ -56,7 +56,7 @@ case class QflockCompactScan(schema: StructType,
     GenericPushdownStats(numRows = rowCount, sizeInBytes = sizeInBytes)
   }
   private def createPartitions(): Array[InputPartition] = {
-    val path = options.get("path")
+    val tableName = options.get("tablename")
     val rowGroups = options.get("numrowgroups").toInt
     val batchSize = options.getOrDefault("rowgroupbatchsize", "0").toInt
     val numRows = options.get("numrows").toInt
@@ -65,16 +65,15 @@ case class QflockCompactScan(schema: StructType,
 //    if (path.contains("store_sales")) {
 //      throw new Exception("fake exception")
 //    }
-//    var partitions = 0
-    var partitions = 1
-    if (true) {
+    var partitions = 0
+    if (false) {
       // generate one partition per batch.
       // last partition gets any remainder row groups
       for (i <- 0 until partitions) {
         partitionArray += new QflockCompactPartition(index = i,
           offset = i,
-          length = 0,
-          name = path)
+          length = 1,
+          name = tableName)
       }
     } else if (batchSize > 1) {
       partitions = {
@@ -90,7 +89,7 @@ case class QflockCompactScan(schema: StructType,
         partitionArray += new QflockCompactPartition(index = i,
           offset = i * batchSize,
           length = currentRowGroups,
-          name = path)
+          name = tableName)
       }
     } else {
       val rowsPerPartition = numRows / rowGroups
@@ -100,7 +99,7 @@ case class QflockCompactScan(schema: StructType,
         partitionArray += new QflockCompactPartition(index = i,
           offset = i,
           length = 1,
-          name = path,
+          name = tableName,
           rows = rowsPerPartition)
       }
     }

@@ -16,7 +16,8 @@
  */
 package com.github.qflock.server
 
-import org.apache.hadoop.hive.metastore.api.Table
+import com.github.qflock.datasource.QflockTableDescriptor
+import org.apache.hadoop.hive.metastore.api.{FieldSchema, Table}
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
@@ -27,6 +28,7 @@ class QflockServerTable(dbName: String, tableName: String, maxViews: Integer = 4
   private val logger = LoggerFactory.getLogger(getClass)
   val spark = SparkSession.builder.getOrCreate
   val table: Table = ExtHiveUtils.getTable(dbName, tableName)
+  def getTableName: String = tableName
   val schema = getSchema
   def getSchema: String = {
     def convert_col(dType: String): String = {
@@ -36,30 +38,43 @@ class QflockServerTable(dbName: String, tableName: String, maxViews: Integer = 4
         case "string" => "string"
       }
     }
-      // each field in the schema has name:type:nullable
-//      table.getSd().getCols().toArray.map(col =>
-//        s"${col.getName}:${convert_col(col.getType)}:true")
-    ""
+    // each field in the schema has name:type:nullable
+    val s = table.getSd().getCols().toArray.map(col => {
+      val c = col.asInstanceOf[FieldSchema]
+      s"${c.getName}:${convert_col(c.getType)}:true"
+    })
+    s.mkString(",")
   }
   def createView(requestId: Integer): Unit = {
-    logger.info(s"Create view for table: ${table.getTableName} request_id: ${requestId}")
+    val df = spark.read
+      .format("qflockDs")
+      .option("format", "parquet")
+      .option("schema", schema)
+      .option("tableName", table.getTableName)
+      .option("path", table.getSd.getLocation)
+      .option("dbName", table.getDbName)
+      .option("requestId", requestId.toString)
+      .load()
+    val viewName = s"${table.getTableName}_${requestId}"
+    logger.info(s"Create view for table: ${table.getTableName} request_id: ${requestId} " +
+                s"viewName: $viewName")
+    df.createOrReplaceTempView(viewName)
   }
-//    df = spark.read
-//      .format("qflockDs")
-//      .option("format", "parquet")
-//      .option("schema", schema)
-//      .option("tableName", table.tableName)
-//      .option("path", filePath)
-//      .option("dbName", table.dbName)
-//      .option("requestId", requestId)
-//      .load()
-//    view_name = s"{$table.tableName}_{$requestId}"
-//    df.createOrReplaceTempView(view_name)
-//  }
   def createViews: Unit = {
     for (requestId <- Range(0, maxViews)) {
       createView(requestId)
     }
+  }
+  // fillRequestInfo
+  // freeRequestId
+  val descriptor: QflockTableDescriptor = {
+    // Tell the datasource about our table and the number of views it has.
+    // This table descriptor will be used later to fetch a request id
+    // via fillRequestInfo()
+    // That request id can then be used to ship parameters to our
+    // Datasource which is selecting ranges of row groups to read.
+    QflockTableDescriptor.addTable(table.getTableName, maxViews)
+    QflockTableDescriptor.getTableDescriptor(table.getTableName)
   }
 }
 

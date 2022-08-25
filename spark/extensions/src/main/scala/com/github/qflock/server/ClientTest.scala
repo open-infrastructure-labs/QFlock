@@ -57,23 +57,11 @@ object ClientTest {
   }
   val spark = getSparkSession()
   spark.sparkContext.setLogLevel("INFO")
-  def runQuery(query: String, schema: StructType): ListBuffer[String] = {
+  def runQuery(query: String, tableName: String, rgOffset: String, rgCount: String,
+               schema: StructType): ListBuffer[String] = {
     val url = "http://192.168.32.5:9860/test"
-//    val con = url.openConnection.asInstanceOf[HttpURLConnection]
-//    con.setRequestMethod("POST")
-//    con.setRequestProperty("Accept", "application/json")
-//    con.setDoOutput(true)
-//    con.setReadTimeout(0)
-//    con.setConnectTimeout(0)
-//    val jsonString = getJson(query)
-//    val os = con.getOutputStream
-//    try {
-//      val input = jsonString.getBytes("utf-8")
-//      os.write(input, 0, input.length)
-//    } finally if (os != null) os.close()
-//    val inStream = new DataInputStream(new BufferedInputStream(con.getInputStream))
-//    val br = new BufferedReader(new InputStreamReader(inStream, "utf-8"))
-    val client = new QflockCompactClient(query, schema, url)
+    val client = new QflockCompactClient(query, tableName,
+                                         rgOffset, rgCount, schema, url)
     var data = ListBuffer.empty[String]
     try {
       data = readData(schema, 4096, client)
@@ -139,6 +127,7 @@ object ClientTest {
       StructField("cc_tax_percentage", DoubleType, true)
     ))
     val data = runQuery("select * from call_center",
+      "call_center", "0", "1",
       schema)
     writeToFile(data, schema, "call_center.csv")
   }
@@ -171,6 +160,7 @@ object ClientTest {
       StructField("wr_net_loss", DoubleType, true)
     ))
     val data = runQuery("select * from web_returns",
+    "web_returns", "0", "1",
       schema)
     writeToFile(data, schema, "web_returns.csv")
   }
@@ -230,6 +220,7 @@ object ClientTest {
       StructField("ss_net_profit", DoubleType, true)
     ))
     val data = runQuery("select * from store_sales",
+      "store_sales", "0", "1",
       schema)
 
     writeToFile(data, schema, "store_sales.csv")
@@ -261,6 +252,7 @@ object ClientTest {
       StructField("i_product_name", StringType, true)
     ))
     val data = runQuery("select * from item",
+      "item", "0", "1",
       schema)
 
     writeToFile(data, schema, "item.csv")
