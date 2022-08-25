@@ -65,7 +65,7 @@ object QflockRelationArgs {
    */
   def apply(child: Any): Option[QflockRelationArgs] = {
     val (relation, scan, output, catalogTable) = child match {
-      case DataSourceV2ScanRelation(relation, scan, output) =>
+      case DataSourceV2ScanRelation(relation, scan, output, _) =>
         val catalogTable = scan match {
           case QflockJdbcScan(_, _, statsParam, _) =>
             if (statsParam.isDefined) {
@@ -95,7 +95,7 @@ object QflockRelationArgs {
         (relation, relation, output, table)
     }
     val (dataSchema, readSchema, options, statsParam) = scan match {
-      case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _) =>
+      case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _, _) =>
         (dataSchema, readSchema, opts, None)
       case HadoopFsRelation(_, _, dataSchema, _, _, opts) =>
         (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava), None)

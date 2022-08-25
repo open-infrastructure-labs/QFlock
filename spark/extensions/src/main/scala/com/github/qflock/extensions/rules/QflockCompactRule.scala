@@ -152,7 +152,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       return false
     }
     child match {
-      case DataSourceV2ScanRelation(_, scan, output) =>
+      case DataSourceV2ScanRelation(_, scan, output, _) =>
         val isJoin = scan match {
           case QflockCompactScan(_, _, statsParam, _)
             if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
@@ -179,7 +179,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       return false
     }
     child match {
-      case DataSourceV2ScanRelation(_, scan, output) =>
+      case DataSourceV2ScanRelation(_, scan, output, _) =>
         val isJoin = scan match {
           case QflockCompactScan(_, _, statsParam, _)
             if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
@@ -198,7 +198,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   private def needsRule(child: Any): Boolean = {
     child match {
-      case DataSourceV2ScanRelation(_, scan, _) =>
+      case DataSourceV2ScanRelation(_, scan, _, _) =>
         !scan.isInstanceOf[QflockCompactScan]
       case qlr@QflockLogicalRelation(relation, _, _, _) =>
         relation match {
@@ -279,7 +279,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       _,
       child: DataSourceV2ScanRelation) =>
         child match {
-          case DataSourceV2ScanRelation(relation, _, _) =>
+          case DataSourceV2ScanRelation(relation, _, _, _) =>
             Some(relation)
           case _ => None
         }
@@ -421,7 +421,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references,
-      relationArgs.catalogTable.get)
+      None, relationArgs.catalogTable.get)
 //    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
@@ -575,7 +575,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
       references,
-      relationArgs.catalogTable.get)
+      None, relationArgs.catalogTable.get)
     scanRelation
   }
   private def pushFilterProject(plan: LogicalPlan): LogicalPlan = {
@@ -680,11 +680,11 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case ScanOperation(_, _,
                          child: DataSourceV2ScanRelation) =>
         val relationScan = child match {
-          case DataSourceV2ScanRelation(_, scan, _) =>
+          case DataSourceV2ScanRelation(_, scan, _, _) =>
             scan
         }
         val scanOpts = relationScan match {
-          case ParquetScan(_, _, _, _, _, _, _, opts, _, _) =>
+          case ParquetScan(_, _, _, _, _, _, _, opts, _, _, _) =>
             opts
           case QflockCompactScan(_, opts, _, _) =>
             opts
@@ -985,7 +985,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       relationStats)
     val ndpRel = getNdpRelation(opt.get("path"), schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
-      references,
+      references, None,
       relationArgsLeft.catalogTable.get)
     scanRelation
   }
@@ -994,7 +994,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     plan match {
       case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
         child match {
-          case DataSourceV2ScanRelation(_, scan, _) =>
+          case DataSourceV2ScanRelation(_, scan, _, _) =>
             if (scan.isInstanceOf[QflockCompactScan]) {
               scan match {
                 case QflockCompactScan(_, _, params, _ ) =>

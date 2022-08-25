@@ -112,7 +112,7 @@ case class QflockExplainRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   private def needsRule(child: Any): Boolean = {
     child match {
-      case DataSourceV2ScanRelation(_, scan, _) =>
+      case DataSourceV2ScanRelation(_, scan, _, _) =>
         !scan.isInstanceOf[QflockJdbcScan]
       case qlr@QflockLogicalRelation(relation, _, _, _) =>
         relation match {
