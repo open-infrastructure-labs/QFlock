@@ -22,7 +22,7 @@ import java.util
 import java.util.Objects
 
 import com.github.luben.zstd.{Zstd, ZstdOutputStream}
-import com.github.qflock.datasource.QflockOutputStreamDescriptor
+import com.github.qflock.extensions.compact.QflockOutputStreamDescriptor
 import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 

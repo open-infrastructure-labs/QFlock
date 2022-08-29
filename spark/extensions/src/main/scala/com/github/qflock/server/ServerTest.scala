@@ -16,16 +16,24 @@
  */
 package com.github.qflock.server
 
-import org.apache.log4j.BasicConfigurator
+import org.apache.log4j.{BasicConfigurator, ConsoleAppender, Level, Logger, PatternLayout}
 
 object ServerTest {
-
+  def setupLogger: Unit = {
+    val console = new ConsoleAppender()
+    val PATTERN = "%d{dd MMM yyyy HH:mm:ss.SSS [%p|%c|%C{1}] %m%n"
+    console.setLayout(new PatternLayout(PATTERN))
+    console.setThreshold(Level.INFO)
+    console.activateOptions()
+    Logger.getRootLogger.addAppender(console)
+  }
   def main(args: scala.Array[String]): Unit = {
     val mode = if (args.length > 0) {
       args(0)
     } else "server"
     if (mode == "server") {
       // BasicConfigurator.configure
+      // setupLogger
       val server = new Server("qflock-jdbc-dc2", 9860)
       server.start()
     } else {

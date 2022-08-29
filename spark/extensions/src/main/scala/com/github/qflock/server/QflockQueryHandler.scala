@@ -16,9 +16,10 @@
  */
 package com.github.qflock.server
 
+
 import java.io.OutputStream
 
-import com.github.qflock.datasource.QflockOutputStreamDescriptor
+import com.github.qflock.extensions.compact.QflockOutputStreamDescriptor
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
@@ -45,7 +46,7 @@ object QflockQueryHandler {
       .getOrCreate()
   }
   spark.sql(s"USE ${dbName}")
-  spark.sparkContext.setLogLevel("INFO")
+  // spark.sparkContext.setLogLevel("INFO")
   def handleQuery(query: String,
                   tableName: String,
                   offset: Int,
@@ -53,10 +54,12 @@ object QflockQueryHandler {
                   outStream: OutputStream): String = {
     val writeRequestId = QflockOutputStreamDescriptor.get.fillRequestInfo(outStream)
     val readRequestId = tablesMap(tableName).descriptor.fillRequestInfo(offset, count)
-
-
-    val newQuery = query.replace(s" ${tableName} ",
-                     s" ${tableName}_${readRequestId} ")
+    val desc = QflockOutputStreamDescriptor.get.getRequestInfo(writeRequestId)
+    if (desc.wroteHeader != false) {
+      throw new IllegalStateException("descriptor stat is not valid.")
+    }
+    val newQuery = query.replace(s" ${tableName}",
+                     s" ${tableName}_${readRequestId}")
     logger.info(s"Start readRequestId: $readRequestId writeRequestId: $writeRequestId " +
       s"query: $newQuery")
     val df = spark.sql(newQuery)
@@ -65,9 +68,11 @@ object QflockQueryHandler {
     // the results with multiple threads.
     df // .repartition(1)
       // .orderBy((df.columns.toSeq map { x => col(x) }).toArray: _*)
-      .write.format("qflockJdbc")
+      .write.format("qflockCompact")
       .mode("overwrite")
       .option("outStreamRequestId", writeRequestId)
+      .option("rgoffset", offset)
+      .option("rgcount", count)
       .option("query", newQuery)
       .save()
     QflockOutputStreamDescriptor.get.freeRequest(writeRequestId)

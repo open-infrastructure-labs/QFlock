@@ -56,7 +56,8 @@ class QflockServerTable(dbName: String, tableName: String, maxViews: Integer = 4
       .option("requestId", requestId.toString)
       .load()
     val viewName = s"${table.getTableName}_${requestId}"
-    logger.info(s"Create view for table: ${table.getTableName} request_id: ${requestId} " +
+    logger.info(s"Create view for table: ${table.getDbName}:${table.getTableName} " +
+                s"request_id: ${requestId} " +
                 s"viewName: $viewName")
     df.createOrReplaceTempView(viewName)
   }

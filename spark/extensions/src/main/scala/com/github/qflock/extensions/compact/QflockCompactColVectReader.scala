@@ -16,14 +16,17 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.DataInputStream
+import java.io.{DataInputStream, OutputStream}
+import java.nio.ByteBuffer
 
 import com.github.qflock.extensions.jdbc.QflockColumnarVectorReader
+import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.vectorized.ColumnarBatch
 import org.apache.spark.sql.vectorized.ColumnVector
+
 
 
 /** Allows for reading batches of columns from NDP
@@ -59,15 +62,29 @@ class QflockCompactColVectReader(schema: StructType,
      * the the type of each column.  All values are doubles.
      */
     try {
-       logger.info(s"Data Read Starting ${query}")
+      var waitCount = 0
+      while (stream.available() <= 0) {
+        if (waitCount == 0) {
+          logger.info(s"bytes not available, waiting ${client.toString}")
+        }
+        Thread.sleep(10)
+      }
+      if (waitCount > 0) {
+        logger.info(s"bytes not available, waited $waitCount times ${client.toString}")
+      }
+      logger.info(s"Data Read Starting ${query}")
+      val magic = stream.readInt()
+      if (magic != QflockServerHeader.magic) {
+        throw new java.lang.IllegalStateException(s"magic $magic != ${QflockServerHeader.magic}")
+      }
       val nColsLong = stream.readInt()
       val nCols: Integer = nColsLong
-      logger.info("nCols : " + String.valueOf(nCols) + " " + query)
+//      logger.info("nCols : " + String.valueOf(nCols) + " " + query)
       val dataTypes = new Array[Int](nCols)
       for (i <- 0 until nCols) {
         dataTypes(i) = stream.readInt()
-         logger.info(String.valueOf(i) + " : " + String.valueOf(dataTypes(i))
-         + " " + query)
+//         logger.info(String.valueOf(i) + " : " + String.valueOf(dataTypes(i))
+//         + " " + query)
       }
       (nCols, dataTypes)
     } catch {
@@ -94,7 +111,7 @@ class QflockCompactColVectReader(schema: StructType,
     var rows: Integer = 0
     for (i <- 0 until numCols) {
       val currentRows = colVectors(i).readColumn(stream)
-      logger.info(s"Data Read col $i rows $currentRows totalRows $rowsReturned $query")
+//      logger.info(s"Data Read col $i rows $currentRows totalRows $rowsReturned $query")
       if (rows == 0) {
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {

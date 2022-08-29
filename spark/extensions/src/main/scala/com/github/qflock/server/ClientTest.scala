@@ -16,7 +16,7 @@
  */
 package com.github.qflock.server
 
-import java.io.{BufferedInputStream, BufferedReader, BufferedWriter, DataInputStream, File, InputStreamReader, PrintWriter, StringWriter}
+import java.io.{BufferedInputStream, BufferedReader, BufferedWriter, DataInputStream, File, FileOutputStream, InputStreamReader, PrintWriter, StringWriter}
 import java.net.{HttpURLConnection, URL}
 import javax.json.Json
 import javax.json.JsonArrayBuilder
@@ -25,17 +25,28 @@ import javax.json.JsonObjectBuilder
 import javax.json.JsonWriter
 
 import scala.collection.mutable.ListBuffer
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.util.Success
 
 import com.github.qflock.extensions.compact.{QflockCompactClient, QflockCompactColVectReader}
+import org.apache.hadoop.hive.metastore.api.Table
 import org.apache.log4j.BasicConfigurator
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.types._
+import org.apache.spark.util.ThreadUtils
 
-object ClientTest {
+
+
+
+class ClientTests {
   private val logger = LoggerFactory.getLogger(getClass)
+
   def getJson(query: String): String = {
     val queryBuilder = Json.createObjectBuilder()
     queryBuilder.add("query", query)
@@ -45,6 +56,7 @@ object ClientTest {
     writer.writeObject(queryJson)
     stringWriter.getBuffer().toString()
   }
+
   def getSparkSession(): SparkSession = {
     logger.info(s"create new session")
     SparkSession
@@ -55,19 +67,22 @@ object ClientTest {
       .enableHiveSupport()
       .getOrCreate()
   }
+
   val spark = getSparkSession()
   spark.sparkContext.setLogLevel("INFO")
+
   def runQuery(query: String, tableName: String, rgOffset: String, rgCount: String,
                schema: StructType): ListBuffer[String] = {
-    val url = "http://192.168.32.5:9860/test"
+    val url = "http://192.168.64.3:9860/test"
     val client = new QflockCompactClient(query, tableName,
-                                         rgOffset, rgCount, schema, url)
+      rgOffset, rgCount, schema, url)
     var data = ListBuffer.empty[String]
     try {
       data = readData(schema, 4096, client)
     } finally client.close
     data
   }
+
   def readData(schema: StructType,
                batchSize: Int,
                client: QflockCompactClient): ListBuffer[String] = {
@@ -84,13 +99,14 @@ object ClientTest {
           case StringType => row.getUTF8String(s._2)
         })
         // scalastyle:off println
-       data += values.mkString(",")
+        data += values.mkString(",")
         // scalastyle:on println
       }
     }
     reader.close()
     data
   }
+
   def queryCallCenter: Unit = {
     logger.info("start call_center")
     val schema = StructType(Array(
@@ -126,11 +142,10 @@ object ClientTest {
       StructField("cc_gmt_offset", DoubleType, true),
       StructField("cc_tax_percentage", DoubleType, true)
     ))
-    val data = runQuery("select * from call_center",
-      "call_center", "0", "1",
-      schema)
-    writeToFile(data, schema, "call_center.csv")
+    runQueryTpcds("select * from call_center",
+      "call_center", schema)
   }
+
   def queryWebReturns: Unit = {
     logger.info("start web_returns")
     val schema = StructType(Array(
@@ -159,39 +174,51 @@ object ClientTest {
       StructField("wr_account_credit", DoubleType, true),
       StructField("wr_net_loss", DoubleType, true)
     ))
-    val data = runQuery("select * from web_returns",
-    "web_returns", "0", "1",
-      schema)
-    writeToFile(data, schema, "web_returns.csv")
+    runQueryTpcds("select * from web_returns",
+      "web_returns", schema)
   }
+
   def writeToFile(data: ListBuffer[String],
                   schema: StructType,
                   fileName: String): Unit = {
     val tmpFilename = fileName
-    val writer = new PrintWriter(new File(tmpFilename))
+    val writer = new PrintWriter(new FileOutputStream(
+      new File(tmpFilename), true /* append */))
     data.foreach(x => writer.write(x + "\n"))
     writer.close()
-//    val df = spark.read.format("csv")
-//      .schema(schema)
-//      .load(tmpFilename)
-//    val castColumns = (df.schema.fields map { x =>
-//      if (x.dataType == DoubleType) {
-//        format_number(bround(col(x.name), 3), 2)
-//      } else {
-//        col(x.name)
-//      }
-//    }).toArray
-//    val columns = (df.schema.fields map { x => col(x.name) }).toArray
-//    df.select(castColumns: _*)
-//      .repartition(1)
-//      .orderBy((df.columns.toSeq map { x => col(x) }).toArray: _*)
-//      .repartition(1)
-//      .write.mode("overwrite")
-//      .format("csv")
-//      .option("header", "true")
-//      .option("partitions", "1")
-//      .save(fileName)
   }
+
+  def runQueryTpcds(query: String,
+                    tableName: String,
+                    schema: StructType): Unit = {
+    val fileName = s"$tableName.csv"
+    runQueryRowGroups(query, "tpcds",
+      tableName, schema, fileName)
+  }
+
+  def runQueryRowGroups(query: String,
+                        dbName: String,
+                        tableName: String,
+                        schema: StructType,
+                        fileName: String): Unit = {
+    val file = new java.io.File(fileName)
+    if (file.exists) file.delete()
+    val table: Table = ExtHiveUtils.getTable(dbName, tableName)
+    val rgParamName = s"spark.qflock.statistics.tableStats.$tableName.row_groups"
+    val numRowGroups = table.getParameters.get(rgParamName).toInt
+    if (true) {
+      logger.info(s"fetch row group 0-${numRowGroups - 1} table $dbName:$tableName")
+      val data = runQuery(query, tableName, 0.toString, numRowGroups.toString, schema)
+      writeToFile(data, schema, fileName)
+    } else {
+      for (i <- Range(0, numRowGroups)) {
+        logger.info(s"fetch row group $i/${numRowGroups - 1} table $dbName:$tableName")
+        val data = runQuery(query, tableName, i.toString, "1", schema)
+        writeToFile(data, schema, fileName)
+      }
+    }
+  }
+
   def queryStoreSales: Unit = {
     logger.info("start store_sales")
     val schema = StructType(Array(
@@ -219,12 +246,10 @@ object ClientTest {
       StructField("ss_net_paid_inc_tax", DoubleType, true),
       StructField("ss_net_profit", DoubleType, true)
     ))
-    val data = runQuery("select * from store_sales",
-      "store_sales", "0", "1",
-      schema)
-
-    writeToFile(data, schema, "store_sales.csv")
+    runQueryTpcds("select * from store_sales",
+      "store_sales", schema)
   }
+
   def queryItem: Unit = {
     logger.info("start item")
     val schema = StructType(Array(
@@ -251,19 +276,50 @@ object ClientTest {
       StructField("i_manager_id", LongType, true),
       StructField("i_product_name", StringType, true)
     ))
-    val data = runQuery("select * from item",
-      "item", "0", "1",
-      schema)
-
-    writeToFile(data, schema, "item.csv")
+    runQueryTpcds("select * from item",
+      "item", schema)
   }
-
+}
+object ClientTest {
+  private val logger = LoggerFactory.getLogger(getClass)
+  def parallelTests: Unit = {
+    val f0: Future[Int] = Future {
+      logger.info("starting f0")
+      val ct = new ClientTests
+      ct.queryItem
+      logger.info("finished f0")
+      5
+    }
+    f0.onComplete {
+      case Success(stat) => logger.info(s"f0 Completed with status $stat")
+      case _ => logger.info("f0 completed with error")
+    }
+    val f1: Future[Int] = Future {
+      logger.info("starting f1")
+      val ct = new ClientTests
+      ct.queryStoreSales
+      logger.info("finished f1")
+      6
+    }
+    f1.onComplete {
+      case Success(stat) => logger.info(s"f1 Completed with status $stat")
+      case _ => logger.info("f1 completed with error")
+    }
+    // scalastyle:off awaitresult
+    Await.result(f0, 50.seconds)
+    Await.result(f1, 50.seconds)
+    // scalastyle:on awaitresult
+  }
   def main(args: scala.Array[String]): Unit = {
     BasicConfigurator.configure
-
-    queryCallCenter
-    queryWebReturns
-    queryItem
-//    queryStoreSales
+    val ct = new ClientTests
+    val testName = if (args.length == 0) "call_center" else args(0)
+    testName match {
+      case "call_center" => ct.queryCallCenter
+      case "web_returns" => ct.queryWebReturns
+      case "item" => ct.queryItem
+      case "store_sales" => ct.queryStoreSales
+      case test@_ => logger.warn("Unknown test " + test)
+    }
   }
 }

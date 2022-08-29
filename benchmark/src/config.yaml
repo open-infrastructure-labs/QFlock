@@ -14,7 +14,7 @@
     query-path: "queries/tpcds"
 #    limit-rows: "1000"
     query-extension: "sql"
-    query-exceptions: "2,5,43,59,13,48,24a,24b,75,33"
+    query-exceptions: "2,5,43,59,13,48,24a,24b," # 75, 33,49,56,60,77,80,
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10001/tpcds;transportMode=http;httpPath=cliservice"
 #    jdbc-path: "jdbc:hive2://qflock-dc2-spark:10000/tpcds;transportMode=binary;httpPath=cliservice"
 # Below is for debug with jdbc server.
@@ -56,7 +56,7 @@
 #    - spark.sql.cbo.planStats.enabled=true
 #    - spark.sql.cbo.joinReorder.enabled=true
 #    - spark.sql.optimizer.excludedRules=org.apache.spark.sql.catalyst.optimizer.CostBasedJoinReorder
-    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.2/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=192.168.48.3:5006'
+    - 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.3.0/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=192.168.48.3:5006'
     packages:
     - javax.json:javax.json-api:1.1.4
     - org.glassfish:javax.json:1.1.4

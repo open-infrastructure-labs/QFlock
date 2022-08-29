@@ -16,13 +16,13 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{ByteArrayOutputStream, DataOutputStream}
+import java.io.{ByteArrayOutputStream, DataOutputStream, OutputStream}
 import java.nio.ByteBuffer
 import java.util
+import java.util.concurrent.ArrayBlockingQueue
 
 import com.github.luben.zstd.Zstd
-import com.github.qflock.datasource.QflockOutputStreamDescriptor
-import com.github.qflock.server.QflockServerHeader
+import com.github.qflock.server.{QflockDataStreamItem, QflockServerHeader}
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.InternalRow
@@ -30,6 +30,7 @@ import org.apache.spark.sql.catalyst.expressions.SpecializedGetters
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
+
 
 
 
@@ -54,16 +55,25 @@ extends DataWriterFactory {
     new QflockCompactDataWriter(partitionId, taskId, schema, options)
   }
 }
+class QflockWriteBufferStream(schema: StructType,
+                              batchSize: Int,
+                              outputStream: DataOutputStream,
+                              pool: QflockWriteBufferPool)
+    extends QflockDataStreamItem {
+  var name: String = ""
+  def setName(newName: String): Unit = {
+    name = newName
+  }
 
-class QflockCompactDataWriter(partId: Int, taskId: Long,
-                           schema: StructType,
-                           options: util.Map[String, String])
-      extends DataWriter[InternalRow] {
-
-  private val logger = LoggerFactory.getLogger(getClass)
-  private val bufferBytes = 8 * 4096
-  private var rowIndex: Int = 0
-  private val batchSize: Int = 4096
+  override def toString: String = {
+    name
+  }
+  private val compressBuffers: Array[ByteBuffer] = {
+    schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
+  }
+  private val dataBuffers: Array[ByteBuffer] = {
+    schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
+  }
   private def sizeForType(dataType: DataType): Int = {
     dataType match {
       case IntegerType => batchSize * 4
@@ -72,55 +82,9 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
       case StringType => batchSize * QflockServerHeader.stringLength
     }
   }
-  private val compressBuffers: Array[ByteBuffer] = {
-    schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
-  }
-  private val dataBuffers: Array[ByteBuffer] = {
-    schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
-  }
-  val bufferStreams: Array[ByteArrayOutputStream] = {
-    schema.fields.map(x => new ByteArrayOutputStream(bufferBytes))
-  }
-  val stringLengths: Array[ByteBuffer] = {
-    schema.fields.map(x => x.dataType match {
-      case StringType => ByteBuffer.allocate(4 * batchSize)
-      case _ => ByteBuffer.allocate(0)
-    })
-  }
-  private type ValueWriter = (SpecializedGetters, Int) => Unit
-  // `ValueWriter`s for all fields of the schema
-  private var rootFieldWriters: Array[ValueWriter] = _
-  rootFieldWriters = schema.map(_.dataType).map(makeWriter).toArray[ValueWriter]
-
-  val streams: Array[DataOutputStream] = {
-//    schema.fields.zipWithIndex.map(x => new DataOutputStream(
-//      new BufferedOutputStream(
-//      new FileOutputStream(s"$tempDir/${partId}_${x._2}_${x._1.name}")
-    schema.fields.zipWithIndex.map(x => new DataOutputStream(
-                                                  bufferStreams(x._2)))
-  }
-  // Client sets outStreamRequestId after calling fillRequestInfo
-  private val requestId = options.get("outstreamrequestid").toInt
-  // The stream is used to write data back to the client.
-  private val outputStream: DataOutputStream =
-    QflockOutputStreamDescriptor.get.getRequestInfo(requestId)
-      .stream.get.asInstanceOf[DataOutputStream]
-  writeDataFormat
-  private def writeDataFormat: Unit = {
-    // The data format consists of an integer for number of columns,
-    // followed by an integer for the type of each column.
-    val buffer = ByteBuffer.allocate((schema.fields.length + 1) * 4)
-    buffer.putInt(schema.fields.length)
-    schema.fields.foreach(s => buffer.putInt(
-      s.dataType match {
-        case LongType => QflockServerHeader.DataType.LongType.id
-        case DoubleType => QflockServerHeader.DataType.DoubleType.id
-        case StringType => QflockServerHeader.DataType.ByteArrayType.id
-      }
-    ))
-    outputStream.write(buffer.array())
-  }
-  private val header = {
+  private val header = getHeader
+  private val strLenHeader = getHeader
+  def getHeader: Array[ByteBuffer] = {
     val h = schema.fields.map(f => ByteBuffer.allocate(QflockServerHeader.bytes))
     schema.fields.zipWithIndex.map(s => {
       s._1.dataType match {
@@ -128,7 +92,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
           h(s._2).putInt(QflockServerHeader.Offset.dataType,
             QflockServerHeader.DataType.LongType.id)
           h(s._2).putInt(QflockServerHeader.Offset.typeSize,
-                         QflockServerHeader.Length.Long)
+            QflockServerHeader.Length.Long)
         case DoubleType =>
           h(s._2).putInt(QflockServerHeader.Offset.dataType,
             QflockServerHeader.DataType.DoubleType.id)
@@ -142,6 +106,23 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     })
     h
   }
+  val compressStringLengths: Array[ByteBuffer] = {
+    schema.fields.map(x => x.dataType match {
+      case StringType => ByteBuffer.allocate(4 * batchSize)
+      case _ => ByteBuffer.allocate(0)
+    })
+  }
+  val stringLengths: Array[ByteBuffer] = {
+    schema.fields.map(x => x.dataType match {
+      case StringType => ByteBuffer.allocate(4 * batchSize)
+      case _ => ByteBuffer.allocate(0)
+    })
+  }
+  private type ValueWriter = (SpecializedGetters, Int) => Unit
+  // `ValueWriter`s for all fields of the schema
+  private var fieldWriters: Array[ValueWriter] = _
+  fieldWriters = schema.map(_.dataType).map(makeWriter).toArray[ValueWriter]
+
   private def makeWriter(dataType: DataType): ValueWriter = {
     // borrowed from (ParquetWriteSupport)
     dataType match {
@@ -172,8 +153,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
       case _ => sys.error(s"Unsupported data type $dataType.")
     }
   }
-  private def writeFields(row: InternalRow,
-                          fieldWriters: Array[ValueWriter]): Unit = {
+  def writeFields(row: InternalRow): Unit = {
     var i = 0
     while (i < row.numFields) {
       if (!row.isNullAt(i)) {
@@ -182,111 +162,129 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
       i += 1
     }
   }
-  def writeStream(internalRow: InternalRow): Unit = {
-    val row = internalRow.toSeq(schema)
-    schema.fields.zipWithIndex.foreach(x => {
-      x._1.dataType match {
-        case IntegerType =>
-          streams(x._2).writeInt(row(x._2).asInstanceOf[Int])
-        case LongType =>
-          streams(x._2).writeLong(row(x._2).asInstanceOf[Long])
-        case DoubleType =>
-          streams(x._2).writeDouble(row(x._2).asInstanceOf[Double])
-        case FloatType =>
-          streams(x._2).writeFloat(row(x._2).asInstanceOf[Float])
-        case StringType =>
-          row(x._2).asInstanceOf[UTF8String].writeTo(streams(x._2))
-      }
-      if (bufferStreams(x._2).size() > (64 * 1024)) {
-        Zstd.compress(compressBuffers(x._2).array(),
-          bufferStreams(x._2).toByteArray(), 1)
-        bufferStreams(x._2).reset()
-      }
-    })
+  def free: Unit = {
+    pool.free(this)
   }
-  def writeOld(internalRow: InternalRow): Unit = {
-    val row = internalRow.toSeq(schema)
-    for (x <- Range(0, schema.fields.length)) {
-      schema.fields(x).dataType match {
-        case IntegerType =>
-          dataBuffers(x).putInt(rowIndex * 4, row(x).asInstanceOf[Int])
-        case LongType =>
-          dataBuffers(x).putLong(rowIndex * 8, row(x).asInstanceOf[Long])
-        case DoubleType =>
-          dataBuffers(x).putDouble(rowIndex * 8, row(x).asInstanceOf[Double])
-        case FloatType =>
-          dataBuffers(x).putFloat(rowIndex * 8, row(x).asInstanceOf[Float])
-        //        case StringType =>
+  def process: Unit = {
+    for (i <- Range(0, schema.fields.length)) {
+      if (schema.fields(i).dataType != StringType) {
+        val compressedBytes = Zstd.compress(compressBuffers(i).array(),
+          dataBuffers(i).array(), 1)
+        header(i).putInt(QflockServerHeader.Offset.dataLen,
+          dataBuffers(i).position())
+        header(i).putInt(QflockServerHeader.Offset.compressedLen,
+          compressedBytes.toInt)
+        outputStream.write(header(i).array())
+        // The buffer is larger than the amount we need to transfer, just
+        // write the length of the compressed bytes.
+        outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
+        outputStream.flush()
+        dataBuffers(i).clear()
+      } else { // Strings
+        // First compress and send lengths
+        var compressedBytes = Zstd.compress(compressBuffers(i).array(),
+          stringLengths(i).array(), 1)
+        header(i).putInt(QflockServerHeader.Offset.dataLen,
+          stringLengths(i).position())
+        header(i).putInt(QflockServerHeader.Offset.compressedLen,
+          compressedBytes.toInt)
+        outputStream.write(header(i).array())
+        // The buffer is larger than the amount we need to transfer, just
+        // write the length of the compressed bytes.
+        outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
+        stringLengths(i).clear()
+        // Next compress and send strings
+        compressedBytes = Zstd.compress(compressBuffers(i).array(),
+          dataBuffers(i).array(), 1)
+        header(i).putInt(QflockServerHeader.Offset.dataLen,
+          dataBuffers(i).position())
+        header(i).putInt(QflockServerHeader.Offset.compressedLen,
+          compressedBytes.toInt)
+        outputStream.write(header(i).array())
+        // The buffer is larger than the amount we need to transfer, just
+        // write the length of the compressed bytes.
+        outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
+        outputStream.flush()
+        dataBuffers(i).clear()
       }
     }
-    rowIndex += 1
-    if (rowIndex >= batchSize) {
-      for (x <- Range(0, schema.fields.length)) {
-        //        Zstd.compress(compressBuffers(x).array(),
-        //          dataBuffers(x).array(), 1)
-        Zstd.compressDirectByteBuffer(compressBuffers(x),
-          0, bufferBytes,
-          dataBuffers(x),
-          0, bufferBytes, 1)
-      }
-      rowIndex = 0
-    }
   }
+}
+case class QflockWriteBufferPool(count: Int,
+                                 schema: StructType,
+                                 stream: DataOutputStream,
+                                 batchSize: Int) {
+  val pool: ArrayBlockingQueue[QflockWriteBufferStream] = {
+    val pool = new ArrayBlockingQueue[QflockWriteBufferStream](count)
+    for (i <- 0 until count) {
+      pool.add(new QflockWriteBufferStream(schema, batchSize, stream, this))
+    }
+    pool
+  }
+  def size: Int = pool.size()
+  def allocate: QflockWriteBufferStream = {
+    pool.take()
+  }
+  def free(item: QflockWriteBufferStream): Unit = {
+    pool.add(item)
+  }
+}
+class QflockCompactDataWriter(partId: Int, taskId: Long,
+                              schema: StructType,
+                              options: util.Map[String, String])
+      extends DataWriter[InternalRow] {
+
+  private val logger = LoggerFactory.getLogger(getClass)
+  private var rowIndex: Int = 0
+  private val batchSize: Int = 4096
+
+  // Client sets outStreamRequestId after calling fillRequestInfo
+  private val requestId = options.get("outstreamrequestid").toInt
+  private val streamDescriptor = QflockOutputStreamDescriptor.get.getRequestInfo(requestId)
+  if (streamDescriptor.wroteHeader != false) {
+    logger.info(s"$requestId has unexpected state of ${streamDescriptor.wroteHeader}")
+    throw new IllegalStateException("descriptor stat is not valid.")
+  }
+  // The stream is used to write data back to the client.
+  private val outputStream: DataOutputStream =
+    streamDescriptor.stream.get.asInstanceOf[DataOutputStream]
+  val bufferPool = new QflockWriteBufferPool(4, schema, outputStream, batchSize)
+  var buffer = bufferPool.allocate
+  writeDataFormat
+  private def writeDataFormat: Unit = {
+    // The data format consists of an int for magic,
+    // an integer for number of columns,
+    // followed by an integer for the type of each column.
+    val buffer = ByteBuffer.allocate((schema.fields.length + 2) * 4)
+    buffer.putInt(QflockServerHeader.magic)
+    buffer.putInt(schema.fields.length)
+    schema.fields.foreach(s => buffer.putInt(
+      s.dataType match {
+        case LongType => QflockServerHeader.DataType.LongType.id
+        case DoubleType => QflockServerHeader.DataType.DoubleType.id
+        case StringType => QflockServerHeader.DataType.ByteArrayType.id
+      }
+    ))
+    val status = streamDescriptor.writeHeader(buffer)
+    val statusString = if (status) "yes" else "no"
+    logger.info(s"$statusString " +
+                s"for requestId $requestId " +
+                s"${options.get("rgoffset")}/${options.get("rgcount")}")
+  }
+  private def setBufferName: Unit = {
+    buffer.setName(s"rows $rowIndex totalRows $totalRows " +
+      s"rg ${options.get("rgoffset")}/${options.get("rgcount")} ")
+      // s"query ${options.get("query")}")
+  }
+  var totalRows = 0
   override def write(internalRow: InternalRow): Unit = {
-    writeFields(internalRow, rootFieldWriters)
+    buffer.writeFields(internalRow)
     rowIndex += 1
     if (rowIndex >= batchSize) {
-      writeBuffers
-    }
-  }
-  def writeBuffers: Unit = {
-    if (rowIndex > 0) {
-      for (i <- Range(0, schema.fields.length)) {
-        if (schema.fields(i).dataType != StringType) {
-          val compressedBytes = Zstd.compress(compressBuffers(i).array(),
-            dataBuffers(i).array(), 1)
-          header(i).putInt(QflockServerHeader.Offset.dataLen,
-            dataBuffers(i).position())
-          header(i).putInt(QflockServerHeader.Offset.compressedLen,
-            compressedBytes.toInt)
-          outputStream.write(header(i).array())
-          // The buffer is larger than the amount we need to transfer, just
-          // write the length of the compressed bytes.
-          outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
-          outputStream.flush()
-          //        Zstd.compressDirectByteBuffer(compressBuffers(x),
-          //          0, bufferBytes,
-          //          dataBuffers(x),
-          //          0, bufferBytes, 1)
-          dataBuffers(i).clear()
-        } else { // Strings
-          // First compress and send lengths
-          var compressedBytes = Zstd.compress(compressBuffers(i).array(),
-            stringLengths(i).array(), 1)
-          header(i).putInt(QflockServerHeader.Offset.dataLen,
-            stringLengths(i).position())
-          header(i).putInt(QflockServerHeader.Offset.compressedLen,
-            compressedBytes.toInt)
-          outputStream.write(header(i).array())
-          // The buffer is larger than the amount we need to transfer, just
-          // write the length of the compressed bytes.
-          outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
-          stringLengths(i).clear()
-          // Next compress and send strings
-          compressedBytes = Zstd.compress(compressBuffers(i).array(),
-                                          dataBuffers(i).array(), 1)
-          header(i).putInt(QflockServerHeader.Offset.dataLen,
-            dataBuffers(i).position())
-          header(i).putInt(QflockServerHeader.Offset.compressedLen,
-            compressedBytes.toInt)
-          outputStream.write(header(i).array())
-          // The buffer is larger than the amount we need to transfer, just
-          // write the length of the compressed bytes.
-          outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
-          outputStream.flush()
-          dataBuffers(i).clear()
-        }
-      }
+      totalRows += rowIndex
+      setBufferName
+      streamDescriptor.streamAsync(buffer)
+      buffer = bufferPool.allocate
       rowIndex = 0
     }
   }
@@ -295,8 +293,23 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
   }
   override def abort(): Unit = {}
   override def close(): Unit = {
-    streams.foreach(x => x.close())
-    writeBuffers
+    if (rowIndex > 0) {
+      totalRows += rowIndex
+      setBufferName
+      streamDescriptor.streamAsync(buffer)
+      rowIndex = 0
+    } else {
+      buffer.free
+    }
+    var loopCount = 0
+    while (bufferPool.size < 4) {
+      logger.info(s"waiting for buffers to free $loopCount")
+      loopCount += 1
+      Thread.sleep(100)
+    }
+    if (loopCount > 0) {
+      logger.info(s"done waiting for buffers to free $loopCount")
+    }
   }
 }
 

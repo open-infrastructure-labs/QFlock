@@ -35,6 +35,10 @@ class QflockCompactClient(query: String,
                           schema: StructType,
                           urlPath: String) {
   private val logger = LoggerFactory.getLogger(getClass)
+
+  override def toString: String = {
+    s"$tableName $rgOffset/$rgCount $query"
+  }
   private def getJson(query: String): String = {
     val queryBuilder = Json.createObjectBuilder()
     queryBuilder.add("query", query)
@@ -66,6 +70,7 @@ class QflockCompactClient(query: String,
   val stream = getQueryStream
 
   def getQueryStream: DataInputStream = {
+//    logger.info(s"opening stream to: $tableName $rgOffset $rgCount")
     val url = new URL(urlPath)
     val con = url.openConnection.asInstanceOf[HttpURLConnection]
     connection = Some(con)
@@ -84,7 +89,7 @@ class QflockCompactClient(query: String,
         val input = jsonString.getBytes("utf-8")
         os.write(input, 0, input.length)
       } finally if (os != null) os.close()
-      // Thread.sleep(5000)
+//      logger.info(s"opening stream done $tableName $rgOffset $rgCount")
       new DataInputStream(new BufferedInputStream(con.getInputStream))
 //      getEmptyQueryStream(query, schema)
     } else {

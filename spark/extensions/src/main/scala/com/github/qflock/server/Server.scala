@@ -84,7 +84,11 @@ class QflockHttpHandler extends HttpHandler {
                                    json("rgOffset").toString.toInt,
                                    json("rgCount").toString.toInt,
                                    outputStream)
-    outputStream.close()
+//    logger.info(s"delay before closing stream")
+//    Thread.sleep(5000)
+    logger.info(s"closing stream")
+    httpExchange.close()
+    logger.info(s"stream closed")
     ""
   }
   def handleResponse(httpExchange: HttpExchange, requestParamValue: String) {

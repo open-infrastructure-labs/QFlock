@@ -46,4 +46,5 @@ object QflockServerHeader {
     val ByteArrayType = Value(3)
     val FixedLenByteArrayType = Value(4)
   }
+  val magic: Int = 42424242
 }

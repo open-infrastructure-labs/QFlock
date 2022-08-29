@@ -14,31 +14,62 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.datasource
+package com.github.qflock.extensions.compact
+
 
 import java.io.OutputStream
+import java.nio.ByteBuffer
+import java.util.concurrent.ConcurrentLinkedQueue
 
-import scala.collection._
+import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
 
+import com.github.qflock.server.QflockDataStreamer
+import com.github.qflock.server.QflockDataStreamItem
 
-case class QflockOutputStreamRecord(var stream: Option[OutputStream]) {
+
+
+class QflockOutputStreamRecord(var stream: Option[OutputStream]) {
+
+  var freed: Boolean = true
+  private val streamer: QflockDataStreamer = new QflockDataStreamer
 
   def fill(strm: OutputStream): Unit = {
     stream = Some(strm)
+    freed = false
   }
 
   def free(): Unit = {
     stream = None
+    wroteHeader = false
+    freed = true
+  }
+  streamer.start()
+  var wroteHeader: Boolean = false
+  def writeHeader(byteBuffer: ByteBuffer): Boolean = {
+    this.synchronized {
+      if (!wroteHeader) {
+        wroteHeader = true
+        stream.get.write(byteBuffer.array())
+        stream.get.flush()
+        true
+      } else false
+    }
+  }
+  def streamAsync(bufferStream: QflockDataStreamItem): Unit = {
+    streamer.enqueue(bufferStream)
   }
 }
 
 case class QflockOutputStreamDescriptor(requests: Int) {
+  private val freeQueue: ConcurrentLinkedQueue[Int] =
+    new ConcurrentLinkedQueue[Int]()
   private val requestMap = {
-    val requestMap: concurrent.Map[Int, QflockOutputStreamRecord] =
-      new java.util.concurrent.ConcurrentHashMap[Int, QflockOutputStreamRecord].asScala
+    val requestMap: mutable.HashMap[Int, QflockOutputStreamRecord] =
+      new mutable.HashMap[Int, QflockOutputStreamRecord]
     for (i <- 0 until requests) {
-      requestMap(i) = QflockOutputStreamRecord(None)
+      requestMap(i) = new QflockOutputStreamRecord(None)
+      freeQueue.add(i)
     }
     requestMap
   }
@@ -46,15 +77,16 @@ case class QflockOutputStreamDescriptor(requests: Int) {
     requestMap(requestId)
   }
   def fillRequestInfo(stream: OutputStream): Int = {
-    val freeTuple = requestMap.find(_._2.stream.isEmpty)
-    if (freeTuple.isEmpty) {
-      throw new Exception("out of requests")
-    }
-    val (requestId, record) = freeTuple.get
+    val requestId = freeQueue.remove()
+    val record = requestMap(requestId)
     record.fill(stream)
     requestId
   }
-  def freeRequest(requestId: Int): Unit = requestMap(requestId).free()
+  def freeRequest(requestId: Int): Unit = {
+    val request = requestMap(requestId)
+    request.free()
+    freeQueue.add(requestId)
+  }
 }
 
 /** This object holds the global state that allows us to
@@ -63,7 +95,6 @@ case class QflockOutputStreamDescriptor(requests: Int) {
 object QflockOutputStreamDescriptor {
   private val defaultRequests: Int = 16
   private var descriptor = new QflockOutputStreamDescriptor(defaultRequests)
-
   def initMap(maxRequests: Int): Unit = {
     descriptor = QflockOutputStreamDescriptor(maxRequests)
   }

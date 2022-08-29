@@ -44,11 +44,14 @@ class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
     val part = partition.asInstanceOf[QflockCompactPartition]
     val schema = QflockCompactDatasource.getSchema(options)
     val query = options.get("query")
-    logger.info("QflockCompactPartitionReaderFactory created partition " + part.index)
+//    logger.info("QflockCompactPartitionReaderFactory creating partition " +
+//                s"part ${part.index} off ${part.offset} len ${part.length}")
     val client = new QflockCompactClient(query, part.name,
                                          part.offset.toString, part.length.toString,
                                          schema, options.get("url"))
-    logger.info("query: " + options.get("query"))
+//    logger.info("QflockCompactPartitionReaderFactory opened client " +
+//                s"part ${part.index} off ${part.offset} len ${part.length}" +
+//                s"query: " + options.get("query"))
     val reader = new QflockCompactColVectReader(schema, batchSize, query, client)
     new QflockCompactColumnarPartitionReader(reader)
   }
