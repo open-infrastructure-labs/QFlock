@@ -32,15 +32,17 @@ class QflockDataStreamer extends java.lang.Thread {
     new ArrayBlockingQueue[QflockDataStreamItem](16)
 
   def enqueue(item: QflockDataStreamItem): Unit = {
-    logger.info(s"item enqueued ${item.toString}")
+    logger.trace(s"item enqueued ${item.toString}")
     queue.put(item)
   }
+  // Check if any streams are still in process of sending data.
+  def streamsOutstanding: Boolean = (queue.size() > 0)
   override def run: Unit = {
     while (true) {
       val item = queue.take()
-      logger.info(s"process item ${item.toString}")
+      logger.trace(s"process item ${item.toString}")
       item.process
-      logger.info(s"process item done ${item.toString}")
+      logger.trace(s"process item done ${item.toString}")
       item.free
     }
   }

@@ -22,6 +22,7 @@ import java.util.concurrent.{Executors, ThreadPoolExecutor}
 
 import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import org.apache.commons.lang3.StringEscapeUtils
+import org.apache.log4j.{Level, Logger}
 import org.json4s._
 import org.json4s.jackson.JsonMethods._
 import org.slf4j.LoggerFactory
@@ -34,6 +35,7 @@ class Server(hostName: String, port: Integer) {
   private val threadPoolExecutor = Executors.newFixedThreadPool(10)
   def start(): Unit = {
     QflockQueryHandler.init()
+    Logger.getRootLogger().setLevel(Level.INFO)
     server.createContext("/test", new QflockHttpHandler())
     server.setExecutor(threadPoolExecutor)
     server.start()
@@ -86,9 +88,9 @@ class QflockHttpHandler extends HttpHandler {
                                    outputStream)
 //    logger.info(s"delay before closing stream")
 //    Thread.sleep(5000)
-    logger.info(s"closing stream")
+    logger.debug(s"closing stream")
     httpExchange.close()
-    logger.info(s"stream closed")
+    logger.debug(s"stream closed")
     ""
   }
   def handleResponse(httpExchange: HttpExchange, requestParamValue: String) {

@@ -60,6 +60,7 @@ class QflockWriteBufferStream(schema: StructType,
                               outputStream: DataOutputStream,
                               pool: QflockWriteBufferPool)
     extends QflockDataStreamItem {
+  private val logger = LoggerFactory.getLogger(getClass)
   var name: String = ""
   def setName(newName: String): Unit = {
     name = newName
@@ -165,9 +166,12 @@ class QflockWriteBufferStream(schema: StructType,
   def free: Unit = {
     pool.free(this)
   }
+  private var rows: Int = 0
+  def setRows(newRows: Int): Unit = rows = newRows
   def process: Unit = {
     for (i <- Range(0, schema.fields.length)) {
       if (schema.fields(i).dataType != StringType) {
+        logger.trace(s"col $i rows $rows $name")
         val compressedBytes = Zstd.compress(compressBuffers(i).array(),
           dataBuffers(i).array(), 1)
         header(i).putInt(QflockServerHeader.Offset.dataLen,
@@ -181,6 +185,7 @@ class QflockWriteBufferStream(schema: StructType,
         outputStream.flush()
         dataBuffers(i).clear()
       } else { // Strings
+        logger.trace(s"str col $i rows $rows $name")
         // First compress and send lengths
         var compressedBytes = Zstd.compress(compressBuffers(i).array(),
           stringLengths(i).array(), 1)
@@ -236,15 +241,15 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
 
   private val logger = LoggerFactory.getLogger(getClass)
   private var rowIndex: Int = 0
-  private val batchSize: Int = 4096
+  private val batchSize: Int = QflockServerHeader.batchSize
 
   // Client sets outStreamRequestId after calling fillRequestInfo
   private val requestId = options.get("outstreamrequestid").toInt
   private val streamDescriptor = QflockOutputStreamDescriptor.get.getRequestInfo(requestId)
-  if (streamDescriptor.wroteHeader != false) {
-    logger.info(s"$requestId has unexpected state of ${streamDescriptor.wroteHeader}")
-    throw new IllegalStateException("descriptor stat is not valid.")
-  }
+//  if (streamDescriptor.wroteHeader != false) {
+//    logger.info(s"$requestId has unexpected state of ${streamDescriptor.wroteHeader}")
+//    throw new IllegalStateException("descriptor stat is not valid.")
+//  }
   // The stream is used to write data back to the client.
   private val outputStream: DataOutputStream =
     streamDescriptor.stream.get.asInstanceOf[DataOutputStream]
@@ -267,12 +272,12 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     ))
     val status = streamDescriptor.writeHeader(buffer)
     val statusString = if (status) "yes" else "no"
-    logger.info(s"$statusString " +
-                s"for requestId $requestId " +
-                s"${options.get("rgoffset")}/${options.get("rgcount")}")
+    logger.debug(s"$statusString " +
+                 s"for requestId $requestId partId/taskId $partId/$taskId " +
+                 s"${options.get("rgoffset")}/${options.get("rgcount")}")
   }
   private def setBufferName: Unit = {
-    buffer.setName(s"rows $rowIndex totalRows $totalRows " +
+    buffer.setName(s"partId/taskId $partId/$taskId rows $rowIndex totalRows $totalRows " +
       s"rg ${options.get("rgoffset")}/${options.get("rgcount")} ")
       // s"query ${options.get("query")}")
   }
@@ -283,6 +288,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     if (rowIndex >= batchSize) {
       totalRows += rowIndex
       setBufferName
+      buffer.setRows(rowIndex)
       streamDescriptor.streamAsync(buffer)
       buffer = bufferPool.allocate
       rowIndex = 0
@@ -296,6 +302,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     if (rowIndex > 0) {
       totalRows += rowIndex
       setBufferName
+      buffer.setRows(rowIndex)
       streamDescriptor.streamAsync(buffer)
       rowIndex = 0
     } else {
@@ -303,7 +310,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     }
     var loopCount = 0
     while (bufferPool.size < 4) {
-      logger.info(s"waiting for buffers to free $loopCount")
+      // logger.info(s"waiting for buffers to free $loopCount")
       loopCount += 1
       Thread.sleep(100)
     }

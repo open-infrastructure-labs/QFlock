@@ -35,6 +35,8 @@ object QflockServerHeader {
   }
   val bytes: Int = 4 * 4
   val stringLength: Int = 120
+  val magic: Int = 42424242
+  val batchSize: Int = 64 * 1024
 
   /** Type of object encoded in binary.
    *  This follows the encoding values used by the NDP server.
@@ -46,5 +48,4 @@ object QflockServerHeader {
     val ByteArrayType = Value(3)
     val FixedLenByteArrayType = Value(4)
   }
-  val magic: Int = 42424242
 }

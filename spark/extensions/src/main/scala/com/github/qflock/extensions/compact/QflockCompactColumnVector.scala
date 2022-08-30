@@ -119,38 +119,38 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
       val tId = Thread.currentThread().getId()
       QflockServerHeader.DataType(header.getInt(QflockServerHeader.Offset.dataType)) match {
         case QflockServerHeader.DataType.LongType =>
-//          logger.info(s"${tId}:${id}) read ${numBytes.toInt} bytes (Long)")
+          logger.trace(s"${tId}:${id}) read ${numBytes.toInt} bytes (Long)")
           val dataBytes = header.getInt(QflockServerHeader.Offset.dataLen)
           if (compressed) {
               val cb = new Array[Byte](numBytes.toInt)
               stream.readFully(cb, 0, numBytes.toInt)
-//              logger.info(s"${tId}:${id}) decompressing (Double)")
+              logger.trace(s"${tId}:${id}) decompressing (Double)")
               Zstd.decompress(byteBuffer.array(), cb)
           } else {
             stream.readFully(byteBuffer.array(), 0, dataBytes)
           }
           rows = dataBytes.toInt / 8
           fixedTextLen = 0
-//          logger.info(s"${tId}:${tId}:${id}) decompressed ${numBytes.toInt} bytes " +
-//                       s"-> ${dataBytes} (Long)")
+          logger.trace(s"${tId}:${tId}:${id}) decompressed ${numBytes.toInt} bytes " +
+                       s"-> ${dataBytes} (Long)")
           if (rows > batchSize) {
             throw new Exception(s"rows ${rows} > batchSize ${batchSize}")
           }
         case QflockServerHeader.DataType.DoubleType =>
-//           logger.info(s"${tId}:${id}) read ${numBytes.toInt} bytes (Double)")
+           logger.trace(s"${tId}:${id}) read ${numBytes.toInt} bytes (Double)")
           val dataBytes = header.getInt(QflockServerHeader.Offset.dataLen)
           if (compressed) {
               val cb = new Array[Byte](numBytes.toInt)
               stream.readFully(cb, 0, numBytes.toInt)
-//               logger.info(s"${tId}:${id}) decompressing (Double)")
+              logger.trace(s"${tId}:${id}) decompressing (Double)")
               Zstd.decompress(byteBuffer.array(), cb)
           } else {
             stream.readFully(byteBuffer.array(), 0, dataBytes)
           }
           rows = dataBytes.toInt / 8
           fixedTextLen = 0
-//           logger.info(s"${tId}:${id}) decompressed ${numBytes.toInt} " +
-//                       s"-> bytes ${dataBytes} (Double)")
+          logger.trace(s"${tId}:${id}) decompressed ${numBytes.toInt} " +
+                      s"-> bytes ${dataBytes} (Double)")
           if (rows > batchSize) {
             throw new Exception(s"rows ${rows} > batchSize ${batchSize}")
           }
@@ -174,16 +174,16 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
             // Read and decompress string index.
             var cb = new Array[Byte](numBytes.toInt)
             stream.readFully(cb, 0, numBytes.toInt)
-//            logger.info(s"${tId}:${id},${tId}) read ${numBytes.toInt} bytes (String Index)")
-//            logger.info(s"${tId}:${id}) decompressing (String Index)")
+            logger.trace(s"${tId}:${id},${tId}) read ${numBytes.toInt} bytes (String Index)")
+            logger.trace(s"${tId}:${id}) decompressing (String Index)")
             Zstd.decompress(stringLen.array(), cb)
           } else {
             stream.readFully(stringLen.array(), 0, indexBytes.toInt)
           }
           rows = indexBytes / 4
           fixedTextLen = 0
-//          logger.info(s"${tId}:${id}) decompressed ${numBytes.toInt} -> " +
-//                      s"bytes ${indexBytes} (String Index)")
+          logger.trace(s"${tId}:${id}) decompressed ${numBytes.toInt} -> " +
+                      s"bytes ${indexBytes} (String Index)")
           if (rows > batchSize) {
             throw new Exception(s"rows ${rows} > batchSize ${batchSize}")
           }
@@ -199,14 +199,14 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
           if (compressed) {
             val cb = new Array[Byte](compressedBytes.toInt)
             stream.readFully(cb, 0, compressedBytes.toInt)
-//            logger.info(s"${tId}:${id}) read ${compressedBytes.toInt} bytes (String)")
-//            logger.info(s"${tId}:${id}) decompressing (String)")
+            logger.trace(s"${tId}:${id}) read ${compressedBytes.toInt} bytes (String)")
+            logger.trace(s"${tId}:${id}) decompressing (String)")
             Zstd.decompress(byteBuffer.array(), cb)
           } else {
             stream.readFully(byteBuffer.array(), 0, dataBytes.toInt)
           }
-//          logger.info(s"${tId}:${id}) decompressed ${dataBytes.toInt} bytes " +
-//                      s"-> ${dataBytes} (String)")
+          logger.trace(s"${tId}:${id}) decompressed ${dataBytes.toInt} bytes " +
+                      s"-> ${dataBytes} (String)")
           if (dataBytes > bufferLength) {
             throw new Exception(s"textBytes ${compressedBytes} > bufferLength ${bufferLength}")
           }

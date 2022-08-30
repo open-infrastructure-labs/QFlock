@@ -56,22 +56,24 @@ class QflockCompactColVectReader(schema: StructType,
   private var rowsReturned: Long = 0
   private var currentBatchSize: Int = 0
   private var batchIdx: Long = 0
-
+  private def waitForBytes(context: String): Unit = {
+    var waitCount = 0
+    while (stream.available() <= 0) {
+      if (waitCount == 0) {
+        logger.info(s"bytes not available $context, waiting ${client.toString}")
+      }
+      Thread.sleep(1000)
+    }
+    if (waitCount > 0) {
+      logger.info(s"bytes not available $context, waited $waitCount times ${client.toString}")
+    }
+  }
   private val (numCols: Integer, dataTypes: Array[Int]) = {
     /* The NDP server encodes the number of columns followed by
      * the the type of each column.  All values are doubles.
      */
     try {
-      var waitCount = 0
-      while (stream.available() <= 0) {
-        if (waitCount == 0) {
-          logger.info(s"bytes not available, waiting ${client.toString}")
-        }
-        Thread.sleep(10)
-      }
-      if (waitCount > 0) {
-        logger.info(s"bytes not available, waited $waitCount times ${client.toString}")
-      }
+      waitForBytes("data type read")
       logger.info(s"Data Read Starting ${query}")
       val magic = stream.readInt()
       if (magic != QflockServerHeader.magic) {
@@ -79,12 +81,12 @@ class QflockCompactColVectReader(schema: StructType,
       }
       val nColsLong = stream.readInt()
       val nCols: Integer = nColsLong
-//      logger.info("nCols : " + String.valueOf(nCols) + " " + query)
+      logger.debug("nCols : " + String.valueOf(nCols) + " " + query)
       val dataTypes = new Array[Int](nCols)
       for (i <- 0 until nCols) {
         dataTypes(i) = stream.readInt()
-//         logger.info(String.valueOf(i) + " : " + String.valueOf(dataTypes(i))
-//         + " " + query)
+         logger.debug(String.valueOf(i) + " : " + String.valueOf(dataTypes(i))
+         + " " + query)
       }
       (nCols, dataTypes)
     } catch {
@@ -110,12 +112,16 @@ class QflockCompactColVectReader(schema: StructType,
   private def readNextBatch(): Integer = {
     var rows: Integer = 0
     for (i <- 0 until numCols) {
+//      if (i != 0) {
+//        waitForBytes(s"read col $i")
+//      }
       val currentRows = colVectors(i).readColumn(stream)
 //      logger.info(s"Data Read col $i rows $currentRows totalRows $rowsReturned $query")
       if (rows == 0) {
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {
         // We expect all rows in the batch to be the same size.
+        logger.error(s"column $i $currentRows != $rows")
         throw new Exception(s"mismatch in rows $currentRows != $rows")
       }
     }

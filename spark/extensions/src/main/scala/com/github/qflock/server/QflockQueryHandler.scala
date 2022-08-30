@@ -20,7 +20,7 @@ package com.github.qflock.server
 import java.io.OutputStream
 
 import com.github.qflock.extensions.compact.QflockOutputStreamDescriptor
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions.col
@@ -46,7 +46,7 @@ object QflockQueryHandler {
       .getOrCreate()
   }
   spark.sql(s"USE ${dbName}")
-  // spark.sparkContext.setLogLevel("INFO")
+//  spark.sparkContext.setLogLevel("WARN")
   def handleQuery(query: String,
                   tableName: String,
                   offset: Int,
@@ -75,6 +75,15 @@ object QflockQueryHandler {
       .option("rgcount", count)
       .option("query", newQuery)
       .save()
+    var pollCount = 0
+    while (desc.streamsOutstanding) {
+      logger.debug(s"Streams still outstanding $pollCount")
+      Thread.sleep(10)
+      pollCount += 1
+    }
+    if (pollCount > 0) {
+      logger.info(s"streams outstanding pollCount $pollCount")
+    }
     QflockOutputStreamDescriptor.get.freeRequest(writeRequestId)
     tablesMap(tableName).descriptor.freeRequest(readRequestId)
     logger.info(s"Done readRequestId: $readRequestId " +

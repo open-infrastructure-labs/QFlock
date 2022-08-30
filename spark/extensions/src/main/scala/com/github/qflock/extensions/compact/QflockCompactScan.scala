@@ -65,15 +65,15 @@ case class QflockCompactScan(schema: StructType,
 //    if (path.contains("store_sales")) {
 //      throw new Exception("fake exception")
 //    }
-    var partitions = 0
-    if (false) {
+    var partitions = 1
+    if (true) {
       // generate one partition per batch.
       // last partition gets any remainder row groups
       for (i <- 0 until partitions) {
         partitionArray += new QflockCompactPartition(index = i,
-          offset = i,
-          length = 1,
-          name = tableName)
+                                                     offset = i,
+                                                     length = rowGroups,
+                                                     name = tableName)
       }
     } else if (batchSize > 1) {
       partitions = {

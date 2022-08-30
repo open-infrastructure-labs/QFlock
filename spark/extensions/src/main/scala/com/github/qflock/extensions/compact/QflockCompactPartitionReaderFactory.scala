@@ -16,8 +16,10 @@
  */
 package com.github.qflock.extensions.compact
 
+
 import java.util
 
+import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.InternalRow
@@ -30,7 +32,7 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
  * @param options the options including "path"
  */
 class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
-                                          batchSize: Int = 4096)
+                                          batchSize: Int = QflockServerHeader.batchSize)
   extends PartitionReaderFactory {
   private val logger = LoggerFactory.getLogger(getClass)
 

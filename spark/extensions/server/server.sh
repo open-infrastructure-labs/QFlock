@@ -55,8 +55,10 @@ else
     --conf "spark.hadoop.parquet.block.size=16777216"  \
     --conf "spark.sql.cbo.enabled=true"  \
     --conf "spark.sql.statistics.histogram.enabled=true"  \
+    --conf 'spark.driver.extraJavaOptions=-Dlog4j.configuration=file:/extensions/server/conf/log4j.properties' \
     --jars /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar \
     --conf spark.hadoop.hive.metastore.uris=thrift://qflock-storage-dc2:9084 \
     /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar $@
 fi
 #--conf 'spark.driver.extraJavaOptions=-classpath /conf/:/opt/spark-3.2.2/jars/*: -agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=192.168.48.3:5006' \
+#-Dlog4j.debug
