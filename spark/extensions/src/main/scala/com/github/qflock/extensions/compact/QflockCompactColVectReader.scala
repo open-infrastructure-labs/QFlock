@@ -73,7 +73,7 @@ class QflockCompactColVectReader(schema: StructType,
      * the the type of each column.  All values are doubles.
      */
     try {
-      waitForBytes("data type read")
+      // waitForBytes("data type read")
       logger.info(s"Data Read Starting ${query}")
       val magic = stream.readInt()
       if (magic != QflockServerHeader.magic) {
@@ -117,7 +117,10 @@ class QflockCompactColVectReader(schema: StructType,
 //      }
       val currentRows = colVectors(i).readColumn(stream)
 //      logger.info(s"Data Read col $i rows $currentRows totalRows $rowsReturned $query")
-      if (rows == 0) {
+      if (currentRows == 0) {
+        // End of stream hit.
+        return 0
+      } else if (rows == 0) {
         rows = currentRows
       } else if (rows != 0 && currentRows != rows) {
         // We expect all rows in the batch to be the same size.

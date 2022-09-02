@@ -43,7 +43,9 @@ class QflockOutputStreamRecord(var stream: Option[OutputStream]) {
     stream = None
     wroteHeader = false
     freed = true
+    streamer.reset
   }
+  def bytesStreamed: Long = streamer.bytesStreamed
   def streamsOutstanding: Boolean = streamer.streamsOutstanding
   streamer.start()
   var wroteHeader: Boolean = false

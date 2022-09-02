@@ -16,8 +16,7 @@
  */
 package com.github.qflock.server
 
-
-import java.io.OutputStream
+import java.io.{EOFException, OutputStream, PrintWriter, StringWriter}
 
 import com.github.qflock.extensions.compact.QflockOutputStreamDescriptor
 import org.slf4j.{Logger, LoggerFactory}
@@ -62,19 +61,29 @@ object QflockQueryHandler {
                      s" ${tableName}_${readRequestId}")
     logger.info(s"Start readRequestId: $readRequestId writeRequestId: $writeRequestId " +
       s"query: $newQuery")
-    val df = spark.sql(newQuery)
-
-    // Coalesce is slow.  It is temporary until we support double buffering of
-    // the results with multiple threads.
-    df // .repartition(1)
-      // .orderBy((df.columns.toSeq map { x => col(x) }).toArray: _*)
-      .write.format("qflockCompact")
-      .mode("overwrite")
-      .option("outStreamRequestId", writeRequestId)
-      .option("rgoffset", offset)
-      .option("rgcount", count)
-      .option("query", newQuery)
-      .save()
+    try {
+      val df = spark.sql(newQuery)
+      df // .repartition(1)
+        // .orderBy((df.columns.toSeq map { x => col(x) }).toArray: _*)
+        .write.format("qflockCompact")
+        .mode("overwrite")
+        .option("outStreamRequestId", writeRequestId)
+        .option("rgoffset", offset)
+        .option("rgcount", count)
+        .option("query", newQuery)
+        .save()
+    } catch {
+      case ex: EOFException =>
+      // logger.warn(ex.toString)
+      case ex: Exception =>
+        logger.error(s"error during query: $newQuery " +
+                     s"rgoffset $offset rgcount $count" +
+                     s"outStreamRequestId $writeRequestId")
+        val sw = new StringWriter
+        ex.printStackTrace(new PrintWriter(sw))
+        logger.error(sw.toString)
+        throw ex
+    }
     var pollCount = 0
     while (desc.streamsOutstanding) {
       logger.debug(s"Streams still outstanding $pollCount")
@@ -84,10 +93,12 @@ object QflockQueryHandler {
     if (pollCount > 0) {
       logger.info(s"streams outstanding pollCount $pollCount")
     }
+    val bytesStreamed = desc.bytesStreamed
     QflockOutputStreamDescriptor.get.freeRequest(writeRequestId)
     tablesMap(tableName).descriptor.freeRequest(readRequestId)
     logger.info(s"Done readRequestId: $readRequestId " +
-                s"writeRequestId: $writeRequestId query: $newQuery")
+                s"writeRequestId: $writeRequestId " +
+                s"bytesStreamed: $bytesStreamed")
     ""
   }
 }

@@ -23,7 +23,7 @@ import java.util.concurrent.ArrayBlockingQueue
 import org.slf4j.LoggerFactory
 
 abstract class QflockDataStreamItem {
-  def process: Unit
+  def process: Long
   def free: Unit
 }
 class QflockDataStreamer extends java.lang.Thread {
@@ -32,17 +32,19 @@ class QflockDataStreamer extends java.lang.Thread {
     new ArrayBlockingQueue[QflockDataStreamItem](16)
 
   def enqueue(item: QflockDataStreamItem): Unit = {
-    logger.trace(s"item enqueued ${item.toString}")
+//    logger.trace(s"item enqueued ${item.toString}")
     queue.put(item)
   }
   // Check if any streams are still in process of sending data.
   def streamsOutstanding: Boolean = (queue.size() > 0)
+  def reset: Unit = bytesStreamed = 0
+  var bytesStreamed: Long = 0
   override def run: Unit = {
     while (true) {
       val item = queue.take()
-      logger.trace(s"process item ${item.toString}")
-      item.process
-      logger.trace(s"process item done ${item.toString}")
+//      logger.trace(s"process item ${item.toString}")
+      bytesStreamed += item.process
+//      logger.trace(s"process item done ${item.toString}")
       item.free
     }
   }

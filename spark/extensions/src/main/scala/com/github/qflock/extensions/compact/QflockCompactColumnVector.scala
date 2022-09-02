@@ -114,6 +114,12 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
     try {
       var bytesRead = 0
       stream.readFully(header.array(), 0, header.capacity())
+      val headerBuf = header.array()
+      if (headerBuf(0) == 0 && headerBuf(1) == 0 &&
+          headerBuf(2) == 0 && headerBuf(3) == 0) {
+        // logger.info("found terminator")
+        return 0
+      }
       val numBytes = header.getInt(QflockServerHeader.Offset.compressedLen)
       var compressed = (numBytes > 0)
       val tId = Thread.currentThread().getId()

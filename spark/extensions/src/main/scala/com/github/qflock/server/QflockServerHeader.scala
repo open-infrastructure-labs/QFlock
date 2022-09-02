@@ -16,6 +16,8 @@
  */
 package com.github.qflock.server
 
+import java.nio.ByteBuffer
+
 /** This defines the layout of the Qflock Server's Header.
  *
  */
@@ -36,8 +38,14 @@ object QflockServerHeader {
   val bytes: Int = 4 * 4
   val stringLength: Int = 120
   val magic: Int = 42424242
-  val batchSize: Int = 64 * 1024
-
+  val batchSize: Int = 256 * 1024
+  val streamTerminator = {
+    val byteBuffer = ByteBuffer.allocate(4 * 4)
+    for (i <- Range(0, 4)) {
+      byteBuffer.putInt(0)
+    }
+    byteBuffer.array()
+  }
   /** Type of object encoded in binary.
    *  This follows the encoding values used by the NDP server.
    */

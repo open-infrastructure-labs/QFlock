@@ -16,7 +16,7 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{ByteArrayOutputStream, DataOutputStream, OutputStream}
+import java.io.{ByteArrayOutputStream, DataOutputStream, FileOutputStream, OutputStream}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ArrayBlockingQueue
@@ -69,18 +69,27 @@ class QflockWriteBufferStream(schema: StructType,
   override def toString: String = {
     name
   }
+  val compressionLevel = 7
   private val compressBuffers: Array[ByteBuffer] = {
-    schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
+    schema.fields.map(x => ByteBuffer.allocate(batchSizeForType(x.dataType)))
   }
   private val dataBuffers: Array[ByteBuffer] = {
-    schema.fields.map(x => ByteBuffer.allocate(sizeForType(x.dataType)))
+    schema.fields.map(x => ByteBuffer.allocate(batchSizeForType(x.dataType)))
   }
-  private def sizeForType(dataType: DataType): Int = {
+  private def batchSizeForType(dataType: DataType): Int = {
     dataType match {
       case IntegerType => batchSize * 4
       case LongType => batchSize * 8
       case DoubleType => batchSize * 8
       case StringType => batchSize * QflockServerHeader.stringLength
+    }
+  }
+  private def sizeForType(dataType: DataType): Int = {
+    dataType match {
+      case IntegerType => 4
+      case LongType => 8
+      case DoubleType => 8
+      case StringType => QflockServerHeader.stringLength
     }
   }
   private val header = getHeader
@@ -168,51 +177,74 @@ class QflockWriteBufferStream(schema: StructType,
   }
   private var rows: Int = 0
   def setRows(newRows: Int): Unit = rows = newRows
-  def process: Unit = {
+  def reset: Unit = {
+    totalCompressedBytes = 0
+    totalUncompressedBytes = 0
+  }
+  var totalCompressedBytes: Long = 0
+  var totalUncompressedBytes: Long = 0
+  def process: Long = {
     for (i <- Range(0, schema.fields.length)) {
       if (schema.fields(i).dataType != StringType) {
-        logger.trace(s"col $i rows $rows $name")
-        val compressedBytes = Zstd.compress(compressBuffers(i).array(),
-          dataBuffers(i).array(), 1)
+//        logger.trace(s"col $i rows $rows $name")
+        val dataLen = rows * sizeForType(schema.fields(i).dataType)
+        val compressedBytes = Zstd.compressByteArray(
+          compressBuffers(i).array(), 0, compressBuffers(i).array().length,
+          dataBuffers(i).array(), 0, dataLen, compressionLevel)
         header(i).putInt(QflockServerHeader.Offset.dataLen,
-          dataBuffers(i).position())
+          dataLen)
         header(i).putInt(QflockServerHeader.Offset.compressedLen,
           compressedBytes.toInt)
+//        totalCompressedBytes += 16
+//        totalUncompressedBytes += 16
         outputStream.write(header(i).array())
         // The buffer is larger than the amount we need to transfer, just
         // write the length of the compressed bytes.
+        totalUncompressedBytes += dataBuffers(i).position()
+        totalCompressedBytes += compressedBytes
         outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
         outputStream.flush()
         dataBuffers(i).clear()
       } else { // Strings
-        logger.trace(s"str col $i rows $rows $name")
+//        logger.trace(s"str col $i rows $rows $name")
         // First compress and send lengths
-        var compressedBytes = Zstd.compress(compressBuffers(i).array(),
-          stringLengths(i).array(), 1)
+        var compressedBytes = Zstd.compressByteArray(
+          compressBuffers(i).array(), 0, compressBuffers(i).array().length,
+          stringLengths(i).array(), 0, stringLengths(i).position(), compressionLevel)
         header(i).putInt(QflockServerHeader.Offset.dataLen,
           stringLengths(i).position())
         header(i).putInt(QflockServerHeader.Offset.compressedLen,
           compressedBytes.toInt)
+//        totalCompressedBytes += header(i).position()
+//        totalUncompressedBytes += header(i).position()
         outputStream.write(header(i).array())
         // The buffer is larger than the amount we need to transfer, just
         // write the length of the compressed bytes.
+//        totalUncompressedBytes += stringLengths(i).position()
+//        totalCompressedBytes += compressedBytes
         outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
         stringLengths(i).clear()
         // Next compress and send strings
-        compressedBytes = Zstd.compress(compressBuffers(i).array(),
-          dataBuffers(i).array(), 1)
+        compressedBytes = Zstd.compressByteArray(
+          compressBuffers(i).array(), 0, compressBuffers(i).array().length,
+          dataBuffers(i).array(), 0, dataBuffers(i).position(), compressionLevel)
         header(i).putInt(QflockServerHeader.Offset.dataLen,
           dataBuffers(i).position())
         header(i).putInt(QflockServerHeader.Offset.compressedLen,
           compressedBytes.toInt)
+//        totalCompressedBytes += header(i).position()
+//        totalUncompressedBytes += header(i).position()
         outputStream.write(header(i).array())
         // The buffer is larger than the amount we need to transfer, just
         // write the length of the compressed bytes.
+        totalUncompressedBytes += dataBuffers(i).position()
+        totalCompressedBytes += compressedBytes
         outputStream.write(compressBuffers(i).array(), 0, compressedBytes.toInt)
         outputStream.flush()
         dataBuffers(i).clear()
       }
     }
+    totalCompressedBytes
   }
 }
 case class QflockWriteBufferPool(count: Int,
@@ -230,7 +262,12 @@ case class QflockWriteBufferPool(count: Int,
   def allocate: QflockWriteBufferStream = {
     pool.take()
   }
+  var totalCompressedBytes: Long = 0
+  var totalUncompressedBytes: Long = 0
   def free(item: QflockWriteBufferStream): Unit = {
+    totalCompressedBytes += item.totalCompressedBytes
+    totalUncompressedBytes += item.totalUncompressedBytes
+    item.reset
     pool.add(item)
   }
 }
@@ -253,7 +290,8 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
   // The stream is used to write data back to the client.
   private val outputStream: DataOutputStream =
     streamDescriptor.stream.get.asInstanceOf[DataOutputStream]
-  val bufferPool = new QflockWriteBufferPool(4, schema, outputStream, batchSize)
+  private val bufferPoolCount = 1
+  val bufferPool = new QflockWriteBufferPool(bufferPoolCount, schema, outputStream, batchSize)
   var buffer = bufferPool.allocate
   writeDataFormat
   private def writeDataFormat: Unit = {
@@ -271,10 +309,10 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
       }
     ))
     val status = streamDescriptor.writeHeader(buffer)
-    val statusString = if (status) "yes" else "no"
-    logger.debug(s"$statusString " +
-                 s"for requestId $requestId partId/taskId $partId/$taskId " +
-                 s"${options.get("rgoffset")}/${options.get("rgcount")}")
+//    val statusString = if (status) "yes" else "no"
+//    logger.debug(s"$statusString " +
+//                 s"for requestId $requestId partId/taskId $partId/$taskId " +
+//                 s"${options.get("rgoffset")}/${options.get("rgcount")}")
   }
   private def setBufferName: Unit = {
     buffer.setName(s"partId/taskId $partId/$taskId rows $rowIndex totalRows $totalRows " +
@@ -287,7 +325,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     rowIndex += 1
     if (rowIndex >= batchSize) {
       totalRows += rowIndex
-      setBufferName
+      // setBufferName
       buffer.setRows(rowIndex)
       streamDescriptor.streamAsync(buffer)
       buffer = bufferPool.allocate
@@ -309,7 +347,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
       buffer.free
     }
     var loopCount = 0
-    while (bufferPool.size < 4) {
+    while (bufferPool.size < bufferPoolCount) {
       // logger.info(s"waiting for buffers to free $loopCount")
       loopCount += 1
       Thread.sleep(100)
@@ -317,6 +355,9 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
     if (loopCount > 0) {
       logger.info(s"done waiting for buffers to free $loopCount")
     }
+    logger.info(s"rows $totalRows " +
+                s"uncompressed ${bufferPool.totalUncompressedBytes} " +
+                s"compressed ${bufferPool.totalCompressedBytes} ")
   }
 }
 

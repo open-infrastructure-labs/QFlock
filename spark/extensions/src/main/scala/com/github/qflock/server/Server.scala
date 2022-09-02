@@ -73,11 +73,13 @@ class QflockHttpHandler extends HttpHandler {
     } finally if (br != null) br.close()
     parse(response.toString).values.asInstanceOf[Map[String, Any]]
   }
+
   def handlePostRequest(httpExchange: HttpExchange): String = {
     val requestStream = httpExchange.getRequestBody()
     val json = getRequestJson(requestStream)
+    httpExchange.getResponseHeaders().set("Content-Type", "application/octet-stream")
     val outputStream = new DataOutputStream(
-      new BufferedOutputStream(httpExchange.getResponseBody(), 128*1024))
+      new BufferedOutputStream(httpExchange.getResponseBody(), 128 * 1024))
     // Set length to 0.  By convention this means that we will used chunked
     // format instead of content-length.  Close will end the response.
     httpExchange.sendResponseHeaders(200, 0)
@@ -88,9 +90,13 @@ class QflockHttpHandler extends HttpHandler {
                                    outputStream)
 //    logger.info(s"delay before closing stream")
 //    Thread.sleep(5000)
-    logger.debug(s"closing stream")
+    // Send terminator to other side.
+//    logger.debug(s"sending terminator")
+    outputStream.write(QflockServerHeader.streamTerminator)
+    outputStream.flush()
+//    logger.debug(s"closing stream")
     httpExchange.close()
-    logger.debug(s"stream closed")
+//    logger.debug(s"stream closed")
     ""
   }
   def handleResponse(httpExchange: HttpExchange, requestParamValue: String) {

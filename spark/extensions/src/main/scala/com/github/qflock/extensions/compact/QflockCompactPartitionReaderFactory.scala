@@ -19,6 +19,7 @@ package com.github.qflock.extensions.compact
 
 import java.util
 
+import com.github.qflock.extensions.common.QflockQueryCache
 import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 
@@ -46,7 +47,14 @@ class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
     val part = partition.asInstanceOf[QflockCompactPartition]
     val schema = QflockCompactDatasource.getSchema(options)
     val query = options.get("query")
-//    logger.info("QflockCompactPartitionReaderFactory creating partition " +
+//    val cachedValue = QflockQueryCache.checkKey(query, part.index)
+//    if (cachedValue.isDefined) {
+//      val bytes = QflockQueryCache.bytes
+//      val appId = options.get("appid")
+//      logger.info(s" use-cached-data " +
+//        s"appId:$appId part:${part.index} cachedBytes:$bytes key:$query")
+//    }
+    //    logger.info("QflockCompactPartitionReaderFactory creating partition " +
 //                s"part ${part.index} off ${part.offset} len ${part.length}")
     val client = new QflockCompactClient(query, part.name,
                                          part.offset.toString, part.length.toString,

@@ -78,7 +78,7 @@ class ClientTests {
       rgOffset, rgCount, schema, url)
     var data = ListBuffer.empty[String]
     try {
-      data = readData(schema, 4096, client)
+      data = readData(schema, QflockServerHeader.batchSize, client)
     } finally client.close
     data
   }
@@ -206,7 +206,7 @@ class ClientTests {
     val table: Table = ExtHiveUtils.getTable(dbName, tableName)
     val rgParamName = s"spark.qflock.statistics.tableStats.$tableName.row_groups"
     val numRowGroups = table.getParameters.get(rgParamName).toInt
-    if (true) {
+    if (false) {
       logger.info(s"fetch row group 0-${numRowGroups - 1} table $dbName:$tableName")
       val data = runQuery(query, tableName, 0.toString, numRowGroups.toString, schema)
       writeToFile(data, schema, fileName)
