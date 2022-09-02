@@ -52,7 +52,7 @@ DOCKER_RUN="docker run ${DOCKER_IT} --rm \
   -e SPARK_PUBLIC_DNS=localhost \
   -e SPARK_LOG_DIR=/opt/volume/logs \
   -e HADOOP_CONF_DIR=/opt/spark-$SPARK_VERSION/conf \
-  --mount type=bind,source=$(pwd)/../,target=/qflock \
+  --mount type=bind,source=$ROOT_DIR/,target=/qflock \
   --mount type=bind,source=$(pwd)/,target=/server \
   --mount type=bind,source=$(pwd)/scripts,target=/scripts \
   --mount type=bind,source=$ROOT_DIR/storage,target=/storage \

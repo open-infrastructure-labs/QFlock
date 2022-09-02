@@ -11,7 +11,7 @@ if [ $# -eq 0 ]; then
   echo "Starting SSH Server.  Done."
 fi
 pushd /server
-./start_server.sh > /opt/volume/logs/server.log 2>&1 &
+./server.sh > /opt/volume/logs/server.log 2>&1 &
 
 echo "SERVER_READY"
 echo "SERVER_READY" > /opt/volume/status/SERVER_STATE

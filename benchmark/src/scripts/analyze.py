@@ -54,7 +54,7 @@ class Result:
         self.status = d['status']
         self.rows = int(d['rows'])
         self.seconds = float(d['seconds'])
-        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-jdbc-dc2:tx_bytes:eth1'])
+        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-spark-dc2:tx_bytes:eth1'])
         self.spark_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-storage-dc2:tx_bytes:eth1'])
 
 

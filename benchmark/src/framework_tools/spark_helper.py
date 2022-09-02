@@ -97,6 +97,12 @@ class SparkHelper:
         gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
+    def show_cache_stats(self, test):
+        from py4j.java_gateway import java_import
+        gw = self._spark.sparkContext._gateway
+        java_import(gw.jvm, "com.github.qflock.extensions.common.QflockQueryCache")
+        gw.jvm.com.github.qflock.extensions.common.QflockQueryCache.logPotentialHits(test)
+
     def load_rule(self, ext):
         from py4j.java_gateway import java_import
         gw = self._spark.sparkContext._gateway
@@ -242,6 +248,7 @@ class SparkHelper:
                                      output_path=self._output_path, spark_helper=self, query=query,
                                      overall_start_time=overall_start_time)
             result.process_result(collect_only)
+            self.show_cache_stats(query_name)
         except (ValueError, Exception):
             print(f"caught error executing query for {query}")
             print(traceback.format_exc())
