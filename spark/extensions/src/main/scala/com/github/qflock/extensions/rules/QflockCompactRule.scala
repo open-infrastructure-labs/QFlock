@@ -53,6 +53,8 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
 //  protected val resultApi: String = "default"
   protected val resultApi: String = "parquet"
+  protected val resultsPath = spark.conf.get("qflockResultsPath", "data")
+  QflockLog.setPath(resultsPath)
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -377,7 +379,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("appid", fullAppId)
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockServerUrl"))
-    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("resultspath", resultsPath)
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
@@ -406,6 +408,8 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     /* Prepare for later caching if needed. */
     QflockQueryCache.addKey(query)
+    QflockLog.log(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
+                  s"query:$query")
     val filterCondition = filters.reduceLeftOption(And)
     val statsParameters = QflockStatsParameters(project, filterCondition,
                                                 relationArgs, attrReferences,
@@ -913,7 +917,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val fullAppId = s"$appId$testNum-$generationId"
     opt.put("appid", fullAppId)
     opt.put("url", spark.conf.get("qflockServerUrl"))
-    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("resultspath", resultsPath)
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     val query = getJoinQuery(join, left, right, joinType, expression)
@@ -1035,7 +1039,6 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   def checkJoin(plan: LogicalPlan): LogicalPlan = {
     val queryName = spark.conf.get("qflockQueryName")
-    val resultsPath = spark.conf.get("qflockResultsPath", "data")
     plan.transform {
       case j@Join(left, right, joinType, condition, joinHint) =>
         val (lValid, lTable) = checkJoinChild(left)
@@ -1044,14 +1047,12 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
           QflockLog.log(s"queryName:$queryName joinStatus:valid " +
                         s"tables:${rTable.get},${lTable.get} " +
                         s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}",
-                        path = resultsPath)
+                        s"condition:$condition " + s"plan:${j.toString}")
         } else if (lTable.isDefined && rTable.isDefined) {
           QflockLog.log(s"queryName:$queryName joinStatus:invalid " +
                         s"tables:${rTable.get},${lTable.get} " +
                         s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}",
-                        path = resultsPath)
+                        s"condition:$condition " + s"plan:${j.toString}")
         }
         j
     }
@@ -1107,9 +1108,9 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def apply(inputPlan: LogicalPlan): LogicalPlan = {
-//    val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
+    val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
 //    val after = pushAggregate(pushFilterProject(inputPlan))
-    val after = pushFilterProject(inputPlan)
+//    val after = pushFilterProject(inputPlan)
     after
   }
 }

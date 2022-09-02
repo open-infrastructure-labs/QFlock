@@ -52,6 +52,8 @@ case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
   protected val appId: String = spark.sparkContext.applicationId
 //  protected val resultApi: String = "default"
   protected val resultApi: String = "parquet"
+  protected val resultsPath = spark.conf.get("qflockResultsPath", "data")
+  QflockLog.setPath(resultsPath)
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -377,7 +379,7 @@ case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("appid", fullAppId)
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
-    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("resultspath", resultsPath)
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
@@ -914,7 +916,7 @@ case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val fullAppId = s"$appId$testNum-$generationId"
     opt.put("appid", fullAppId)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
-    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("resultspath", resultsPath)
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
@@ -1037,7 +1039,6 @@ case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   def checkJoin(plan: LogicalPlan): LogicalPlan = {
     val queryName = spark.conf.get("qflockQueryName")
-    val resultsPath = spark.conf.get("qflockResultsPath", "data")
     plan.transform {
       case j@Join(left, right, joinType, condition, joinHint) =>
         val (lValid, lTable) = checkJoinChild(left)
@@ -1046,14 +1047,12 @@ case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
           QflockLog.log(s"queryName:$queryName joinStatus:valid " +
                         s"tables:${rTable.get},${lTable.get} " +
                         s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}",
-                        path = resultsPath)
+                        s"condition:$condition " + s"plan:${j.toString}")
         } else if (lTable.isDefined && rTable.isDefined) {
           QflockLog.log(s"queryName:$queryName joinStatus:invalid " +
                         s"tables:${rTable.get},${lTable.get} " +
                         s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}",
-                        path = resultsPath)
+                        s"condition:$condition " + s"plan:${j.toString}")
         }
         j
     }

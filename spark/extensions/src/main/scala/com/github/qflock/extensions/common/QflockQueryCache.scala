@@ -16,6 +16,7 @@
  */
 package com.github.qflock.extensions.common
 
+import com.github.qflock.extensions.jdbc.QflockLog
 import org.slf4j.{Logger, LoggerFactory}
 
 
@@ -59,7 +60,8 @@ case class QflockCacheKeyEntry(query: String) {
   def incMaxHits(): Unit = maxHits += 1
 }
 object QflockQueryCache {
-  private val cache = collection.mutable.Map[String, QflockCacheKeyEntry]()
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
+  private var cache = collection.mutable.Map[String, QflockCacheKeyEntry]()
   private val maxBytes: Long = 1024L * 1024L * 1024L * 10L
   var bytes: Long = 0
   def checkKey(key: String, partitionIndex: Int): Option[Any] = {
@@ -74,6 +76,14 @@ object QflockQueryCache {
         entry
       }
     }
+  }
+  def logPotentialHits(test: String): Unit = {
+    for ((k, e) <- cache) {
+      if (e.maxHits > 1) {
+        QflockLog.log(s"QflockQueryCache:logPotentialHits test:$test hits:${e.maxHits} query:$k")
+      }
+    }
+    cache = collection.mutable.Map[String, QflockCacheKeyEntry]()
   }
   def cacheNeeded(key: String): Boolean = {
     this.synchronized {

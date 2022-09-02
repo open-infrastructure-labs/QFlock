@@ -104,7 +104,7 @@ class QflockScan(schema: StructType,
           last = i == parquetBlocks.size - 1)
       }
     }
-    logger.info(a.mkString(", "))
+    // logger.info(a.mkString(", "))
     a.toArray
   }
   private val sparkSession: SparkSession = SparkSession

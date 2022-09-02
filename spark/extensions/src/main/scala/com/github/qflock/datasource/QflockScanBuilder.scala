@@ -65,7 +65,7 @@ class QflockScanBuilder(schema: StructType,
    */
   override def pruneColumns(requiredSchema: StructType): Unit = {
     prunedSchema = requiredSchema
-    logger.info("pruneColumns " + requiredSchema.toString)
+//    logger.info("pruneColumns " + requiredSchema.toString)
   }
 
   override def pushedFilters: Array[Filter] = {
