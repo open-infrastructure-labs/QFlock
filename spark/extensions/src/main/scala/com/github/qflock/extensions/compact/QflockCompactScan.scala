@@ -58,7 +58,7 @@ case class QflockCompactScan(schema: StructType,
   private def createPartitions(): Array[InputPartition] = {
     val tableName = options.get("tablename")
     val rowGroups = options.get("numrowgroups").toInt
-    val batchSize = options.getOrDefault("rowgroupbatchsize", "0").toInt
+    val batchSize: Int = options.getOrDefault("rowgroupbatchsize", "0").toInt
     val numRows = options.get("numrows").toInt
     // Set below to true to do a 1 partition test.
     val partitionArray = new ArrayBuffer[InputPartition](0)

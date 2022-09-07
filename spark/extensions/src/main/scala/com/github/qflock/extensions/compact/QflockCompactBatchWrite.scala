@@ -69,7 +69,7 @@ class QflockWriteBufferStream(schema: StructType,
   override def toString: String = {
     name
   }
-  val compressionLevel = 7
+  val compressionLevel = 3
   private val compressBuffers: Array[ByteBuffer] = {
     schema.fields.map(x => ByteBuffer.allocate(batchSizeForType(x.dataType)))
   }

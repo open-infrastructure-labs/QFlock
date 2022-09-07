@@ -16,9 +16,10 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{DataInputStream, OutputStream}
+import java.io.{DataInputStream, DataOutputStream, OutputStream}
 import java.nio.ByteBuffer
 
+import com.github.qflock.extensions.common.QflockFileCachedData
 import com.github.qflock.extensions.jdbc.QflockColumnarVectorReader
 import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
@@ -39,7 +40,8 @@ import org.apache.spark.sql.vectorized.ColumnVector
 class QflockCompactColVectReader(schema: StructType,
                                  batchSize: Integer,
                                  query: String,
-                                 client: QflockCompactClient)
+                                 client: QflockClient,
+                                 cachedData: Option[QflockFileCachedData] = None)
     extends QflockColumnarVectorReader {
   private val logger = LoggerFactory.getLogger(getClass)
   override def next(): Boolean = {
@@ -51,8 +53,11 @@ class QflockCompactColVectReader(schema: StructType,
   override def close(): Unit = {
     logger.info(s"Data Read Close $query")
     client.close
+    if (cachedData.isDefined) {
+      cachedData.get.close
+    }
   }
-  private val stream = client.stream
+  private val stream = client.getStream
   private var rowsReturned: Long = 0
   private var currentBatchSize: Int = 0
   private var batchIdx: Long = 0
@@ -101,7 +106,19 @@ class QflockCompactColVectReader(schema: StructType,
           (0, new Array[Int](0))
     }
   }
-  private val colVectors = QflockCompactColumnVector(batchSize, dataTypes, schema)
+  def writeHeader: Unit = {
+    if (cachedData.isDefined && cachedData.get.shouldWrite) {
+      val writeStream = cachedData.get.stream.get
+      writeStream.writeInt(QflockServerHeader.magic)
+      writeStream.writeInt(numCols)
+      for (i <- 0 until numCols) {
+        writeStream.writeInt(dataTypes(i))
+      }
+    }
+  }
+  writeHeader
+  private val colVectors = QflockCompactColumnVector(batchSize, dataTypes, schema,
+                                                     cachedData)
   private val columnarBatch = new ColumnarBatch(colVectors.asInstanceOf[Array[ColumnVector]])
   /** Fetches the next set of columns from the stream, returning the
    *  number of rows that were returned.

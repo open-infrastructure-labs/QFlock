@@ -33,7 +33,7 @@ class QflockCompactClient(query: String,
                           rgOffset: String,
                           rgCount: String,
                           schema: StructType,
-                          urlPath: String) {
+                          urlPath: String) extends QflockClient {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def toString: String = {
@@ -67,8 +67,8 @@ class QflockCompactClient(query: String,
       logger.info("close end")
     }
   }
-  val stream = getQueryStream
-
+  private val stream = getQueryStream
+  def getStream: DataInputStream = stream
   def getQueryStream: DataInputStream = {
 //    logger.info(s"opening stream to: $tableName $rgOffset $rgCount")
     val url = new URL(urlPath)

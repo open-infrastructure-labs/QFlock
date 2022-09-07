@@ -16,11 +16,12 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{DataInputStream, EOFException, PrintWriter, StringWriter}
+import java.io.{DataInputStream, DataOutputStream, EOFException, PrintWriter, StringWriter}
 import java.nio.ByteBuffer
 
 // ZSTD support
 import com.github.luben.zstd.Zstd
+import com.github.qflock.extensions.common.QflockFileCachedData
 import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 
@@ -35,7 +36,11 @@ import org.apache.spark.unsafe.types.UTF8String
  *  @param schema the schema returned from the server.
  *  @return
  */
-class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: StructType, id: String)
+class QflockCompactColumnVector(batchSize: Integer,
+                                dataType: Int,
+                                schema: StructType,
+                                id: String,
+                                cachedData: Option[QflockFileCachedData] = None)
     extends ColumnVector(schema: StructType) {
   private val logger = LoggerFactory.getLogger(getClass)
   // private val factory = LZ4Factory.fastestInstance()
@@ -64,6 +69,15 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
      ByteBuffer.allocate(batchSize * bytes),
      (batchSize * bytes).asInstanceOf[Integer],
      stringIndex, stringLen)
+  }
+  private def readFully(stream: DataInputStream,
+                        dest: Array[Byte],
+                        offset: Int,
+                        length: Int): Unit = {
+    stream.readFully(dest, offset, length)
+    if (cachedData.isDefined && cachedData.get.shouldWrite) {
+      cachedData.get.stream.get.write(dest, offset, length)
+    }
   }
   private val header = ByteBuffer.allocate(4 * 4)
   private var fixedTextLen: Int = 0
@@ -113,7 +127,7 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
     var rows: Int = 0
     try {
       var bytesRead = 0
-      stream.readFully(header.array(), 0, header.capacity())
+      readFully(stream, header.array(), 0, header.capacity())
       val headerBuf = header.array()
       if (headerBuf(0) == 0 && headerBuf(1) == 0 &&
           headerBuf(2) == 0 && headerBuf(3) == 0) {
@@ -129,11 +143,11 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
           val dataBytes = header.getInt(QflockServerHeader.Offset.dataLen)
           if (compressed) {
               val cb = new Array[Byte](numBytes.toInt)
-              stream.readFully(cb, 0, numBytes.toInt)
+              readFully(stream, cb, 0, numBytes.toInt)
               logger.trace(s"${tId}:${id}) decompressing (Double)")
               Zstd.decompress(byteBuffer.array(), cb)
           } else {
-            stream.readFully(byteBuffer.array(), 0, dataBytes)
+            readFully(stream, byteBuffer.array(), 0, dataBytes)
           }
           rows = dataBytes.toInt / 8
           fixedTextLen = 0
@@ -147,11 +161,11 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
           val dataBytes = header.getInt(QflockServerHeader.Offset.dataLen)
           if (compressed) {
               val cb = new Array[Byte](numBytes.toInt)
-              stream.readFully(cb, 0, numBytes.toInt)
+              readFully(stream, cb, 0, numBytes.toInt)
               logger.trace(s"${tId}:${id}) decompressing (Double)")
               Zstd.decompress(byteBuffer.array(), cb)
           } else {
-            stream.readFully(byteBuffer.array(), 0, dataBytes)
+            readFully(stream, byteBuffer.array(), 0, dataBytes)
           }
           rows = dataBytes.toInt / 8
           fixedTextLen = 0
@@ -168,10 +182,10 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
           }
           if (compressed) {
             val cb = new Array[Byte](numBytes.toInt)
-            stream.readFully(cb, 0, numBytes.toInt)
+            readFully(stream, cb, 0, numBytes.toInt)
             Zstd.decompress(byteBuffer.array(), cb)
           } else {
-            stream.readFully(byteBuffer.array(), 0, dataBytes.toInt)
+            readFully(stream, byteBuffer.array(), 0, dataBytes.toInt)
           }
           rows = dataBytes.toInt / fixedTextLen
         case QflockServerHeader.DataType.ByteArrayType =>
@@ -179,12 +193,12 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
           if (compressed) {
             // Read and decompress string index.
             var cb = new Array[Byte](numBytes.toInt)
-            stream.readFully(cb, 0, numBytes.toInt)
+            readFully(stream, cb, 0, numBytes.toInt)
             logger.trace(s"${tId}:${id},${tId}) read ${numBytes.toInt} bytes (String Index)")
             logger.trace(s"${tId}:${id}) decompressing (String Index)")
             Zstd.decompress(stringLen.array(), cb)
           } else {
-            stream.readFully(stringLen.array(), 0, indexBytes.toInt)
+            readFully(stream, stringLen.array(), 0, indexBytes.toInt)
           }
           rows = indexBytes / 4
           fixedTextLen = 0
@@ -198,18 +212,18 @@ class QflockCompactColumnVector(batchSize: Integer, dataType: Int, schema: Struc
             stringIndex(i) = idx
             idx += stringLen.getInt(i * 4)
           }
-          stream.readFully(header.array(), 0, header.capacity())
+          readFully(stream, header.array(), 0, header.capacity())
           val compressedBytes = header.getInt(QflockServerHeader.Offset.compressedLen)
           val dataBytes = header.getInt(QflockServerHeader.Offset.dataLen)
           compressed = (compressedBytes > 0)
           if (compressed) {
             val cb = new Array[Byte](compressedBytes.toInt)
-            stream.readFully(cb, 0, compressedBytes.toInt)
+            readFully(stream, cb, 0, compressedBytes.toInt)
             logger.trace(s"${tId}:${id}) read ${compressedBytes.toInt} bytes (String)")
             logger.trace(s"${tId}:${id}) decompressing (String)")
             Zstd.decompress(byteBuffer.array(), cb)
           } else {
-            stream.readFully(byteBuffer.array(), 0, dataBytes.toInt)
+            readFully(stream, byteBuffer.array(), 0, dataBytes.toInt)
           }
           logger.trace(s"${tId}:${id}) decompressed ${dataBytes.toInt} bytes " +
                       s"-> ${dataBytes} (String)")
@@ -244,12 +258,14 @@ object QflockCompactColumnVector {
    */
   def apply(batchSize: Integer,
             dataTypes: Array[Int],
-            schema: StructType): Array[QflockCompactColumnVector] = {
+            schema: StructType,
+            cachedData: Option[QflockFileCachedData] = None): Array[QflockCompactColumnVector] = {
     var vectors = new Array[QflockCompactColumnVector](dataTypes.length)
     for (i <- 0 until dataTypes.length) {
       val id = f"$colIndex%d) $i%d/${dataTypes.length}%d"
       colIndex += 1
-      vectors(i) = new QflockCompactColumnVector(batchSize, dataTypes(i), schema, id);
+      vectors(i) = new QflockCompactColumnVector(batchSize, dataTypes(i), schema, id,
+        cachedData);
     }
     vectors
   }

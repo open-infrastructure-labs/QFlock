@@ -16,16 +16,17 @@
  */
 package com.github.qflock.extensions.compact
 
-
+import java.io.{BufferedOutputStream, DataOutputStream, FileOutputStream}
 import java.util
 
-import com.github.qflock.extensions.common.QflockQueryCache
+import com.github.qflock.extensions.common.{QflockCacheKeyEntry, QflockFileCachedData, QflockQueryCache}
 import com.github.qflock.server.QflockServerHeader
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.connector.read.{InputPartition, PartitionReader, PartitionReaderFactory}
 import org.apache.spark.sql.vectorized.ColumnarBatch
+
 
 
 /** Creates a factory for creating QflockCompactPartitionReaderFactory objects
@@ -47,22 +48,46 @@ class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
     val part = partition.asInstanceOf[QflockCompactPartition]
     val schema = QflockCompactDatasource.getSchema(options)
     val query = options.get("query")
-//    val cachedValue = QflockQueryCache.checkKey(query, part.index)
-//    if (cachedValue.isDefined) {
-//      val bytes = QflockQueryCache.bytes
-//      val appId = options.get("appid")
-//      logger.info(s" use-cached-data " +
-//        s"appId:$appId part:${part.index} cachedBytes:$bytes key:$query")
-//    }
+    var cachedValue = QflockQueryCache.checkKey(query, part.index)
+
+    val appId = options.get("appid")
+    val cachedDataEntry: Option[QflockFileCachedData] = {
+      if (cachedValue.isDefined) {
+        val fileData = cachedValue.get.asInstanceOf[QflockFileCachedData]
+        var waitCount = 0
+        while(!fileData.isDataValid) {
+          // Wait for the write of data to be complete.
+          logger.warn(s" invalid-cached-data wait $waitCount" +
+                      s"appId:$appId part:${part.index} key:$query")
+          Thread.sleep(100)
+          waitCount += 1
+        }
+        logger.warn(s" use-cached-data " + s"appId:$appId part:${part.index} key:$query")
+        Some(fileData)
+      } else {
+        logger.warn(s" insert-cached-data " +
+          s"appId:$appId part:${part.index} key:$query")
+        QflockQueryCache.insertFileData(query, part.index)
+      }
+    }
     //    logger.info("QflockCompactPartitionReaderFactory creating partition " +
-//                s"part ${part.index} off ${part.offset} len ${part.length}")
-    val client = new QflockCompactClient(query, part.name,
-                                         part.offset.toString, part.length.toString,
-                                         schema, options.get("url"))
+    //                s"part ${part.index} off ${part.offset} len ${part.length}")
+    val client = {
+      if (cachedValue.isDefined) {
+        new QflockFileClient(cachedDataEntry.get.getFile)
+      } else {
+        new QflockCompactClient(query, part.name,
+          part.offset.toString, part.length.toString,
+          schema, options.get("url"))
+      }
+    }
 //    logger.info("QflockCompactPartitionReaderFactory opened client " +
 //                s"part ${part.index} off ${part.offset} len ${part.length}" +
 //                s"query: " + options.get("query"))
-    val reader = new QflockCompactColVectReader(schema, batchSize, query, client)
+
+    val reader = new QflockCompactColVectReader(schema, batchSize,
+                                                query, client, cachedDataEntry)
     new QflockCompactColumnarPartitionReader(reader)
   }
 }
+
