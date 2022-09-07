@@ -193,7 +193,7 @@ class BenchmarkApp:
                          results_path=self._args.results_path)
         if self._args.jdbc:
             sh.load_extension()
-        sh.load_rule(self._args.ext)
+        sh.init_extensions(self._args.ext)
         # This trace is important
         # the calling script will look for this before starting tracing.
         # Any traces before this point will *not* be seen at the default log level of OFF

@@ -17,7 +17,7 @@
 package com.github.qflock.extensions.common
 
 
-import java.io.{BufferedOutputStream, DataOutputStream, FileOutputStream}
+import java.io.{BufferedOutputStream, DataOutputStream, File, FileOutputStream}
 
 import org.slf4j.{Logger, LoggerFactory}
 
@@ -43,6 +43,16 @@ class QflockFileCachedData(key: String, partition: Int) {
 }
 
 object QflockFileCachedData {
+  protected val logger: Logger = LoggerFactory.getLogger(getClass)
+  def init: Unit = {
+    val dir = new File("/qflock/spark/build/cache")
+    for (file <- dir.listFiles) {
+      if (!file.isDirectory) {
+        logger.info(s"Deleting: ${file.toString}")
+        file.delete
+      }
+    }
+  }
   var generation: Long = 0
   def getGeneration: Long = {
     synchronized {

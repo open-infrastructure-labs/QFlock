@@ -51,6 +51,7 @@ class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
     var cachedValue = QflockQueryCache.checkKey(query, part.index)
 
     val appId = options.get("appid")
+//    val cachedDataEntry: Option[QflockFileCachedData] = None
     val cachedDataEntry: Option[QflockFileCachedData] = {
       if (cachedValue.isDefined) {
         val fileData = cachedValue.get.asInstanceOf[QflockFileCachedData]
