@@ -16,9 +16,6 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{DataInputStream, DataOutputStream, OutputStream}
-import java.nio.ByteBuffer
-
 import com.github.qflock.extensions.common.QflockFileCachedData
 import com.github.qflock.extensions.jdbc.QflockColumnarVectorReader
 import com.github.qflock.server.QflockServerHeader
@@ -62,7 +59,7 @@ class QflockCompactColVectReader(schema: StructType,
   private var currentBatchSize: Int = 0
   private var batchIdx: Long = 0
   private def waitForBytes(context: String): Unit = {
-    var waitCount = 0
+    val waitCount = 0
     while (stream.available() <= 0) {
       if (waitCount == 0) {
         logger.info(s"bytes not available $context, waiting ${client.toString}")

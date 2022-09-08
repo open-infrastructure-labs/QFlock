@@ -16,7 +16,7 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{ByteArrayOutputStream, DataOutputStream, FileOutputStream, OutputStream}
+import java.io.DataOutputStream
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ArrayBlockingQueue
@@ -29,10 +29,6 @@ import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters
 import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.types._
-import org.apache.spark.unsafe.types.UTF8String
-
-
-
 
 
 class QflockCompactBatchWrite(writeInfo: LogicalWriteInfo) extends BatchWrite {

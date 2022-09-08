@@ -16,14 +16,7 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{BufferedInputStream, ByteArrayInputStream, DataInputStream, StringWriter}
-import java.net.{HttpURLConnection, URL}
-import java.nio.ByteBuffer
-import javax.json.Json
-
-import org.slf4j.LoggerFactory
-
-import org.apache.spark.sql.types.StructType
+import java.io.DataInputStream
 
 
 abstract class QflockClient {

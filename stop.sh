@@ -1,4 +1,5 @@
 #!/bin/bash
+pushd "$(dirname "$0")" # connect to root
 
 pushd storage
 ./stop.sh

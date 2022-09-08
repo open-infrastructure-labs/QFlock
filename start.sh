@@ -1,4 +1,5 @@
 #!/bin/bash
+pushd "$(dirname "$0")" # connect to root
 
 ./scripts/start_dc1.sh
 

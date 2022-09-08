@@ -22,7 +22,6 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import scala.collection.{mutable, _}
-import scala.collection.JavaConverters._
 
 import com.github.qflock.server.QflockDataStreamer
 import com.github.qflock.server.QflockDataStreamItem

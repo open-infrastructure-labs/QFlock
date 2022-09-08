@@ -16,7 +16,7 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{DataInputStream, DataOutputStream, EOFException, PrintWriter, StringWriter}
+import java.io.{DataInputStream, EOFException, PrintWriter, StringWriter}
 import java.nio.ByteBuffer
 
 // ZSTD support
@@ -126,7 +126,6 @@ class QflockCompactColumnVector(batchSize: Integer,
   def readColumn(stream: DataInputStream): Int = {
     var rows: Int = 0
     try {
-      var bytesRead = 0
       readFully(stream, header.array(), 0, header.capacity())
       val headerBuf = header.array()
       if (headerBuf(0) == 0 && headerBuf(1) == 0 &&
@@ -139,7 +138,7 @@ class QflockCompactColumnVector(batchSize: Integer,
       val tId = Thread.currentThread().getId()
       QflockServerHeader.DataType(header.getInt(QflockServerHeader.Offset.dataType)) match {
         case QflockServerHeader.DataType.LongType =>
-          logger.trace(s"${tId}:${id}) read ${numBytes.toInt} bytes (Long)")
+          logger.trace(s"$tId:${id}) read ${numBytes.toInt} bytes (Long)")
           val dataBytes = header.getInt(QflockServerHeader.Offset.dataLen)
           if (compressed) {
               val cb = new Array[Byte](numBytes.toInt)

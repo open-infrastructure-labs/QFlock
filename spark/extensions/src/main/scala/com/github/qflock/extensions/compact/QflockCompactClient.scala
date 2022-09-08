@@ -16,10 +16,9 @@
  */
 package com.github.qflock.extensions.compact
 
-import java.io.{BufferedInputStream, ByteArrayInputStream, DataInputStream, InputStream, StringWriter}
+import java.io.{BufferedInputStream, ByteArrayInputStream, DataInputStream, StringWriter}
 import java.net.{HttpURLConnection, URL}
 import java.nio.ByteBuffer
-import java.util
 import javax.json.Json
 
 import org.slf4j.LoggerFactory
@@ -91,7 +90,6 @@ class QflockCompactClient(query: String,
       } finally if (os != null) os.close()
 //      logger.info(s"opening stream done $tableName $rgOffset $rgCount")
       new DataInputStream(new BufferedInputStream(con.getInputStream))
-//      getEmptyQueryStream(query, schema)
     } else {
       logger.error(s"unexpected http status on connect: $statusCode")
       getEmptyQueryStream(query, schema)
