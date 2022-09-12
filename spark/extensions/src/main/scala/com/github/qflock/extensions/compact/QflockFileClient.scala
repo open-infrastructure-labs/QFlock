@@ -29,10 +29,10 @@ class QflockFileClient(fileName: String)  extends QflockClient {
   override def toString: String = {
     s"QflockFileClient "
   }
-  def close: Unit = {
+  def close(): Unit = {
     stream.close()
   }
-  val stream = getQueryStream
+  private val stream: DataInputStream = getQueryStream
   def getStream: DataInputStream = stream
 
   private def getQueryStream: DataInputStream = {

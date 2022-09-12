@@ -27,7 +27,7 @@ export CLASSPATH=$($HADOOP_HOME/bin/hadoop classpath --glob)
 
 if [ ${DEBUG} == "YES" ]; then
     spark-submit --master local[4] --total-executor-cores 1 \
-    --class com.github.qflock.server.ServerTest \
+    --class com.github.qflock.server.RemoteServer \
     --conf "spark.driver.maxResultSize=16g"  \
     --conf "spark.driver.memory=16g"  \
     --conf "spark.executor.memory=16g"  \
@@ -44,7 +44,7 @@ if [ ${DEBUG} == "YES" ]; then
     /extensions/target/scala-2.12/qflock-extensions_2.12-0.1.0.jar $@
 else
     spark-submit --master local[4] --total-executor-cores 1 \
-    --class com.github.qflock.server.ServerTest \
+    --class com.github.qflock.server.RemoteServer \
     --conf "spark.driver.maxResultSize=16g"  \
     --conf "spark.driver.memory=16g"  \
     --conf "spark.executor.memory=16g"  \

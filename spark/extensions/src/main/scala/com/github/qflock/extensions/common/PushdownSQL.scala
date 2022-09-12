@@ -26,19 +26,17 @@ package com.github.qflock.extensions.common
 
 import java.io.StringWriter
 import java.sql.Timestamp
-import javax.json.Json
-import javax.json.JsonArrayBuilder
-
-import scala.util.matching.Regex
+import javax.json.{Json, JsonArrayBuilder}
 
 import com.github.qflock.extensions.common.PushdownSqlStatus.PushdownSqlStatus
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.catalyst.expressions._
-import org.apache.spark.sql.catalyst.expressions.aggregate.{AggregateExpression, Count, Max, Min, Sum}
+import org.apache.spark.sql.catalyst.expressions.aggregate._
 import org.apache.spark.sql.catalyst.util.DateFormatter
 import org.apache.spark.sql.execution.datasources.PushableColumnWithoutNestedColumn
 import org.apache.spark.sql.types._
+
 
 
 /** Provides pushdown capabilities aimed at
@@ -63,7 +61,7 @@ class PushdownSQL(schema: StructType,
    * Build a string for a set of filters.
    *
    */
-  def getFilterString(): String = {
+  def getFilterString: String = {
     validFilters.flatMap(f => buildFilterExpression(f)).mkString(" AND ")
   }
 
@@ -74,7 +72,7 @@ class PushdownSQL(schema: StructType,
    *
    */
   def buildWhereClause(): String = {
-    val filterExpressions = getFilterString()
+    val filterExpressions = getFilterString
     if (filterExpressions.isEmpty) "" else "WHERE " + filterExpressions
   }
   /**
@@ -118,7 +116,7 @@ class PushdownSQL(schema: StructType,
       } else {
         // Search the referenceMap for the entry that matches this expression id.
         // Then return back the map key (._1) to generate the prefix to use.
-        val referenceName = referenceMap.find(_._2.find(x => x.exprId == exprId).isDefined).get._1
+        val referenceName = referenceMap.find(_._2.exists(x => x.exprId == exprId)).get._1
         Option(s"$referenceName.$attr")
       }
     }

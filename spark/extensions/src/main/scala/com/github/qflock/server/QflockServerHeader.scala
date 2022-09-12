@@ -25,10 +25,10 @@ object QflockServerHeader {
   /** This encodes the offset of the fields in the header.
    */
   object Offset {
-    val dataType: Int = (0 * 4)
-    val typeSize: Int = (1 * 4)
-    val dataLen: Int = (2 * 4)
-    val compressedLen: Int = (3 * 4)
+    val dataType: Int = 0 * 4
+    val typeSize: Int = 1 * 4
+    val dataLen: Int = 2 * 4
+    val compressedLen: Int = 3 * 4
   }
   object Length {
     val Long: Int = 8
@@ -39,9 +39,9 @@ object QflockServerHeader {
   val stringLength: Int = 120
   val magic: Int = 42424242
   val batchSize: Int = 256 * 1024
-  val streamTerminator = {
+  val streamTerminator: Array[Byte] = {
     val byteBuffer = ByteBuffer.allocate(4 * 4)
-    for (i <- Range(0, 4)) {
+    for (_ <- Range(0, 4)) {
       byteBuffer.putInt(0)
     }
     byteBuffer.array()
@@ -51,9 +51,9 @@ object QflockServerHeader {
    */
   object DataType extends Enumeration {
     type DataType = Value
-    val LongType = Value(1)
-    val DoubleType = Value(2)
-    val ByteArrayType = Value(3)
-    val FixedLenByteArrayType = Value(4)
+    val LongType: QflockServerHeader.DataType.Value = Value(1)
+    val DoubleType: QflockServerHeader.DataType.Value = Value(2)
+    val ByteArrayType: QflockServerHeader.DataType.Value = Value(3)
+    val FixedLenByteArrayType: QflockServerHeader.DataType.Value = Value(4)
   }
 }

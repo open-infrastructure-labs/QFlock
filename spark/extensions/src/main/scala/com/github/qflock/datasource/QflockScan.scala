@@ -34,7 +34,12 @@ import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 
 
-/** A scan object that works on HDFS files.
+/** A scan object that is used to partition based on row groups.
+ *  This scan allows for partitioning across a subset of row groups.
+ *  The QflockTableDescriptor is used by the client to specify this range.
+ *  The tableName datasource option specifies the table to partition on row groups.
+ *  The requestId specifies the table descriptor's requestId which contains the
+ *  range of row groups to operate on.
  *
  * @param schema the column format
  * @param options the options including "path"

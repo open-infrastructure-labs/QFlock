@@ -22,6 +22,6 @@ import java.io.DataInputStream
 abstract class QflockClient {
 
   def toString: String
-  def close: Unit
+  def close(): Unit
   def getStream: DataInputStream
 }

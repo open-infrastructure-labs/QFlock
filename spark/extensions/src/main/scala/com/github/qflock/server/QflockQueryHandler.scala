@@ -19,22 +19,27 @@ package com.github.qflock.server
 import java.io.{EOFException, OutputStream, PrintWriter, StringWriter}
 
 import com.github.qflock.extensions.compact.QflockOutputStreamDescriptor
-import org.slf4j.{Logger, LoggerFactory}
+import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions.col
 
-
+/** Handles queries for the server.
+ *  This object has a set of views it instantiates at init time.
+ *  These temp views are used for spark's spark.sql() call, which
+ *  requires view names in order to reference tables.
+ *
+ *
+ */
 object QflockQueryHandler {
   private val logger = LoggerFactory.getLogger(getClass)
-  private val spark = getSparkSession()
+  private val spark = getSparkSession
   private val dbName = "tpcds"
   private val tables = QflockServerTable.getAllTables
-  private val tablesMap = tables.map(t => (t.getTableName -> t)).toMap
+  private val tablesMap = tables.map(t => t.getTableName -> t).toMap
   def init(): Unit = {
-    tables.foreach(t => t.createViews)
+    tables.foreach(t => t.createViews())
   }
-  def getSparkSession(): SparkSession = {
+  private def getSparkSession: SparkSession = {
     logger.info(s"create new session")
     SparkSession
       .builder
@@ -44,21 +49,43 @@ object QflockQueryHandler {
       .enableHiveSupport()
       .getOrCreate()
   }
-  spark.sql(s"USE ${dbName}")
-//  spark.sparkContext.setLogLevel("WARN")
+  // Initialize to use the database which contains our tables.
+  spark.sql(s"USE $dbName")
+
+  // We are using log4j.properties to control the log level.
+  //  spark.sparkContext.setLogLevel("WARN")
+
+  /** performs the spark query and instructs our
+   *  write data source to ship the data back to our output stream.
+   * @param query String representation of the query.
+   * @param tableName name of the table to partition on
+   * @param offset row group offset to start at
+   * @param count number of row groups.
+   * @param outStream stream of data to send data back to.
+   * @return
+   */
   def handleQuery(query: String,
                   tableName: String,
                   offset: Int,
                   count: Int,
                   outStream: OutputStream): String = {
+    // When we handle a query we are issuing a spark query, where the
+    // input data source is our data source (readRequestId) and the output
+    // data source is our data source also (writeRequestId).
+    // The request Ids are used to ship specific parameters to our data source including
+    // for the read data source, the row group offset and row group count
+    // for the write data source, the output data stream.
+    // Note that the output stream descriptor also has embedded in it, a
+    // QflockDataStreamer, which will be  used by that write in order to
+    // stream data back to the client in a separate thread.
     val writeRequestId = QflockOutputStreamDescriptor.get.fillRequestInfo(outStream)
     val readRequestId = tablesMap(tableName).descriptor.fillRequestInfo(offset, count)
     val desc = QflockOutputStreamDescriptor.get.getRequestInfo(writeRequestId)
-    if (desc.wroteHeader != false) {
+    if (desc.wroteHeader) {
       throw new IllegalStateException("descriptor stat is not valid.")
     }
-    val newQuery = query.replace(s" ${tableName}",
-                     s" ${tableName}_${readRequestId}")
+    val newQuery = query.replace(s" $tableName",
+                     s" ${tableName}_$readRequestId")
     logger.info(s"Start readRequestId: $readRequestId writeRequestId: $writeRequestId " +
       s"query: $newQuery")
     try {
@@ -73,7 +100,7 @@ object QflockQueryHandler {
         .option("query", newQuery)
         .save()
     } catch {
-      case ex: EOFException =>
+      case _: EOFException =>
       // logger.warn(ex.toString)
       case ex: Exception =>
         logger.error(s"error during query: $newQuery " +
@@ -85,6 +112,10 @@ object QflockQueryHandler {
         throw ex
     }
     var pollCount = 0
+    // We do not want to allow the request to return until
+    // after we have finished streaming back the data.
+    // If there is a stream still outstanding, then we will
+    // wait for it to complete.
     while (desc.streamsOutstanding) {
       logger.debug(s"Streams still outstanding $pollCount")
       Thread.sleep(10)

@@ -154,9 +154,9 @@ class QflockColumnarPartitionReaderFactory(pushdown: Pushdown,
       int96RebaseSpec.timeZone,
       enableOffHeapColumnVector && taskContext.isDefined,
       batchSize)
-    val iter = new RecordReaderIterator(vectorizedReader)
+    val iterator = new RecordReaderIterator(vectorizedReader)
     // SPARK-23457 Register a task completion listener before `initialization`.
-    taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iter.close()))
+    taskContext.foreach(_.addTaskCompletionListener[Unit](_ => iterator.close()))
     vectorizedReader
   }
   private def createVectorizedReader(partition: QflockPartition): VectorizedParquetRecordReader = {

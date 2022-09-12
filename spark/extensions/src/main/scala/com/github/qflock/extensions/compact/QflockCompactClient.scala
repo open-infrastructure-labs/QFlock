@@ -48,7 +48,7 @@ class QflockCompactClient(query: String,
     val stringWriter = new StringWriter
     val writer = Json.createWriter(stringWriter)
     writer.writeObject(queryJson)
-    stringWriter.getBuffer().toString()
+    stringWriter.getBuffer.toString
   }
   def getEmptyQueryStream(query: String, schema: StructType): DataInputStream = {
     // Write a header with a column number of 0.
@@ -58,12 +58,12 @@ class QflockCompactClient(query: String,
     s
   }
   private var connection: Option[HttpURLConnection] = None
-  def close: Unit = {
+  def close(): Unit = {
     if (connection.isDefined) {
-      logger.info("close start")
+//      logger.info("close start")
       stream.close()
       connection.get.disconnect()
-      logger.info("close end")
+//      logger.info("close end")
     }
   }
   private val stream = getQueryStream

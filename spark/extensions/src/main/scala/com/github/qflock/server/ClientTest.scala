@@ -16,13 +16,8 @@
  */
 package com.github.qflock.server
 
-import java.io.{BufferedInputStream, BufferedReader, BufferedWriter, DataInputStream, File, FileOutputStream, InputStreamReader, PrintWriter, StringWriter}
-import java.net.{HttpURLConnection, URL}
+import java.io.{File, FileOutputStream, PrintWriter, StringWriter}
 import javax.json.Json
-import javax.json.JsonArrayBuilder
-import javax.json.JsonObject
-import javax.json.JsonObjectBuilder
-import javax.json.JsonWriter
 
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.{Await, Future}
@@ -36,10 +31,8 @@ import org.apache.log4j.BasicConfigurator
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions._
 import org.apache.spark.sql.hive.extension.ExtHiveUtils
 import org.apache.spark.sql.types._
-import org.apache.spark.util.ThreadUtils
 
 
 
@@ -54,10 +47,10 @@ class ClientTests {
     val stringWriter = new StringWriter
     val writer = Json.createWriter(stringWriter)
     writer.writeObject(queryJson)
-    stringWriter.getBuffer().toString()
+    stringWriter.getBuffer.toString
   }
 
-  def getSparkSession(): SparkSession = {
+  def getSparkSession: SparkSession = {
     logger.info(s"create new session")
     SparkSession
       .builder
@@ -68,7 +61,7 @@ class ClientTests {
       .getOrCreate()
   }
 
-  val spark = getSparkSession()
+  private val spark = getSparkSession
   spark.sparkContext.setLogLevel("INFO")
 
   def runQuery(query: String, tableName: String, rgOffset: String, rgCount: String,
@@ -79,7 +72,7 @@ class ClientTests {
     var data = ListBuffer.empty[String]
     try {
       data = readData(schema, QflockServerHeader.batchSize, client)
-    } finally client.close
+    } finally client.close()
     data
   }
 
@@ -90,9 +83,9 @@ class ClientTests {
     val reader = new QflockCompactColVectReader(schema, batchSize, "", client)
     while (reader.next()) {
       val batch = reader.get()
-      val rowIter = batch.rowIterator()
-      while (rowIter.hasNext()) {
-        val row = rowIter.next()
+      val rowIterator = batch.rowIterator()
+      while (rowIterator.hasNext) {
+        val row = rowIterator.next()
         val values = schema.fields.zipWithIndex.map(s => s._1.dataType match {
           case LongType => row.getLong(s._2)
           case DoubleType => row.getDouble(s._2)
@@ -107,79 +100,78 @@ class ClientTests {
     data
   }
 
-  def queryCallCenter: Unit = {
+  def queryCallCenter(): Unit = {
     logger.info("start call_center")
     val schema = StructType(Array(
-      StructField("cc_call_center_sk", LongType, true),
-      StructField("cc_call_center_id", StringType, true),
-      StructField("cc_rec_start_date", StringType, true),
-      StructField("cc_rec_end_date", StringType, true),
-      StructField("cc_closed_date_sk", LongType, true),
-      StructField("cc_open_date_sk", LongType, true),
-      StructField("cc_name", StringType, true),
-      StructField("cc_class", StringType, true),
-      StructField("cc_employees", LongType, true),
-      StructField("cc_sq_ft", LongType, true),
-      StructField("cc_hours", StringType, true),
-      StructField("cc_manager", StringType, true),
-      StructField("cc_mkt_id", LongType, true),
-      StructField("cc_mkt_class", StringType, true),
-      StructField("cc_mkt_desc", StringType, true),
-      StructField("cc_market_manager", StringType, true),
-      StructField("cc_division", LongType, true),
-      StructField("cc_division_name", StringType, true),
-      StructField("cc_company", LongType, true),
-      StructField("cc_company_name", StringType, true),
-      StructField("cc_street_number", StringType, true),
-      StructField("cc_street_name", StringType, true),
-      StructField("cc_street_type", StringType, true),
-      StructField("cc_suite_number", StringType, true),
-      StructField("cc_city", StringType, true),
-      StructField("cc_county", StringType, true),
-      StructField("cc_state", StringType, true),
-      StructField("cc_zip", StringType, true),
-      StructField("cc_country", StringType, true),
-      StructField("cc_gmt_offset", DoubleType, true),
-      StructField("cc_tax_percentage", DoubleType, true)
+      StructField("cc_call_center_sk", LongType, nullable = true),
+      StructField("cc_call_center_id", StringType, nullable = true),
+      StructField("cc_rec_start_date", StringType, nullable = true),
+      StructField("cc_rec_end_date", StringType, nullable = true),
+      StructField("cc_closed_date_sk", LongType, nullable = true),
+      StructField("cc_open_date_sk", LongType, nullable = true),
+      StructField("cc_name", StringType, nullable = true),
+      StructField("cc_class", StringType, nullable = true),
+      StructField("cc_employees", LongType, nullable = true),
+      StructField("cc_sq_ft", LongType, nullable = true),
+      StructField("cc_hours", StringType, nullable = true),
+      StructField("cc_manager", StringType, nullable = true),
+      StructField("cc_mkt_id", LongType, nullable = true),
+      StructField("cc_mkt_class", StringType, nullable = true),
+      StructField("cc_mkt_desc", StringType, nullable = true),
+      StructField("cc_market_manager", StringType, nullable = true),
+      StructField("cc_division", LongType, nullable = true),
+      StructField("cc_division_name", StringType, nullable = true),
+      StructField("cc_company", LongType, nullable = true),
+      StructField("cc_company_name", StringType, nullable = true),
+      StructField("cc_street_number", StringType, nullable = true),
+      StructField("cc_street_name", StringType, nullable = true),
+      StructField("cc_street_type", StringType, nullable = true),
+      StructField("cc_suite_number", StringType, nullable = true),
+      StructField("cc_city", StringType, nullable = true),
+      StructField("cc_county", StringType, nullable = true),
+      StructField("cc_state", StringType, nullable = true),
+      StructField("cc_zip", StringType, nullable = true),
+      StructField("cc_country", StringType, nullable = true),
+      StructField("cc_gmt_offset", DoubleType, nullable = true),
+      StructField("cc_tax_percentage", DoubleType, nullable = true)
     ))
     runQueryTpcds("select * from call_center",
       "call_center", schema)
   }
 
-  def queryWebReturns: Unit = {
+  def queryWebReturns(): Unit = {
     logger.info("start web_returns")
     val schema = StructType(Array(
-      StructField("wr_returned_date_sk", LongType, true),
-      StructField("wr_returned_time_sk", LongType, true),
-      StructField("wr_item_sk", LongType, true),
-      StructField("wr_refunded_customer_sk", LongType, true),
-      StructField("wr_refunded_cdemo_sk", LongType, true),
-      StructField("wr_refunded_hdemo_sk", LongType, true),
-      StructField("wr_refunded_addr_sk", LongType, true),
-      StructField("wr_returning_customer_sk", LongType, true),
-      StructField("wr_returning_cdemo_sk", LongType, true),
-      StructField("wr_returning_hdemo_sk", LongType, true),
-      StructField("wr_returning_addr_sk", LongType, true),
-      StructField("wr_web_page_sk", LongType, true),
-      StructField("wr_reason_sk", LongType, true),
-      StructField("wr_order_number", LongType, true),
-      StructField("wr_return_quantity", LongType, true),
-      StructField("wr_return_amt", DoubleType, true),
-      StructField("wr_return_tax", DoubleType, true),
-      StructField("wr_return_amt_inc_tax", DoubleType, true),
-      StructField("wr_fee", DoubleType, true),
-      StructField("wr_return_ship_cost", DoubleType, true),
-      StructField("wr_refunded_cash", DoubleType, true),
-      StructField("wr_reversed_charge", DoubleType, true),
-      StructField("wr_account_credit", DoubleType, true),
-      StructField("wr_net_loss", DoubleType, true)
+      StructField("wr_returned_date_sk", LongType, nullable = true),
+      StructField("wr_returned_time_sk", LongType, nullable = true),
+      StructField("wr_item_sk", LongType, nullable = true),
+      StructField("wr_refunded_customer_sk", LongType, nullable = true),
+      StructField("wr_refunded_cdemo_sk", LongType, nullable = true),
+      StructField("wr_refunded_hdemo_sk", LongType, nullable = true),
+      StructField("wr_refunded_addr_sk", LongType, nullable = true),
+      StructField("wr_returning_customer_sk", LongType, nullable = true),
+      StructField("wr_returning_cdemo_sk", LongType, nullable = true),
+      StructField("wr_returning_hdemo_sk", LongType, nullable = true),
+      StructField("wr_returning_addr_sk", LongType, nullable = true),
+      StructField("wr_web_page_sk", LongType, nullable = true),
+      StructField("wr_reason_sk", LongType, nullable = true),
+      StructField("wr_order_number", LongType, nullable = true),
+      StructField("wr_return_quantity", LongType, nullable = true),
+      StructField("wr_return_amt", DoubleType, nullable = true),
+      StructField("wr_return_tax", DoubleType, nullable = true),
+      StructField("wr_return_amt_inc_tax", DoubleType, nullable = true),
+      StructField("wr_fee", DoubleType, nullable = true),
+      StructField("wr_return_ship_cost", DoubleType, nullable = true),
+      StructField("wr_refunded_cash", DoubleType, nullable = true),
+      StructField("wr_reversed_charge", DoubleType, nullable = true),
+      StructField("wr_account_credit", DoubleType, nullable = true),
+      StructField("wr_net_loss", DoubleType, nullable = true)
     ))
     runQueryTpcds("select * from web_returns",
       "web_returns", schema)
   }
 
   def writeToFile(data: ListBuffer[String],
-                  schema: StructType,
                   fileName: String): Unit = {
     val tmpFilename = fileName
     val writer = new PrintWriter(new FileOutputStream(
@@ -209,72 +201,72 @@ class ClientTests {
     if (false) {
       logger.info(s"fetch row group 0-${numRowGroups - 1} table $dbName:$tableName")
       val data = runQuery(query, tableName, 0.toString, numRowGroups.toString, schema)
-      writeToFile(data, schema, fileName)
+      writeToFile(data, fileName)
     } else {
       for (i <- Range(0, numRowGroups)) {
         logger.info(s"fetch row group $i/${numRowGroups - 1} table $dbName:$tableName")
         val data = runQuery(query, tableName, i.toString, "1", schema)
-        writeToFile(data, schema, fileName)
+        writeToFile(data, fileName)
       }
     }
   }
 
-  def queryStoreSales: Unit = {
+  def queryStoreSales(): Unit = {
     logger.info("start store_sales")
     val schema = StructType(Array(
-      StructField("ss_sold_date_sk", LongType, true),
-      StructField("ss_sold_time_sk", LongType, true),
-      StructField("ss_item_sk", LongType, true),
-      StructField("ss_customer_sk", LongType, true),
-      StructField("ss_cdemo_sk", LongType, true),
-      StructField("ss_hdemo_sk", LongType, true),
-      StructField("ss_addr_sk", LongType, true),
-      StructField("ss_store_sk", LongType, true),
-      StructField("ss_promo_sk", LongType, true),
-      StructField("ss_ticket_number", LongType, true),
-      StructField("ss_quantity", LongType, true),
-      StructField("ss_wholesale_cost", DoubleType, true),
-      StructField("ss_list_price", DoubleType, true),
-      StructField("ss_sales_price", DoubleType, true),
-      StructField("ss_ext_discount_amt", DoubleType, true),
-      StructField("ss_ext_sales_price", DoubleType, true),
-      StructField("ss_ext_wholesale_cost", DoubleType, true),
-      StructField("ss_ext_list_price", DoubleType, true),
-      StructField("ss_ext_tax", DoubleType, true),
-      StructField("ss_coupon_amt", DoubleType, true),
-      StructField("ss_net_paid", DoubleType, true),
-      StructField("ss_net_paid_inc_tax", DoubleType, true),
-      StructField("ss_net_profit", DoubleType, true)
+      StructField("ss_sold_date_sk", LongType, nullable = true),
+      StructField("ss_sold_time_sk", LongType, nullable = true),
+      StructField("ss_item_sk", LongType, nullable = true),
+      StructField("ss_customer_sk", LongType, nullable = true),
+      StructField("ss_cdemo_sk", LongType, nullable = true),
+      StructField("ss_hdemo_sk", LongType, nullable = true),
+      StructField("ss_addr_sk", LongType, nullable = true),
+      StructField("ss_store_sk", LongType, nullable = true),
+      StructField("ss_promo_sk", LongType, nullable = true),
+      StructField("ss_ticket_number", LongType, nullable = true),
+      StructField("ss_quantity", LongType, nullable = true),
+      StructField("ss_wholesale_cost", DoubleType, nullable = true),
+      StructField("ss_list_price", DoubleType, nullable = true),
+      StructField("ss_sales_price", DoubleType, nullable = true),
+      StructField("ss_ext_discount_amt", DoubleType, nullable = true),
+      StructField("ss_ext_sales_price", DoubleType, nullable = true),
+      StructField("ss_ext_wholesale_cost", DoubleType, nullable = true),
+      StructField("ss_ext_list_price", DoubleType, nullable = true),
+      StructField("ss_ext_tax", DoubleType, nullable = true),
+      StructField("ss_coupon_amt", DoubleType, nullable = true),
+      StructField("ss_net_paid", DoubleType, nullable = true),
+      StructField("ss_net_paid_inc_tax", DoubleType, nullable = true),
+      StructField("ss_net_profit", DoubleType, nullable = true)
     ))
     runQueryTpcds("select * from store_sales",
       "store_sales", schema)
   }
 
-  def queryItem: Unit = {
+  def queryItem(): Unit = {
     logger.info("start item")
     val schema = StructType(Array(
-      StructField("i_item_sk", LongType, true),
-      StructField("i_item_id", StringType, true),
-      StructField("i_rec_start_date", StringType, true),
-      StructField("i_rec_end_date", StringType, true),
-      StructField("i_item_desc", StringType, true),
-      StructField("i_current_price", DoubleType, true),
-      StructField("i_wholesale_cost", DoubleType, true),
-      StructField("i_brand_id", LongType, true),
-      StructField("i_brand", StringType, true),
-      StructField("i_class_id", LongType, true),
-      StructField("i_class", StringType, true),
-      StructField("i_category_id", LongType, true),
-      StructField("i_category", StringType, true),
-      StructField("i_manufact_id", LongType, true),
-      StructField("i_manufact", StringType, true),
-      StructField("i_size", StringType, true),
-      StructField("i_formulation", StringType, true),
-      StructField("i_color", StringType, true),
-      StructField("i_units", StringType, true),
-      StructField("i_container", StringType, true),
-      StructField("i_manager_id", LongType, true),
-      StructField("i_product_name", StringType, true)
+      StructField("i_item_sk", LongType, nullable = true),
+      StructField("i_item_id", StringType, nullable = true),
+      StructField("i_rec_start_date", StringType, nullable = true),
+      StructField("i_rec_end_date", StringType, nullable = true),
+      StructField("i_item_desc", StringType, nullable = true),
+      StructField("i_current_price", DoubleType, nullable = true),
+      StructField("i_wholesale_cost", DoubleType, nullable = true),
+      StructField("i_brand_id", LongType, nullable = true),
+      StructField("i_brand", StringType, nullable = true),
+      StructField("i_class_id", LongType, nullable = true),
+      StructField("i_class", StringType, nullable = true),
+      StructField("i_category_id", LongType, nullable = true),
+      StructField("i_category", StringType, nullable = true),
+      StructField("i_manufact_id", LongType, nullable = true),
+      StructField("i_manufact", StringType, nullable = true),
+      StructField("i_size", StringType, nullable = true),
+      StructField("i_formulation", StringType, nullable = true),
+      StructField("i_color", StringType, nullable = true),
+      StructField("i_units", StringType, nullable = true),
+      StructField("i_container", StringType, nullable = true),
+      StructField("i_manager_id", LongType, nullable = true),
+      StructField("i_product_name", StringType, nullable = true)
     ))
     runQueryTpcds("select * from item",
       "item", schema)
@@ -282,11 +274,11 @@ class ClientTests {
 }
 object ClientTest {
   private val logger = LoggerFactory.getLogger(getClass)
-  def parallelTests: Unit = {
+  def parallelTests(): Unit = {
     val f0: Future[Int] = Future {
       logger.info("starting f0")
       val ct = new ClientTests
-      ct.queryItem
+      ct.queryItem()
       logger.info("finished f0")
       5
     }
@@ -297,7 +289,7 @@ object ClientTest {
     val f1: Future[Int] = Future {
       logger.info("starting f1")
       val ct = new ClientTests
-      ct.queryStoreSales
+      ct.queryStoreSales()
       logger.info("finished f1")
       6
     }
@@ -311,14 +303,14 @@ object ClientTest {
     // scalastyle:on awaitresult
   }
   def main(args: scala.Array[String]): Unit = {
-    BasicConfigurator.configure
+    BasicConfigurator.configure()
     val ct = new ClientTests
     val testName = if (args.length == 0) "call_center" else args(0)
     testName match {
-      case "call_center" => ct.queryCallCenter
-      case "web_returns" => ct.queryWebReturns
-      case "item" => ct.queryItem
-      case "store_sales" => ct.queryStoreSales
+      case "call_center" => ct.queryCallCenter()
+      case "web_returns" => ct.queryWebReturns()
+      case "item" => ct.queryItem()
+      case "store_sales" => ct.queryStoreSales()
       case test@_ => logger.warn("Unknown test " + test)
     }
   }

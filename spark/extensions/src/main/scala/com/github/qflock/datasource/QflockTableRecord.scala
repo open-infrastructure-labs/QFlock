@@ -14,30 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.server
+package com.github.qflock.datasource
 
-import org.apache.log4j.{BasicConfigurator, ConsoleAppender, Level, Logger, PatternLayout}
+import scala.collection._
+import scala.collection.JavaConverters._
 
-object ServerTest {
-  def setupLogger: Unit = {
-    val console = new ConsoleAppender()
-    val PATTERN = "%d{dd MMM yyyy HH:mm:ss.SSS [%p|%c|%C{1}] %m%n"
-    console.setLayout(new PatternLayout(PATTERN))
-    console.setThreshold(Level.INFO)
-    console.activateOptions()
-    Logger.getRootLogger.addAppender(console)
+
+case class QflockTableRecord(var offset: Int, var count: Int, var freed: Boolean) {
+
+  def fill(off: Int, cnt: Int): Unit = {
+    offset = off
+    count = cnt
+    freed = false
   }
-  def main(args: scala.Array[String]): Unit = {
-    val mode = if (args.length > 0) {
-      args(0)
-    } else "server"
-    if (mode == "server") {
-      // BasicConfigurator.configure
-      // setupLogger
-      val server = new Server("qflock-jdbc-dc2", 9860)
-      server.start()
-    } else {
 
-    }
+  def free(): Unit = {
+    freed = true
   }
 }

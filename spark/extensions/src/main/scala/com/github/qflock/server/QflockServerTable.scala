@@ -23,13 +23,18 @@ import org.slf4j.LoggerFactory
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.hive.extension.ExtHiveUtils
 
-
+/** Is a table represented by a hive table instance, and a
+ *  set of temporary spark view which this object creates.
+ * @param dbName database name as it appears in metastore.
+ * @param tableName name of the table as it appears in metastore.
+ * @param maxViews number of views to create for this table.
+ */
 class QflockServerTable(dbName: String, tableName: String, maxViews: Integer = 4) {
   private val logger = LoggerFactory.getLogger(getClass)
-  val spark = SparkSession.builder.getOrCreate
-  val table: Table = ExtHiveUtils.getTable(dbName, tableName)
+  private val spark = SparkSession.builder.getOrCreate
+  private val table: Table = ExtHiveUtils.getTable(dbName, tableName)
   def getTableName: String = tableName
-  val schema = getSchema
+  private val schema = getSchema
   def getSchema: String = {
     def convert_col(dType: String): String = {
       dType match {
@@ -39,12 +44,18 @@ class QflockServerTable(dbName: String, tableName: String, maxViews: Integer = 4
       }
     }
     // each field in the schema has name:type:nullable
-    val s = table.getSd().getCols().toArray.map(col => {
+    val s = table.getSd.getCols.toArray.map(col => {
       val c = col.asInstanceOf[FieldSchema]
       s"${c.getName}:${convert_col(c.getType)}:true"
     })
     s.mkString(",")
   }
+
+  /** Creates a spark view for the given table with a specific
+   *  request id.  This request id refers to the
+   *  set of parameters we are passing it in the QflockTableDescriptor.
+   * @param requestId request id of qflock table descriptor.
+   */
   def createView(requestId: Integer): Unit = {
     val df = spark.read
       .format("qflockDs")
@@ -55,13 +66,13 @@ class QflockServerTable(dbName: String, tableName: String, maxViews: Integer = 4
       .option("dbName", table.getDbName)
       .option("requestId", requestId.toString)
       .load()
-    val viewName = s"${table.getTableName}_${requestId}"
+    val viewName = s"${table.getTableName}_$requestId"
     logger.info(s"Create view for table: ${table.getDbName}:${table.getTableName} " +
-                s"request_id: ${requestId} " +
+                s"request_id: $requestId " +
                 s"viewName: $viewName")
     df.createOrReplaceTempView(viewName)
   }
-  def createViews: Unit = {
+  def createViews(): Unit = {
     for (requestId <- Range(0, maxViews)) {
       createView(requestId)
     }
@@ -87,8 +98,8 @@ object QflockServerTable {
     }
   }
   def getAllTables: Array[QflockServerTable] = {
-    ExtHiveUtils.getDatabases.map { d =>
+    ExtHiveUtils.getDatabases().flatMap { d =>
       getTables(d)
-    }.flatten
+    }
   }
 }

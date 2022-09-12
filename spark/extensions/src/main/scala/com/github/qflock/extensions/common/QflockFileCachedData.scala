@@ -21,16 +21,23 @@ import java.io.{BufferedOutputStream, DataOutputStream, File, FileOutputStream}
 
 import org.slf4j.{Logger, LoggerFactory}
 
+/** Provides a reference to a file that contains cached data.
+ *  Clients can use this to get an output stream to fill the cache.
+ *  Or clients can use this to get the path to the file containing the cache data.
+ *
+ * @param key - The query to be used as a key.
+ * @param partition - The partition id for this specific query.
+ */
 class QflockFileCachedData(key: String, partition: Int) {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   private val generation = QflockFileCachedData.getGeneration
-  private val cacheFile = s"/qflock/spark/build/cache/cache_data_${generation}_${partition}.bin"
+  private val cacheFile = s"/qflock/spark/build/cache/cache_data_${generation}_$partition.bin"
   logger.info(s"stream cache gen:$generation file:$cacheFile " +
-    s"part:${partition} key:$key")
+    s"part:$partition key:$key")
   var stream: Option[DataOutputStream] = Some(new DataOutputStream(
     new BufferedOutputStream(
       new FileOutputStream(cacheFile))))
-  def close: Unit = {
+  def close(): Unit = {
     if (stream.isDefined) {
       stream.get.flush()
       stream.get.close()
@@ -44,7 +51,7 @@ class QflockFileCachedData(key: String, partition: Int) {
 
 object QflockFileCachedData {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
-  def init: Unit = {
+  def init(): Unit = {
     val dir = new File("/qflock/spark/build/cache")
     for (file <- dir.listFiles) {
       if (!file.isDirectory) {

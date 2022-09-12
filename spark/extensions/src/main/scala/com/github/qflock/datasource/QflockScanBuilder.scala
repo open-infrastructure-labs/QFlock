@@ -26,7 +26,6 @@ import org.apache.spark.sql.types._
 
 
 /** Creates a builder for scan objects.
- *  For hdfs HdfsScan.
  *
  * @param schema the format of the columns
  * @param options the options (see PushdownBatchTable for full list.)

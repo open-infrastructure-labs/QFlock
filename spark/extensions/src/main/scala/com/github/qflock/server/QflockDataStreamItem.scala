@@ -14,20 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package com.github.qflock.server
 
-package com.github.qflock.datasource
 
-import scala.collection._
-import scala.collection.JavaConverters._
-
-import org.apache.spark.sql._
-
-object QflockQueryExecutor {
-  val spark = SparkSession
-  .builder()
-  .getOrCreate()
-  def executeQuery(query: String): Unit = {
-    val df = spark.sql("query")
-    df.show(1000, false)
-  }
+/** Provides an abstract class for handling a data stream in pieces.
+ *  This object is the unit of work enqueued to the data stream.
+ *  The data streamer for each item in the queue will invoke the
+ *  process method, followed by the free method.
+ */
+abstract class QflockDataStreamItem {
+  def process: Long
+  def free(): Unit
 }

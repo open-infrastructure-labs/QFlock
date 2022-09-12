@@ -32,7 +32,9 @@ import org.apache.spark.sql.vectorized.ColumnVector
  *
  *  @param schema definition of the columns
  *  @param batchSize the number of rows in a batch
- *  @param stream the data stream attached to server.
+ *  @param query the text string of sql query
+ *  @param client The client for reading the data
+ *  @param cachedData The FileCachedData client for writing a cache file.
  */
 class QflockCompactColVectReader(schema: StructType,
                                  batchSize: Integer,
@@ -48,10 +50,10 @@ class QflockCompactColVectReader(schema: StructType,
     columnarBatch
   }
   override def close(): Unit = {
-    logger.info(s"Data Read Close $query")
-    client.close
+//    logger.info(s"Data Read Close $query")
+    client.close()
     if (cachedData.isDefined) {
-      cachedData.get.close
+      cachedData.get.close()
     }
   }
   private val stream = client.getStream
@@ -59,11 +61,12 @@ class QflockCompactColVectReader(schema: StructType,
   private var currentBatchSize: Int = 0
   private var batchIdx: Long = 0
   private def waitForBytes(context: String): Unit = {
-    val waitCount = 0
+    var waitCount: Long = 0
     while (stream.available() <= 0) {
       if (waitCount == 0) {
         logger.info(s"bytes not available $context, waiting ${client.toString}")
       }
+      waitCount += 1
       Thread.sleep(1000)
     }
     if (waitCount > 0) {
@@ -76,7 +79,7 @@ class QflockCompactColVectReader(schema: StructType,
      */
     try {
       // waitForBytes("data type read")
-      logger.info(s"Data Read Starting ${query}")
+//      logger.info(s"Data Read Starting $query")
       val magic = stream.readInt()
       if (magic != QflockServerHeader.magic) {
         throw new java.lang.IllegalStateException(s"magic $magic != ${QflockServerHeader.magic}")
@@ -103,7 +106,7 @@ class QflockCompactColVectReader(schema: StructType,
           (0, new Array[Int](0))
     }
   }
-  def writeHeader: Unit = {
+  def writeHeader(): Unit = {
     if (cachedData.isDefined && cachedData.get.shouldWrite) {
       val writeStream = cachedData.get.stream.get
       writeStream.writeInt(QflockServerHeader.magic)
@@ -113,7 +116,7 @@ class QflockCompactColVectReader(schema: StructType,
       }
     }
   }
-  writeHeader
+  writeHeader()
   private val colVectors = QflockCompactColumnVector(batchSize, dataTypes, schema,
                                                      cachedData)
   private val columnarBatch = new ColumnarBatch(colVectors.asInstanceOf[Array[ColumnVector]])
@@ -152,7 +155,7 @@ class QflockCompactColVectReader(schema: StructType,
     columnarBatch.setNumRows(0)
     val rows = readNextBatch()
     if (rows == 0) {
-      logger.info(s"Data Read Batch Complete $query")
+//      logger.info(s"Data Read Batch Complete $query")
     }
     rowsReturned += rows
     columnarBatch.setNumRows(rows.toInt)

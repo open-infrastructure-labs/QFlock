@@ -21,7 +21,7 @@ import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentLinkedQueue
 
-import scala.collection.{mutable, _}
+import scala.collection.mutable
 
 import com.github.qflock.server.QflockDataStreamer
 import com.github.qflock.server.QflockDataStreamItem
@@ -33,8 +33,8 @@ class QflockOutputStreamRecord(var stream: Option[OutputStream]) {
   var freed: Boolean = true
   private val streamer: QflockDataStreamer = new QflockDataStreamer
 
-  def fill(strm: OutputStream): Unit = {
-    stream = Some(strm)
+  def fill(inputStream: OutputStream): Unit = {
+    stream = Some(inputStream)
     freed = false
   }
 

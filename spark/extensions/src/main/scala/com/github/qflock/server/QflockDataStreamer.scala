@@ -16,18 +16,16 @@
  */
 package com.github.qflock.server
 
-import java.io.DataOutputStream
-import java.lang.Thread
 import java.util.concurrent.ArrayBlockingQueue
 
-import org.slf4j.LoggerFactory
 
-abstract class QflockDataStreamItem {
-  def process: Long
-  def free: Unit
-}
+/** Is a thread which represents a streamer of data.
+ * It receives new items to stream via the enqueue method,
+ * and automatically will process these items by calling the process, and free()
+ * methods for each QflockDataStreamItem enqueued.
+ *
+ */
 class QflockDataStreamer extends java.lang.Thread {
-  private val logger = LoggerFactory.getLogger(getClass)
   val queue: ArrayBlockingQueue[QflockDataStreamItem] =
     new ArrayBlockingQueue[QflockDataStreamItem](16)
 
@@ -36,20 +34,25 @@ class QflockDataStreamer extends java.lang.Thread {
     queue.put(item)
   }
   // Check if any streams are still in process of sending data.
-  def streamsOutstanding: Boolean = (queue.size() > 0)
-  def reset: Unit = bytesStreamed = 0
+  def streamsOutstanding: Boolean = queue.size() > 0
+  def reset(): Unit = bytesStreamed = 0
   var bytesStreamed: Long = 0
-  override def run: Unit = {
+  override def run(): Unit = {
     while (true) {
       val item = queue.take()
 //      logger.trace(s"process item ${item.toString}")
       bytesStreamed += item.process
 //      logger.trace(s"process item done ${item.toString}")
-      item.free
+      item.free()
     }
   }
 }
 object QflockDataStreamer {
+  /** When we instantiate a new data streamer, we do so as a
+   *  set of threads for streaming.
+   * @param threads the number of threads for this streamer.
+   * @return array of QflockDataStreamer
+   */
   def apply(threads: Int): Array[QflockDataStreamer] = {
     Array.fill[QflockDataStreamer](threads)(new QflockDataStreamer)
   }

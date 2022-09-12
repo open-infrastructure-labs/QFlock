@@ -25,9 +25,9 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.catalyst.catalog.{CatalogStatistics, CatalogTable}
-import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference, Expression, NamedExpression}
-import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Project, Statistics}
+import org.apache.spark.sql.catalyst.catalog.CatalogTable
+import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference}
+import org.apache.spark.sql.catalyst.plans.logical.{LogicalPlan, Statistics}
 import org.apache.spark.sql.catalyst.plans.logical.statsEstimation.BasicStatsPlanVisitor
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.execution.datasources.LogicalRelation
@@ -54,14 +54,14 @@ class QflockJoinRelation(override val relation: BaseRelation,
                           t.identifier.table))
   def getTableForCol(colName: String): CatalogTable =
     statsParam.catalogTables.get.filter(t =>
-    t.stats.get.colStats.get(colName).isDefined)(0)
+      t.stats.get.colStats.contains(colName)).head
 
   private val colStats =
-    output.map(a => (a.name -> getTableForCol(a.name).stats.get.colStats.get(a.name).get)).toMap
+    output.map(a => a.name -> getTableForCol(a.name).stats.get.colStats(a.name)).toMap
 
   def getTableForColumn(colName: String): Table = {
     tables.filter(t =>
-      t.getParameters.containsKey(QflockJoinRelation.getColSizeParamName(colName)))(0)
+      t.getParameters.containsKey(QflockJoinRelation.getColSizeParamName(colName))).head
   }
   val (colsBytes: Double, colsNames: String) = {
     var bytes: Double = 0
@@ -80,8 +80,8 @@ class QflockJoinRelation(override val relation: BaseRelation,
       QflockLogicalRelation.getColSize(getTableForColumn(y.name), y.name) * rows}.asInstanceOf[Int])
 //     stats.sizeInBytes.longValue().asInstanceOf[Int]
   }
-  def toPlanStats(): Statistics = {
-    val left = statsParam.catalogTables.get(0).stats.get
+  def toPlanStats: Statistics = {
+    val left = statsParam.catalogTables.get.head.stats.get
     val right = statsParam.catalogTables.get(1).stats.get
     if (rowCount.isDefined) {
       val planStats1 = output.flatMap(a =>
@@ -100,7 +100,7 @@ class QflockJoinRelation(override val relation: BaseRelation,
     }
   }
   override def computeStats(): Statistics = {
-    toPlanStats()
+    toPlanStats
 //    catalogTable
 //      .flatMap(_.stats.map(x =>
 //        new CatalogStatistics(x.sizeInBytes,

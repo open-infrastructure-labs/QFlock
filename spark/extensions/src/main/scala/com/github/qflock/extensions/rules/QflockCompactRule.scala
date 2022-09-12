@@ -50,10 +50,10 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  * @param spark the current SparkSession
  */
 case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
-  protected val appId: String = spark.sparkContext.applicationId
+  private val appId: String = spark.sparkContext.applicationId
 //  protected val resultApi: String = "default"
-  protected val resultApi: String = "parquet"
-  protected val resultsPath = spark.conf.get("qflockResultsPath", "data")
+  private val resultApi: String = "parquet"
+  private val resultsPath = spark.conf.get("qflockResultsPath", "data")
   QflockLog.setPath(resultsPath)
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
@@ -370,7 +370,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val opt = new util.HashMap[String, String](relationArgs.options)
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "projectfilter,")
     if (filters.nonEmpty &&
-        filters.filter(f => !f.isInstanceOf[IsNotNull]).nonEmpty) {
+        filters.exists(f => !f.isInstanceOf[IsNotNull])) {
       opt.put("rulelog", opt.getOrDefault("rulelog", "") + "hasfilters,")
     }
     val path = opt.get("path")
@@ -531,7 +531,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // For now we always push down
     if (filtersStatus != PushdownSqlStatus.Invalid) {
       val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
-      val query = pushdownSql.getFilterString()
+      val query = pushdownSql.getFilterString
       // logger.info("Pushdown query " + query)
       query
     } else {
@@ -575,7 +575,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     //    opt.put("queryStats", relationForStats.toString)
     val hdfsScanObject = QflockCompactScan(references.toStructType, opt,
       Some(statsParameters),
-      relationForStats.toPlanStats())
+      relationForStats.toPlanStats)
     val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
       references,
@@ -868,7 +868,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
         val expressions = splitAndExpression(expression.get)
         val pushdownSql = PushdownSQL(references.toStructType, expressions, queryCols,
           referenceMap.asInstanceOf[Map[String, Seq[AttributeReference]]])
-        val expressionString = pushdownSql.getFilterString()
+        val expressionString = pushdownSql.getFilterString
 
         /* Note that the a and be here are used to identify the left and right
          * sides of the join.  All references in the join condition will
@@ -962,8 +962,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       Some(statsParameters), relationArgsLeft.catalogTable)
     val relationForStats = QflockJoinRelation.apply(relationArgs,
       join, opt, references, spark)
-    val relationStats = relationForStats.toPlanStats()
-    val relationBytes = relationStats.sizeInBytes.toLong
+    val relationStats = relationForStats.toPlanStats
     val rowGroupBatchSize = {
       val maxResultBytes = 1024L * 1024L * 200L
 //      val batches = (relationBytes / maxResultBytes) +
@@ -1080,8 +1079,8 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def joinHasFilter(left: LogicalPlan, right: LogicalPlan): Boolean = {
     val relationArgsLeft = QflockRelationArgs(left)
     val relationArgsRight = QflockRelationArgs(right)
-    (relationArgsLeft.get.options.get("rulelog").contains("hasfilters") ||
-     relationArgsRight.get.options.get("rulelog").contains("hasfilters"))
+    relationArgsLeft.get.options.get("rulelog").contains("hasfilters") ||
+     relationArgsRight.get.options.get("rulelog").contains("hasfilters")
   }
 
   def joinValid(join: LogicalPlan,
