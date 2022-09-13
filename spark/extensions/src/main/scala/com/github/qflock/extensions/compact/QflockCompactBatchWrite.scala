@@ -56,6 +56,7 @@ class QflockWriteBufferStream(schema: StructType,
                               outputStream: DataOutputStream,
                               pool: QflockWriteBufferPool)
     extends QflockDataStreamItem {
+  private val logger = LoggerFactory.getLogger(getClass)
   var name: String = ""
   def setName(newName: String): Unit = {
     name = newName
@@ -64,7 +65,14 @@ class QflockWriteBufferStream(schema: StructType,
   override def toString: String = {
     name
   }
-  val compressionLevel = 3
+  // When the buffer gets full, such as when strings fill up the buffer,
+  // this gets set in order to signal to client this buffer needs flush.
+  var isFull: Boolean = false
+  private var numBytes: Int = 0
+  private val compressionLevel = 3
+  private val bufferLength: Array[Int] = {
+    schema.fields.map(x => batchSizeForType(x.dataType))
+  }
   private val compressBuffers: Array[ByteBuffer] = {
     schema.fields.map(x => ByteBuffer.allocate(batchSizeForType(x.dataType)))
   }
@@ -76,7 +84,7 @@ class QflockWriteBufferStream(schema: StructType,
       case IntegerType => batchSize * 4
       case LongType => batchSize * 8
       case DoubleType => batchSize * 8
-      case StringType => batchSize * QflockServerHeader.stringLength
+      case StringType => batchSize * 8 // QflockServerHeader.stringLength
     }
   }
   private def sizeForType(dataType: DataType): Int = {
@@ -151,8 +159,15 @@ class QflockWriteBufferStream(schema: StructType,
       case StringType =>
         (row: SpecializedGetters, ordinal: Int) =>
           val utfBytes = row.getUTF8String(ordinal).getBytes
-          stringLengths(ordinal).putInt(utfBytes.length)
+          val currentBytes = utfBytes.length
+          numBytes += currentBytes
+          if (numBytes >= bufferLength(ordinal) - QflockServerHeader.stringLength) {
+            // logger.info(s"buffer full ${bufferLength(ordinal)} ${toString}")
+            isFull = true
+          }
+          stringLengths(ordinal).putInt(currentBytes)
           dataBuffers(ordinal).put(utfBytes)
+
       // TODO Adds IntervalType support
       case _ => sys.error(s"Unsupported data type $dataType.")
     }
@@ -172,12 +187,14 @@ class QflockWriteBufferStream(schema: StructType,
   private var rows: Int = 0
   def setRows(newRows: Int): Unit = rows = newRows
   def reset(): Unit = {
-    totalCompressedBytes = 0
-    totalUncompressedBytes = 0
+    isFull = false
+    numBytes = 0
+//    totalCompressedBytes = 0
+//    totalUncompressedBytes = 0
   }
-  var totalCompressedBytes: Long = 0
-  var totalUncompressedBytes: Long = 0
-  def process: Long = {
+//  var totalCompressedBytes: Long = 0
+//  var totalUncompressedBytes: Long = 0
+  def process: Unit = {
     for (i <- Range(0, schema.fields.length)) {
       if (schema.fields(i).dataType != StringType) {
 //        logger.trace(s"col $i rows $rows $name")
@@ -240,7 +257,6 @@ class QflockWriteBufferStream(schema: StructType,
         dataBuffers(i).clear()
       }
     }
-    totalCompressedBytes
   }
 }
 case class QflockWriteBufferPool(count: Int,
@@ -282,7 +298,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
   // The stream is used to write data back to the client.
   private val outputStream: DataOutputStream =
     streamDescriptor.stream.get.asInstanceOf[DataOutputStream]
-  private val bufferPoolCount = 1
+  private val bufferPoolCount = 2
   private val bufferPool = QflockWriteBufferPool(bufferPoolCount, schema, outputStream, batchSize)
   private var buffer = bufferPool.allocate
   writeDataFormat()
@@ -311,7 +327,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
   override def write(internalRow: InternalRow): Unit = {
     buffer.writeFields(internalRow)
     rowIndex += 1
-    if (rowIndex >= batchSize) {
+    if (rowIndex >= batchSize || buffer.isFull) {
       totalRows += rowIndex
       // setBufferName
       buffer.setRows(rowIndex)
@@ -340,7 +356,7 @@ class QflockCompactDataWriter(partId: Int, taskId: Long,
       loopCount += 1
       Thread.sleep(100)
     }
-    if (loopCount > 0) {
+    if (loopCount > 100) {
       logger.info(s"done waiting for buffers to free $loopCount")
     }
 //    logger.info(s"rows $totalRows " +

@@ -23,6 +23,6 @@ package com.github.qflock.server
  *  process method, followed by the free method.
  */
 abstract class QflockDataStreamItem {
-  def process: Long
+  def process: Unit
   def free(): Unit
 }

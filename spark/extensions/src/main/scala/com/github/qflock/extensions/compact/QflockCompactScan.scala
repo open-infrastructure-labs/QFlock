@@ -72,7 +72,7 @@ case class QflockCompactScan(schema: StructType,
       for (i <- 0 until partitions) {
         partitionArray += new QflockCompactPartition(index = i,
                                                      offset = i,
-                                                     length = rowGroups,
+                                                     length = 1,
                                                      name = tableName)
       }
     } else if (batchSize > 1) {

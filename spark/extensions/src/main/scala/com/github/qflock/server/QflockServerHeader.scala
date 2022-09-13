@@ -38,7 +38,7 @@ object QflockServerHeader {
   val bytes: Int = 4 * 4
   val stringLength: Int = 120
   val magic: Int = 42424242
-  val batchSize: Int = 256 * 1024
+  val batchSize: Int = 4 * 1024 * 1024
   val streamTerminator: Array[Byte] = {
     val byteBuffer = ByteBuffer.allocate(4 * 4)
     for (_ <- Range(0, 4)) {

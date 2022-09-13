@@ -238,7 +238,7 @@ class AnalyzeData:
             index += 1
 
     def compare(self):
-        print("query,jdbc seconds,spark seconds,gain time,jdbc bytes,spark bytes,gain bytes")
+        print("query,qflock seconds,spark seconds,gain time,qflock bytes,spark bytes,gain bytes")
         for query, jdbc_result in self._jdbc_results.items():
             spark_result = self._baseline_results[query]
 
@@ -319,7 +319,7 @@ class AnalyzeData:
         print(f"all_remote: {','.join(sorted(set(all_remote)))}")
 
     def jdbc_compare(self):
-        print("query,jdbc seconds,jdbc base seconds,spark seconds," +
+        print("query,qflock seconds,jdbc base seconds,spark seconds," +
               "jdbc spark gain time,jdbc base spark gain time,jdbc gain time," +
               "jdbc bytes,jdbc base bytes,spark bytes," +
               "jdbc spark gain bytes,jdbc base spark gain bytes,jdbc gain bytes")

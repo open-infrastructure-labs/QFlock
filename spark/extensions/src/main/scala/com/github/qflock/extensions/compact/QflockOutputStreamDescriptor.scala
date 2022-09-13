@@ -19,6 +19,8 @@ package com.github.qflock.extensions.compact
 
 import java.io.OutputStream
 import java.nio.ByteBuffer
+import java.nio.channels.Channels
+import java.nio.channels.WritableByteChannel
 import java.util.concurrent.ConcurrentLinkedQueue
 
 import scala.collection.mutable
@@ -30,11 +32,18 @@ import com.github.qflock.server.QflockDataStreamItem
 
 class QflockOutputStreamRecord(var stream: Option[OutputStream]) {
 
+  var channel: Option[WritableByteChannel] = None
+  def updateStream(newOutputStream: OutputStream): Unit = {
+    stream = Some(newOutputStream)
+    channel = Some(Channels.newChannel(newOutputStream))
+  }
+
   var freed: Boolean = true
   private val streamer: QflockDataStreamer = new QflockDataStreamer
 
   def fill(inputStream: OutputStream): Unit = {
     stream = Some(inputStream)
+    updateStream(inputStream)
     freed = false
   }
 
@@ -52,6 +61,7 @@ class QflockOutputStreamRecord(var stream: Option[OutputStream]) {
     this.synchronized {
       if (!wroteHeader) {
         wroteHeader = true
+        // channel.get.write(byteBuffer)
         stream.get.write(byteBuffer.array())
         stream.get.flush()
         true

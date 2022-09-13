@@ -40,9 +40,7 @@ class QflockDataStreamer extends java.lang.Thread {
   override def run(): Unit = {
     while (true) {
       val item = queue.take()
-//      logger.trace(s"process item ${item.toString}")
-      bytesStreamed += item.process
-//      logger.trace(s"process item done ${item.toString}")
+      item.process
       item.free()
     }
   }
