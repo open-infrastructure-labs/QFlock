@@ -18,8 +18,10 @@ package com.github.qflock.extensions.common
 
 
 import java.io.{BufferedOutputStream, DataOutputStream, File, FileOutputStream}
+import java.nio.file.{Files, Paths}
 
 import org.slf4j.{Logger, LoggerFactory}
+
 
 /** Provides a reference to a file that contains cached data.
  *  Clients can use this to get an output stream to fill the cache.
@@ -51,9 +53,15 @@ class QflockFileCachedData(key: String, partition: Int) {
 
 object QflockFileCachedData {
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
+  private val cacheDir = "/qflock/spark/build/cache"
   def init(): Unit = {
-    val dir = new File("/qflock/spark/build/cache")
-    for (file <- dir.listFiles) {
+    val path = Paths.get(cacheDir)
+    val dir = new File(cacheDir)
+    if (!Files.exists(path)) {
+      // Create the directory if it does not exist
+      dir.mkdirs()
+    }
+    for (file <- dir.listFiles()) {
       if (!file.isDirectory) {
         logger.info(s"Deleting: ${file.toString}")
         file.delete
