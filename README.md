@@ -60,12 +60,12 @@ benchmark/src/docker-bench.py --query_range "*"
 benchmark/src/docker-bench.py --help
 ```
 
-# Testing with jdbc
+# Testing with Qflock Remote Server 
 ```shell
-- Set metastore locations to be all on dc2 (helps with testing jdbc)
+- Set metastore locations to be all on dc2 (helps with testing remote
 python3 storage/metastore/qflock_metastore_one_location.py dc2
 - Or split locations between dc2 and dc2 evenly
 python3 storage/metastore/qflock_metastore_split_locations.py
-- Run all benchmark queries against jdbc server
-benchmark/src/docker-bench.py --query_range "*" -ext jdbc
+- Run all benchmark queries against Qflock Remote Server
+benchmark/src/docker-bench.py --query_range "*" -ext remote
 ```
