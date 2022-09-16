@@ -48,10 +48,12 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  *  that needs to be transferred.
  * @param spark the current SparkSession
  */
-case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
-  protected val appId: String = spark.sparkContext.applicationId
+case class QflockJdbcRule(spark: SparkSession) extends Rule[LogicalPlan] {
+  private val appId: String = spark.sparkContext.applicationId
 //  protected val resultApi: String = "default"
-  protected val resultApi: String = "parquet"
+  private val resultApi: String = "parquet"
+  private val resultsPath = spark.conf.get("qflockResultsPath", "data")
+  QflockLog.setPath(resultsPath)
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -151,7 +153,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       return false
     }
     child match {
-      case DataSourceV2ScanRelation(_, scan, output) =>
+      case DataSourceV2ScanRelation(_, scan, output, _) =>
         val isJoin = scan match {
           case QflockJdbcScan(_, _, statsParam, _)
             if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
@@ -178,7 +180,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       return false
     }
     child match {
-      case DataSourceV2ScanRelation(_, scan, output) =>
+      case DataSourceV2ScanRelation(_, scan, output, _) =>
         val isJoin = scan match {
           case QflockJdbcScan(_, _, statsParam, _)
             if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
@@ -197,7 +199,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   private def needsRule(child: Any): Boolean = {
     child match {
-      case DataSourceV2ScanRelation(_, scan, _) =>
+      case DataSourceV2ScanRelation(_, scan, _, _) =>
         !scan.isInstanceOf[QflockJdbcScan]
       case qlr@QflockLogicalRelation(relation, _, _, _) =>
         relation match {
@@ -279,7 +281,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       _,
       child: DataSourceV2ScanRelation) =>
         child match {
-          case DataSourceV2ScanRelation(relation, _, _) =>
+          case DataSourceV2ScanRelation(relation, _, _, _) =>
             Some(relation)
           case _ => None
         }
@@ -321,7 +323,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                filters: Seq[Expression],
                                child: LogicalPlan)
   : LogicalPlan = {
-    val generationId = QflockOptimizationRule.getGenerationId
+    val generationId = QflockJdbcOptimizationRule.getGenerationId
     val relationArgs = QflockRelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
 
@@ -368,7 +370,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val opt = new util.HashMap[String, String](relationArgs.options)
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "projectfilter,")
     if (filters.nonEmpty &&
-        filters.filter(f => !f.isInstanceOf[IsNotNull]).nonEmpty) {
+        filters.exists(f => !f.isInstanceOf[IsNotNull])) {
       opt.put("rulelog", opt.getOrDefault("rulelog", "") + "hasfilters,")
     }
     val path = opt.get("path")
@@ -377,7 +379,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("appid", fullAppId)
     opt.put("path", path)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
-    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("resultspath", resultsPath)
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
@@ -422,7 +424,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references,
-      relationArgs.catalogTable.get)
+      None, relationArgs.catalogTable.get)
 //    val scanRelation = DataSourceV2ScanRelation(ndpRel.get, hdfsScanObject, references)
     val withFilter = {
       if (filtersStatus == PushdownSqlStatus.FullyValid) {
@@ -528,7 +530,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     // For now we always push down
     if (filtersStatus != PushdownSqlStatus.Invalid) {
       val pushdownSql = PushdownSQL(references.toStructType, filters, queryCols)
-      val query = pushdownSql.getFilterString()
+      val query = pushdownSql.getFilterString
       // logger.info("Pushdown query " + query)
       query
     } else {
@@ -572,10 +574,10 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     //    opt.put("queryStats", relationForStats.toString)
     val hdfsScanObject = QflockJdbcScan(references.toStructType, opt,
       Some(statsParameters),
-      relationForStats.toPlanStats())
+      relationForStats.toPlanStats)
     val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
-      references,
+      references, None,
       relationArgs.catalogTable.get)
     scanRelation
   }
@@ -681,11 +683,11 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case ScanOperation(_, _,
                          child: DataSourceV2ScanRelation) =>
         val relationScan = child match {
-          case DataSourceV2ScanRelation(_, scan, _) =>
+          case DataSourceV2ScanRelation(_, scan, _, _) =>
             scan
         }
         val scanOpts = relationScan match {
-          case ParquetScan(_, _, _, _, _, _, _, opts, _, _) =>
+          case ParquetScan(_, _, _, _, _, _, _, opts, _, _, _) =>
             opts
           case QflockJdbcScan(_, opts, _, _) =>
             opts
@@ -865,7 +867,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
         val expressions = splitAndExpression(expression.get)
         val pushdownSql = PushdownSQL(references.toStructType, expressions, queryCols,
           referenceMap.asInstanceOf[Map[String, Seq[AttributeReference]]])
-        val expressionString = pushdownSql.getFilterString()
+        val expressionString = pushdownSql.getFilterString
 
         /* Note that the a and be here are used to identify the left and right
          * sides of the join.  All references in the join condition will
@@ -899,7 +901,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def transformJoin(join: LogicalPlan, left: LogicalPlan, right: LogicalPlan,
                     joinType: JoinType,
                     expression: Option[Expression]): LogicalPlan = {
-    val generationId = QflockOptimizationRule.getGenerationId
+    val generationId = QflockJdbcOptimizationRule.getGenerationId
     val relationArgsLeft = QflockRelationArgs(left).get
     val relationArgsRight = QflockRelationArgs(right).get
     val attrReferencesEither = getAttributeReferences(join.output)
@@ -914,7 +916,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val fullAppId = s"$appId$testNum-$generationId"
     opt.put("appid", fullAppId)
     opt.put("url", spark.conf.get("qflockJdbcUrl"))
-    opt.put("resultspath", spark.conf.get("qflockResultsPath", "data"))
+    opt.put("resultspath", resultsPath)
     opt.put("queryname", spark.conf.get("qflockQueryName"))
     opt.put("format", "parquet")
     opt.put("driver", "com.github.qflock.jdbc.QflockDriver")
@@ -960,8 +962,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       Some(statsParameters), relationArgsLeft.catalogTable)
     val relationForStats = QflockJoinRelation.apply(relationArgs,
       join, opt, references, spark)
-    val relationStats = relationForStats.toPlanStats()
-    val relationBytes = relationStats.sizeInBytes.toLong
+    val relationStats = relationForStats.toPlanStats
     val rowGroupBatchSize = {
       val maxResultBytes = 1024L * 1024L * 200L
 //      val batches = (relationBytes / maxResultBytes) +
@@ -987,7 +988,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
       relationStats)
     val ndpRel = getNdpRelation(opt.get("path"), schemaStr)
     val scanRelation = new QflockDataSourceV2ScanRelation(ndpRel.get, hdfsScanObject,
-      references,
+      references, None,
       relationArgsLeft.catalogTable.get)
     scanRelation
   }
@@ -996,7 +997,7 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     plan match {
       case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
         child match {
-          case DataSourceV2ScanRelation(_, scan, _) =>
+          case DataSourceV2ScanRelation(_, scan, _, _) =>
             if (scan.isInstanceOf[QflockJdbcScan]) {
               scan match {
                 case QflockJdbcScan(_, _, params, _ ) =>
@@ -1037,7 +1038,6 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   }
   def checkJoin(plan: LogicalPlan): LogicalPlan = {
     val queryName = spark.conf.get("qflockQueryName")
-    val resultsPath = spark.conf.get("qflockResultsPath", "data")
     plan.transform {
       case j@Join(left, right, joinType, condition, joinHint) =>
         val (lValid, lTable) = checkJoinChild(left)
@@ -1046,14 +1046,12 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
           QflockLog.log(s"queryName:$queryName joinStatus:valid " +
                         s"tables:${rTable.get},${lTable.get} " +
                         s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}",
-                        path = resultsPath)
+                        s"condition:$condition " + s"plan:${j.toString}")
         } else if (lTable.isDefined && rTable.isDefined) {
           QflockLog.log(s"queryName:$queryName joinStatus:invalid " +
                         s"tables:${rTable.get},${lTable.get} " +
                         s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}",
-                        path = resultsPath)
+                        s"condition:$condition " + s"plan:${j.toString}")
         }
         j
     }
@@ -1081,8 +1079,8 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def joinHasFilter(left: LogicalPlan, right: LogicalPlan): Boolean = {
     val relationArgsLeft = QflockRelationArgs(left)
     val relationArgsRight = QflockRelationArgs(right)
-    (relationArgsLeft.get.options.get("rulelog").contains("hasfilters") ||
-     relationArgsRight.get.options.get("rulelog").contains("hasfilters"))
+    relationArgsLeft.get.options.get("rulelog").contains("hasfilters") ||
+     relationArgsRight.get.options.get("rulelog").contains("hasfilters")
   }
 
   def joinValid(join: LogicalPlan,
@@ -1112,15 +1110,15 @@ case class QflockRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val after = pushJoin(pushAggregate(pushFilterProject(inputPlan)))
 //    val after = pushAggregate(pushFilterProject(inputPlan))
 //    val after = pushFilterProject(inputPlan)
-    after
+   after
   }
 }
-object QflockOptimizationRule extends Rule[LogicalPlan] {
+object QflockJdbcOptimizationRule extends Rule[LogicalPlan] {
   val spark: SparkSession =
     SparkSession.builder().appName("Extra optimization rules")
       .getOrCreate()
   def apply(logicalPlan: LogicalPlan): LogicalPlan = {
-    QflockRule(spark).apply(logicalPlan)
+    QflockJdbcRule(spark).apply(logicalPlan)
   }
   private var generationId: Int = 0
 
@@ -1129,7 +1127,7 @@ object QflockOptimizationRule extends Rule[LogicalPlan] {
     generationId
   }
 }
-object QflockRuleBuilder {
+object QflockJdbcRuleBuilder {
   var injected: Boolean = false
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def injectExtraOptimization(): Unit = {
@@ -1138,6 +1136,6 @@ object QflockRuleBuilder {
         .getOrCreate()
     // import testSparkSession.implicits._
     logger.info(s"added QflockOptimizationRule to session $testSparkSession")
-    testSparkSession.experimental.extraOptimizations = Seq(QflockOptimizationRule)
+    testSparkSession.experimental.extraOptimizations = Seq(QflockJdbcOptimizationRule)
   }
 }

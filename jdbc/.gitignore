@@ -1,3 +1,4 @@
+build/
 docker/thrift-0.16.0.tar.gz
 driver/build/
 driver/clean.sh

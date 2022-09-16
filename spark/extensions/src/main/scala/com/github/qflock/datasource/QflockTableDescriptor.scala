@@ -19,20 +19,18 @@ package com.github.qflock.datasource
 import scala.collection._
 import scala.collection.JavaConverters._
 
-
-case class QflockTableRecord(var offset: Int, var count: Int, var freed: Boolean) {
-
-  def fill(off: Int, cnt: Int): Unit = {
-    offset = off
-    count = cnt
-    freed = false
-  }
-
-  def free(): Unit = {
-    freed = true
-  }
-}
-
+/** Provides a mechanism for passing arguments to our data source.
+ *  The reason this is needed is since we are required to create
+ *  views beforehand which contain all the needed arguments to our data source.
+ *  This is required for the Spark API, which only allows view names to be used
+ *  to specify a table as part of a complex query via spark.sql("querytext").
+ *  When we create those views, we provide the "requestId".
+ *  This number or tag called requestId is used to identify a slot in our
+ *  table descriptor which contains the arguments to be passed to our data source.
+ *
+ * @param name
+ * @param requests
+ */
 case class QflockTableDescriptor(name: String, requests: Int) {
   private val requestMap = {
 

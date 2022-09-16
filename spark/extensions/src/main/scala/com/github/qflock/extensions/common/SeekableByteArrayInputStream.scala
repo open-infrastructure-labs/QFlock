@@ -20,23 +20,15 @@
 
 package com.github.qflock.extensions.common
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream}
-import java.io.IOException
+import java.io.{ByteArrayInputStream, IOException}
 
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.FileStatus
-import org.apache.hadoop.fs.FileSystem
-import org.apache.hadoop.fs.Path
-import org.apache.hadoop.fs.PositionedReadable
-import org.apache.hadoop.fs.Seekable
-import org.apache.parquet.hadoop.util.HadoopStreams
-import org.apache.parquet.io.InputFile
-import org.apache.parquet.io.SeekableInputStream
+import org.apache.hadoop.fs.{PositionedReadable, Seekable}
+
 
 class SeekableByteArrayInputStream(buffer: Array[Byte])
   extends ByteArrayInputStream(buffer) with Seekable with PositionedReadable {
 
-  override def getPos(): Long = {
+  override def getPos: Long = {
     pos
   }
   override def seek(pos: Long): Unit = {
@@ -44,13 +36,13 @@ class SeekableByteArrayInputStream(buffer: Array[Byte])
       throw new IllegalStateException()
     }
     reset()
-    var skipped = skip(pos)
+    val skipped = skip(pos)
 
     if (skipped != pos) {
       throw new IOException()
     }
   }
-  def getCount(): Int = count
+  def getCount: Int = count
   override def seekToNewSource(targetPos: Long): Boolean = {
     false
   }

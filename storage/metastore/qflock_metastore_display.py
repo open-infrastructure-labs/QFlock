@@ -56,7 +56,14 @@ def get_storage_size(location: str):
 
 
 if __name__ == '__main__':
-    storage_ip = get_docker_ip('qflock-storage-dc1')
+    data_center = "dc1"
+    if len(sys.argv) > 1:
+        data_center = sys.argv[1]
+
+    server = f"qflock-storage-{data_center}"
+    print(f"server: {server}")
+
+    storage_ip = get_docker_ip(server)
     print(f"storage ip: {storage_ip}")
     client_transport = TSocket.TSocket(storage_ip, 9084)
     client_transport = TTransport.TBufferedTransport(client_transport)

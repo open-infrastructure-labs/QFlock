@@ -70,10 +70,10 @@ class BenchmarkResult:
     def filtered_explain(self):
         new_explain_text = ""
         for line in self.explain_text.splitlines():
-            if "== Physical Plan ==" in line:
-                break
-            elif "== Optimized Logical Plan" not in line:
-                new_explain_text += line + "\n"
+        #     if "== Physical Plan ==" in line:
+        #         break
+        #     elif "== Optimized Logical Plan" not in line:
+            new_explain_text += line + "\n"
         return new_explain_text
 
     def formatted_df(self):
@@ -106,8 +106,7 @@ class BenchmarkResult:
                 logging.info(f"csv output path is {output_path}")
                 if self._save_data:
                     logging.info(f"saving formatted output")
-                    self.formatted_df() \
-                        .repartition(1) \
+                    self.formatted_df().coalesce(1) \
                         .write.mode("overwrite") \
                         .format("csv") \
                         .option("header", "true") \

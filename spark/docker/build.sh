@@ -44,6 +44,7 @@ then
 fi
 
 echo "build.sh: Building ${SPARK_DOCKER_BASE_NAME} docker"
+echo SPARK_PACKAGE: $SPARK_PACKAGE
 docker build -f Dockerfile --build-arg SPARK_VERSION=$SPARK_VERSION \
                            --build-arg HADOOP_VERSION=$HADOOP_VERSION \
                            -t ${SPARK_DOCKER_BASE_NAME} -f Dockerfile .

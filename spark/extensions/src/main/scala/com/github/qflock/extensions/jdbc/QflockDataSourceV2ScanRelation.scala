@@ -17,7 +17,7 @@
 package com.github.qflock.extensions.jdbc
 
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
-import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference}
+import org.apache.spark.sql.catalyst.expressions.{AttributeMap, AttributeReference, Expression}
 import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, Statistics}
 import org.apache.spark.sql.catalyst.util.truncatedString
 import org.apache.spark.sql.connector.read.{Scan, Statistics => V2Statistics, SupportsReportStatistics}
@@ -36,10 +36,12 @@ class QflockDataSourceV2ScanRelation(
                                      override val relation: DataSourceV2Relation,
                                      override val scan: Scan,
                                      override val output: Seq[AttributeReference],
+                                     keyGroupedPartitioning: Option[Seq[Expression]] = None,
                                      catalogTable: CatalogTable)
-  extends DataSourceV2ScanRelation(relation, scan, output) {
-  def getArgs: Option[(DataSourceV2Relation, Scan, Seq[AttributeReference], CatalogTable)] =
-    Some(relation, scan, output, catalogTable)
+  extends DataSourceV2ScanRelation(relation, scan, output, keyGroupedPartitioning) {
+  def getArgs: Option[(DataSourceV2Relation, Scan, Seq[AttributeReference],
+    Option[Seq[Expression]], CatalogTable)] =
+    Some(relation, scan, output, keyGroupedPartitioning, catalogTable)
   override protected final def otherCopyArgs: Seq[AnyRef] = {
     catalogTable :: Nil
   }

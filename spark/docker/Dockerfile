@@ -75,8 +75,8 @@ ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64
 # Setup Spark Environment
 ARG SPARK_VERSION=
 ENV SPARK_VERSION ${SPARK_VERSION}
-ENV SPARK_PACKAGE spark-${SPARK_VERSION}-bin-hadoop2.7.tgz
-ENV SPARK_PACKAGE_FOLDER spark-${SPARK_VERSION}-bin-hadoop2.7
+ENV SPARK_PACKAGE spark-${SPARK_VERSION}-bin-hadoop2.tgz
+ENV SPARK_PACKAGE_FOLDER spark-${SPARK_VERSION}-bin-hadoop2
 ENV SPARK_PACKAGE_URL https://downloads.apache.org/spark/spark-${SPARK_VERSION}/$SPARK_PACKAGE
 ENV SPARK_SRC /spark
 ENV SPARK_BUILD /build

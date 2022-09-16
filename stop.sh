@@ -1,4 +1,5 @@
 #!/bin/bash
+pushd "$(dirname "$0")" # connect to root
 
 pushd storage
 ./stop.sh
@@ -8,6 +9,10 @@ pushd spark
 ./stop.sh
 popd
 
-pushd jdbc
+# pushd jdbc
+# ./stop.sh
+# popd
+
+pushd spark/extensions/server
 ./stop.sh
 popd

@@ -163,6 +163,8 @@ class QflockBench:
                             help="file for perf results.")
         parser.add_argument("--restart_jdbc", action="store_true",
                             help="Restart the jdbc server.")
+        parser.add_argument("--restart_remote", action="store_true",
+                            help="Restart the remote server.")
         return parser
 
     def _terse_command(self):
@@ -234,6 +236,16 @@ class QflockBench:
         # TODO We should really poll the server to check it is up.
         time.sleep(60)
 
+    def restart_remote(self):
+        ssh_cmd = "ssh qflock-spark-dc2 /scripts/restart_server.sh"
+        result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                shell=True)
+        if result.returncode != 0:
+            print("failed to restart remote server")
+        print("restarted remote server.  Waiting 60 seconds for server to come up.")
+        # TODO We should really poll the server to check it is up.
+        time.sleep(60)
+
     def run_query(self):
         # timestr = time.strftime("%Y%m%d-%H%M%S")
         failure_count = 0
@@ -243,6 +255,8 @@ class QflockBench:
             for q in self._query_list:
                 if idx != 0 and self._args.restart_jdbc and (idx % 10) == 0:
                     self.restart_jdbc()
+                if idx != 0 and self._args.restart_remote and (idx % 10) == 0:
+                    self.restart_remote()
                 cmd = f'./bench.py -f {self._args.file} -ll {self._args.log_level} ' + \
                       f'--query_file {q} {" ".join(self._remaining_args)} ' + \
                       f'--test_num {idx} '
@@ -255,6 +269,8 @@ class QflockBench:
                     cmd += '--explain --ext explain'
                 if self._args.extensions == "jdbc":
                     cmd += '--ext jdbc '
+                if self._args.extensions == "remote":
+                    cmd += '--ext remote '
                 if self._args.extensions == "ds":
                     # Auto enable qflock_ds if we are using qflock_ds extension.
                     cmd += '--qflock_ds '
@@ -296,6 +312,8 @@ class QflockBench:
             cmd += '--explain --ext explain '
         if self._args.extensions == "jdbc":
             cmd += '--ext jdbc '
+        if self._args.extensions == "remote":
+            cmd += '--ext remote '
         if self._args.extensions == "ds":
             # Auto enable qflock_ds if we are using qflock_ds extension.
             cmd += '--qflock_ds '

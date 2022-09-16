@@ -11,7 +11,11 @@ pushd  ${ROOT_DIR}/../storage
 ./start_storage_dc.sh dc2
 popd
 
-pushd ${ROOT_DIR}/../jdbc
+# pushd ${ROOT_DIR}/../jdbc
+# ./start.sh
+# popd
+
+pushd ${ROOT_DIR}/../spark/extensions/server
 ./start.sh
 popd
 

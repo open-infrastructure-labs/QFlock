@@ -54,8 +54,12 @@ class Result:
         self.status = d['status']
         self.rows = int(d['rows'])
         self.seconds = float(d['seconds'])
-        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-jdbc-dc2:tx_bytes:eth1'])
+        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-spark-dc2:tx_bytes:eth1'])
         self.spark_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-storage-dc2:tx_bytes:eth1'])
+        self.jdbc_remote_bytes =  int(d['qflock-spark-dc2:tx_bytes:eth1'])
+        self.spark_remote_bytes = int(d['qflock-storage-dc2:tx_bytes:eth1'])
+        self.jdbc_local_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0'])
+        self.spark_local_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0'])
 
 
 class AnalyzeData:
@@ -238,17 +242,29 @@ class AnalyzeData:
             index += 1
 
     def compare(self):
-        print("query,jdbc seconds,spark seconds,gain time,jdbc bytes,spark bytes,gain bytes")
+        print("query,qflock seconds,spark seconds,gain time,qflock total bytes,spark total bytes,gain bytes," +
+              "qflock remote bytes,spark remote bytes,gain bytes," +
+              "qflock remote bytes % of total,spark remote bytes % of total," +
+              "qflock local bytes,spark local bytes,gain bytes,")
         for query, jdbc_result in self._jdbc_results.items():
             spark_result = self._baseline_results[query]
 
             gain_time = (spark_result.seconds - jdbc_result.seconds) / spark_result.seconds
             gain_bytes = (spark_result.spark_bytes - jdbc_result.jdbc_bytes) / spark_result.spark_bytes
+            gain_local_bytes = \
+                (spark_result.spark_local_bytes - jdbc_result.jdbc_local_bytes) / spark_result.spark_local_bytes
+            gain_remote_bytes = \
+                (spark_result.spark_remote_bytes - jdbc_result.jdbc_remote_bytes) / spark_result.spark_remote_bytes
             self._jdbc_results[query].gain_time = gain_time
             self._jdbc_results[query].gain_bytes = gain_bytes
+            qflock_remote_bytes_pct_of_total = jdbc_result.jdbc_remote_bytes / jdbc_result.jdbc_bytes
+            spark_remote_bytes_pct_of_total = spark_result.spark_remote_bytes / spark_result.spark_bytes
             print(query.replace(".sql", ""),
                   jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
                   jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(gain_bytes * 100, 4),
+                  jdbc_result.jdbc_remote_bytes, spark_result.spark_remote_bytes, round(gain_remote_bytes * 100, 4),
+                  round(qflock_remote_bytes_pct_of_total * 100, 4), round(spark_remote_bytes_pct_of_total * 100, 4),
+                  jdbc_result.jdbc_local_bytes, spark_result.spark_local_bytes, round(gain_local_bytes * 100, 4),
                   sep=",")
 
         results_sorted = \
@@ -319,7 +335,7 @@ class AnalyzeData:
         print(f"all_remote: {','.join(sorted(set(all_remote)))}")
 
     def jdbc_compare(self):
-        print("query,jdbc seconds,jdbc base seconds,spark seconds," +
+        print("query,qflock seconds,jdbc base seconds,spark seconds," +
               "jdbc spark gain time,jdbc base spark gain time,jdbc gain time," +
               "jdbc bytes,jdbc base bytes,spark bytes," +
               "jdbc spark gain bytes,jdbc base spark gain bytes,jdbc gain bytes")
