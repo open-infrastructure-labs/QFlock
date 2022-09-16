@@ -14,33 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
-import java.util
+import org.apache.spark.sql.connector.write.{BatchWrite, LogicalWriteInfo, SupportsTruncate, WriteBuilder}
 
-import org.slf4j.LoggerFactory
-
-import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.connector.read.PartitionReader
-
-
-/** PartitionReader of compact api.
- *  This iterator returns an internal row.
+/** Object that we provide to allow spark to create a BatchWrite.
  *
- * @param options the options including "path"
- * @param partition the QflockJdbcPartition to read from
+ * @param writeInfo Contains options, schema, etc.
  */
-class QflockCompactPartitionReader(options: util.Map[String, String],
-                                   partition: QflockCompactPartition)
-  extends PartitionReader[InternalRow] {
-
-  private val logger = LoggerFactory.getLogger(getClass)
-
-  var index = 0
-  def next: Boolean = false
-  def get: InternalRow = {
-    InternalRow.empty
+class QflockRemoteWriteBuilder(writeInfo: LogicalWriteInfo) extends WriteBuilder
+with SupportsTruncate {
+  override def truncate(): WriteBuilder = this
+  override def buildForBatch(): BatchWrite = {
+    new QflockRemoteBatchWrite(writeInfo)
   }
-
-  def close(): Unit = {}
 }

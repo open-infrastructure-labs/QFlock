@@ -122,10 +122,10 @@ class SparkHelper:
             # print("Loading jdbc rule")
             java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockJdbcRuleBuilder")
             gw.jvm.com.github.qflock.extensions.rules.QflockJdbcRuleBuilder.injectExtraOptimization()
-        elif ext == "compact":
-            print("Loading compact rule")
-            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockCompactRuleBuilder")
-            gw.jvm.com.github.qflock.extensions.rules.QflockCompactRuleBuilder.injectExtraOptimization()
+        elif ext == "remote":
+            print("Loading remote rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockRemoteRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockRemoteRuleBuilder.injectExtraOptimization()
 
     def create_table_view(self, table, db_path, db_name):
         if self._jdbc:

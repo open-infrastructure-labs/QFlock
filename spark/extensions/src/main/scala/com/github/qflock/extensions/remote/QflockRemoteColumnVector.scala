@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.io.{DataInputStream, EOFException, PrintWriter, StringWriter}
 import java.nio.ByteBuffer
@@ -36,11 +36,11 @@ import org.apache.spark.unsafe.types.UTF8String
  *  @param schema the schema returned from the server.
  *  @return
  */
-class QflockCompactColumnVector(batchSize: Integer,
-                                dataType: Int,
-                                schema: StructType,
-                                id: String,
-                                cachedData: Option[QflockFileCachedData] = None)
+class QflockRemoteColumnVector(batchSize: Integer,
+                               dataType: Int,
+                               schema: StructType,
+                               id: String,
+                               cachedData: Option[QflockFileCachedData] = None)
     extends ColumnVector(schema: StructType) {
   private val logger = LoggerFactory.getLogger(getClass)
   // private val factory = LZ4Factory.fastestInstance()
@@ -243,7 +243,7 @@ class QflockCompactColumnVector(batchSize: Integer,
   }
 }
 
-object QflockCompactColumnVector {
+object QflockRemoteColumnVector {
   var colIndex = 0
   /** Returns an array of CompactCompressedColumnVectors.
    *  Use of an CompactCompressedColumnVector is always in sets to represent
@@ -258,12 +258,12 @@ object QflockCompactColumnVector {
   def apply(batchSize: Integer,
             dataTypes: Array[Int],
             schema: StructType,
-            cachedData: Option[QflockFileCachedData] = None): Array[QflockCompactColumnVector] = {
-    val vectors = new Array[QflockCompactColumnVector](dataTypes.length)
+            cachedData: Option[QflockFileCachedData] = None): Array[QflockRemoteColumnVector] = {
+    val vectors = new Array[QflockRemoteColumnVector](dataTypes.length)
     for (i <- 0 until dataTypes.length) {
       val id = f"$colIndex%d) $i%d/${dataTypes.length}%d"
       colIndex += 1
-      vectors(i) = new QflockCompactColumnVector(batchSize, dataTypes(i), schema, id,
+      vectors(i) = new QflockRemoteColumnVector(batchSize, dataTypes(i), schema, id,
         cachedData)
     }
     vectors

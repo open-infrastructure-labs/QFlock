@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.util
 
@@ -28,24 +28,24 @@ import org.apache.spark.sql.vectorized.ColumnarBatch
 
 
 
-/** Creates a factory for creating QflockCompactPartitionReaderFactory objects
+/** Creates a factory for creating QflockRemotePartitionReaderFactory objects
  *
  * @param options the options including "path"
  */
-class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
-                                          batchSize: Int = QflockServerHeader.batchSize)
+class QflockRemotePartitionReaderFactory(options: util.Map[String, String],
+                                         var batchSize: Int = QflockServerHeader.batchSize)
   extends PartitionReaderFactory {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def createReader(partition: InputPartition): PartitionReader[InternalRow] = {
-    new QflockCompactPartitionReader(options, partition.asInstanceOf[QflockCompactPartition])
+    new QflockRemotePartitionReader(options, partition.asInstanceOf[QflockRemotePartition])
   }
 
   override def supportColumnarReads(partition: InputPartition): Boolean = true
 
   override def createColumnarReader(partition: InputPartition): PartitionReader[ColumnarBatch] = {
-    val part = partition.asInstanceOf[QflockCompactPartition]
-    val schema = QflockCompactDatasource.getSchema(options)
+    val part = partition.asInstanceOf[QflockRemotePartition]
+    val schema = QflockRemoteDatasource.getSchema(options)
     val query = options.get("query")
     val cachedValue = QflockQueryCache.checkKey(query, part.index)
 
@@ -70,24 +70,26 @@ class QflockCompactPartitionReaderFactory(options: util.Map[String, String],
         QflockQueryCache.insertFileData(query, part.index)
       }
     }
-    //    logger.info("QflockCompactPartitionReaderFactory creating partition " +
+    //    logger.info("QflockRemotePartitionReaderFactory creating partition " +
     //                s"part ${part.index} off ${part.offset} len ${part.length}")
     val client = {
       if (cachedValue.isDefined) {
         new QflockFileClient(cachedDataEntry.get.getFile)
       } else {
-        new QflockCompactClient(query, part.name,
+        new QflockRemoteClient(query, part.name,
           part.offset.toString, part.length.toString,
           schema, options.get("url"))
       }
     }
-//    logger.info("QflockCompactPartitionReaderFactory opened client " +
+//    logger.info("QflockRemotePartitionReaderFactory opened client " +
 //                s"part ${part.index} off ${part.offset} len ${part.length}" +
 //                s"query: " + options.get("query"))
-
-    val reader = new QflockCompactColVectReader(schema, batchSize,
+//    if (schema.fields.length > 10) {
+//      batchSize = 256 * 1024
+//    }
+    val reader = new QflockRemoteColVectReader(schema, batchSize,
                                                 query, client, cachedDataEntry)
-    new QflockCompactColumnarPartitionReader(reader)
+    new QflockRemoteColumnarPartitionReader(reader)
   }
 }
 

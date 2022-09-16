@@ -184,7 +184,7 @@ class BenchmarkApp:
         server_path = None
         if self._args.jdbc or self._args.ext == "jdbc":
             jdbc_config = self._config['benchmark']['jdbc-path']
-        if self._args.ext == "compact":
+        if self._args.ext == "remote":
             server_path = self._config['benchmark']['server-path']
         sh = SparkHelper(verbose=self._args.verbose, jdbc=jdbc_config,
                          server_path=server_path,

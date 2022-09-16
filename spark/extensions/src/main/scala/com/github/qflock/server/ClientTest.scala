@@ -25,7 +25,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.util.Success
 
-import com.github.qflock.extensions.compact.{QflockCompactClient, QflockCompactColVectReader}
+import com.github.qflock.extensions.remote.{QflockRemoteClient, QflockRemoteColVectReader}
 import org.apache.hadoop.hive.metastore.api.Table
 import org.apache.log4j.BasicConfigurator
 import org.slf4j.LoggerFactory
@@ -66,8 +66,8 @@ class ClientTests {
 
   def runQuery(query: String, tableName: String, rgOffset: String, rgCount: String,
                schema: StructType): ListBuffer[String] = {
-    val url = "http://192.168.64.3:9860/test"
-    val client = new QflockCompactClient(query, tableName,
+    val url = "http://192.168.64.3:9860/query"
+    val client = new QflockRemoteClient(query, tableName,
       rgOffset, rgCount, schema, url)
     var data = ListBuffer.empty[String]
     try {
@@ -77,10 +77,11 @@ class ClientTests {
   }
 
   def readData(schema: StructType,
-               batchSize: Int,
-               client: QflockCompactClient): ListBuffer[String] = {
+               inputBatchSize: Int,
+               client: QflockRemoteClient): ListBuffer[String] = {
     val data: ListBuffer[String] = ListBuffer.empty[String]
-    val reader = new QflockCompactColVectReader(schema, batchSize, "", client)
+    val batchSize = if (schema.fields.length > 10) 256 * 1024 else inputBatchSize
+    val reader = new QflockRemoteColVectReader(schema, batchSize, "", client)
     while (reader.next()) {
       val batch = reader.get()
       val rowIterator = batch.rowIterator()
@@ -136,6 +137,16 @@ class ClientTests {
       StructField("cc_tax_percentage", DoubleType, nullable = true)
     ))
     runQueryTpcds("select * from call_center",
+      "call_center", schema)
+  }
+  def queryCallCenter1(): Unit = {
+    logger.info("start call_center_1")
+    val schema = StructType(Array(
+      StructField("cc_call_center_id", StringType, nullable = true),
+      StructField("cc_employees", LongType, nullable = true),
+      StructField("cc_gmt_offset", DoubleType, nullable = true)
+    ))
+    runQueryTpcds("select cc_call_center_id,cc_employees,cc_gmt_offset from call_center",
       "call_center", schema)
   }
 
@@ -308,6 +319,7 @@ object ClientTest {
     val testName = if (args.length == 0) "call_center" else args(0)
     testName match {
       case "call_center" => ct.queryCallCenter()
+      case "call_center_1" => ct.queryCallCenter1()
       case "web_returns" => ct.queryWebReturns()
       case "item" => ct.queryItem()
       case "store_sales" => ct.queryStoreSales()

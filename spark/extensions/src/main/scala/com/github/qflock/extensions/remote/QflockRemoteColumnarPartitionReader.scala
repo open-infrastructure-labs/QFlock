@@ -14,14 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
-import java.io.DataInputStream
+import org.apache.spark.sql.connector.read.PartitionReader
+import org.apache.spark.sql.vectorized.ColumnarBatch
 
-
-abstract class QflockClient {
-
-  def toString: String
-  def close(): Unit
-  def getStream: DataInputStream
+/** PartitionReader which returns a ColumnarBatch, and
+ *  is relying on the QflockColumnarVectorReader to
+ *  fetch the batches.
+ *
+ * @param vectorizedReader - Already initialized QflockColumnarVectorReader
+ *                           which provides the data for the PartitionReader.
+ */
+class QflockRemoteColumnarPartitionReader(vectorizedReader: QflockRemoteColVectReader)
+  extends PartitionReader[ColumnarBatch] {
+  override def next(): Boolean = vectorizedReader.next()
+  override def get(): ColumnarBatch = {
+    val batch = vectorizedReader.get()
+    batch
+  }
+  override def close(): Unit = vectorizedReader.close()
 }
+
+

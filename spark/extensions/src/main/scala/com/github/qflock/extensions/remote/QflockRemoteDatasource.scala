@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.util
 
@@ -32,16 +32,16 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  *  supports pushdown of predicates such as Filter, Project and Aggregate.
  *
  */
-class QflockCompactDatasource extends TableProvider
+class QflockRemoteDatasource extends TableProvider
   with SessionConfigSupport with DataSourceRegister {
 
   private val logger = LoggerFactory.getLogger(getClass)
-  override def toString: String = s"QflockCompactDatasource()"
+  override def toString: String = s"QflockRemoteDatasource()"
   override def supportsExternalMetadata(): Boolean = true
 
   override def inferSchema(options: CaseInsensitiveStringMap): StructType = {
     if (options.get("format") == "parquet") {
-      QflockCompactDatasource.getSchema(options)
+      QflockRemoteDatasource.getSchema(options)
     } else {
       /* Other types like CSV require a user-supplied schema */
       throw new IllegalArgumentException("requires a user-supplied schema")
@@ -51,17 +51,17 @@ class QflockCompactDatasource extends TableProvider
                         transforms: Array[Transform],
                         options: util.Map[String, String]): Table = {
     logger.trace("getTable: Options " + options)
-    new QflockCompactBatchTable(schema, options)
+    new QflockRemoteBatchTable(schema, options)
   }
 
   override def keyPrefix(): String = {
-    "qflockCompact"
+    "qflockRemote"
   }
-  override def shortName(): String = "qflockCompact"
+  override def shortName(): String = "qflockRemote"
 }
 
 
-object QflockCompactDatasource {
+object QflockRemoteDatasource {
   var initialized = false
 
   def getSchema(options: util.Map[String, String]): StructType = {

@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory
  * @param hostName Name of the host to export/bind to
  * @param port port to bind to
  */
-class RemoteServer(hostName: String, port: Integer) {
+class QflockRemoteServer(hostName: String, port: Integer) {
   private val logger = LoggerFactory.getLogger(getClass)
   // Intentionally leave out the address to cause binding to all local adapters.
   private val server = HttpServer.create(new InetSocketAddress(port), 16)
@@ -38,7 +38,7 @@ class RemoteServer(hostName: String, port: Integer) {
   def start(): Unit = {
     QflockQueryHandler.init()
     Logger.getRootLogger.setLevel(Level.INFO)
-    server.createContext("/test", new QflockServerHttpHandler())
+    server.createContext("/query", new QflockServerHttpHandler())
     server.setExecutor(threadPoolExecutor)
     server.start()
     logger.info(s" Server started on port $port")
@@ -48,7 +48,7 @@ class RemoteServer(hostName: String, port: Integer) {
 /** This is a standalone server to be run to connect a
  *  remote spark instance with other spark instances.
  */
-object RemoteServer {
+object QflockRemoteServer {
   def setupLogger(): Unit = {
     val console = new ConsoleAppender()
     val PATTERN = "%d{dd MMM yyyy HH:mm:ss.SSS [%p|%c|%C{1}] %m%n"
@@ -58,7 +58,7 @@ object RemoteServer {
     Logger.getRootLogger.addAppender(console)
   }
   def main(args: scala.Array[String]): Unit = {
-    val server = new RemoteServer("qflock-spark-dc2", 9860)
+    val server = new QflockRemoteServer("qflock-spark-dc2", 9860)
     server.start()
   }
 }

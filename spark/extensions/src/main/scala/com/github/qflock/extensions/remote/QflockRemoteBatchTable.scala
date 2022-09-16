@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.util
 
@@ -37,8 +37,8 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap
  *                "accessKey" and "secretKey" are the credentials for above server.
  *                 "path" is the full path to the s3 file.
  */
-class QflockCompactBatchTable(schema: StructType,
-                              options: util.Map[String, String])
+class QflockRemoteBatchTable(schema: StructType,
+                             options: util.Map[String, String])
   extends Table with SupportsRead with SupportsWrite {
 
   override def name(): String = this.getClass.toString
@@ -50,9 +50,9 @@ class QflockCompactBatchTable(schema: StructType,
   }
 
   override def newScanBuilder(params: CaseInsensitiveStringMap): ScanBuilder =
-    new QflockCompactScanBuilder(schema, options)
+    new QflockRemoteScanBuilder(schema, options)
 
   override def newWriteBuilder(info: LogicalWriteInfo): WriteBuilder =
-    new QflockCompactWriteBuilder(info)
+    new QflockRemoteWriteBuilder(info)
 }
 

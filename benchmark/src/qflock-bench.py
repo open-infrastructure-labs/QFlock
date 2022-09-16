@@ -269,8 +269,8 @@ class QflockBench:
                     cmd += '--explain --ext explain'
                 if self._args.extensions == "jdbc":
                     cmd += '--ext jdbc '
-                if self._args.extensions == "compact":
-                    cmd += '--ext compact '
+                if self._args.extensions == "remote":
+                    cmd += '--ext remote '
                 if self._args.extensions == "ds":
                     # Auto enable qflock_ds if we are using qflock_ds extension.
                     cmd += '--qflock_ds '
@@ -312,8 +312,8 @@ class QflockBench:
             cmd += '--explain --ext explain '
         if self._args.extensions == "jdbc":
             cmd += '--ext jdbc '
-        if self._args.extensions == "compact":
-            cmd += '--ext compact '
+        if self._args.extensions == "remote":
+            cmd += '--ext remote '
         if self._args.extensions == "ds":
             # Auto enable qflock_ds if we are using qflock_ds extension.
             cmd += '--qflock_ds '

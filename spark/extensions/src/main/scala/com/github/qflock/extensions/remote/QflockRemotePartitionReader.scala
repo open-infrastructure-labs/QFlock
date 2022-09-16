@@ -14,30 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
-
-import java.io.{BufferedInputStream, DataInputStream, FileInputStream}
+import java.util
 
 import org.slf4j.LoggerFactory
 
+import org.apache.spark.sql.catalyst.InternalRow
+import org.apache.spark.sql.connector.read.PartitionReader
 
 
-class QflockFileClient(fileName: String)  extends QflockClient {
+/** PartitionReader of compact api.
+ *  This iterator returns an internal row.
+ *
+ * @param options the options including "path"
+ * @param partition the QflockJdbcPartition to read from
+ */
+class QflockRemotePartitionReader(options: util.Map[String, String],
+                                  partition: QflockRemotePartition)
+  extends PartitionReader[InternalRow] {
+
   private val logger = LoggerFactory.getLogger(getClass)
 
-  override def toString: String = {
-    s"QflockFileClient "
+  var index = 0
+  def next: Boolean = false
+  def get: InternalRow = {
+    InternalRow.empty
   }
-  def close(): Unit = {
-    stream.close()
-  }
-  private val stream: DataInputStream = getQueryStream
-  def getStream: DataInputStream = stream
 
-  private def getQueryStream: DataInputStream = {
-    new DataInputStream(
-      new BufferedInputStream(
-        new FileInputStream(fileName)))
-  }
+  def close(): Unit = {}
 }

@@ -18,7 +18,7 @@ package com.github.qflock.server
 
 import java.io.{EOFException, OutputStream, PrintWriter, StringWriter}
 
-import com.github.qflock.extensions.compact.QflockOutputStreamDescriptor
+import com.github.qflock.extensions.remote.QflockOutputStreamDescriptor
 import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.SparkSession
@@ -92,7 +92,7 @@ object QflockQueryHandler {
       val df = spark.sql(newQuery)
       df // .repartition(1)
         // .orderBy((df.columns.toSeq map { x => col(x) }).toArray: _*)
-        .write.format("qflockCompact")
+        .write.format("qflockRemote")
         .mode("overwrite")
         .option("outStreamRequestId", writeRequestId)
         .option("rgoffset", offset)

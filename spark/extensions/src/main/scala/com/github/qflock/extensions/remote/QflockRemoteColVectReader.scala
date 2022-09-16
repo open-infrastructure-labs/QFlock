@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import com.github.qflock.extensions.common.QflockFileCachedData
 import com.github.qflock.extensions.jdbc.QflockColumnarVectorReader
@@ -36,11 +36,11 @@ import org.apache.spark.sql.vectorized.ColumnVector
  *  @param client The client for reading the data
  *  @param cachedData The FileCachedData client for writing a cache file.
  */
-class QflockCompactColVectReader(schema: StructType,
-                                 batchSize: Integer,
-                                 query: String,
-                                 client: QflockClient,
-                                 cachedData: Option[QflockFileCachedData] = None)
+class QflockRemoteColVectReader(schema: StructType,
+                                batchSize: Integer,
+                                query: String,
+                                client: QflockClient,
+                                cachedData: Option[QflockFileCachedData] = None)
     extends QflockColumnarVectorReader {
   private val logger = LoggerFactory.getLogger(getClass)
   override def next(): Boolean = {
@@ -117,7 +117,7 @@ class QflockCompactColVectReader(schema: StructType,
     }
   }
   writeHeader()
-  private val colVectors = QflockCompactColumnVector(batchSize, dataTypes, schema,
+  private val colVectors = QflockRemoteColumnVector(batchSize, dataTypes, schema,
                                                      cachedData)
   private val columnarBatch = new ColumnarBatch(colVectors.asInstanceOf[Array[ColumnVector]])
   /** Fetches the next set of columns from the stream, returning the

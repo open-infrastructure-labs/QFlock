@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.util
 import java.util.OptionalLong
@@ -33,10 +33,10 @@ import org.apache.spark.sql.types._
  *
  * @param options the options including "path"
  */
-case class QflockCompactScan(schema: StructType,
-                             options: util.Map[String, String],
-                             statsParams: Option[Any] = None,
-                             stats: Statistics = Statistics(0, Some(0)))
+case class QflockRemoteScan(schema: StructType,
+                            options: util.Map[String, String],
+                            statsParams: Option[Any] = None,
+                            stats: Statistics = Statistics(0, Some(0)))
   extends Scan with Batch with SupportsReportStatistics {
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -70,7 +70,7 @@ case class QflockCompactScan(schema: StructType,
       // generate one partition per batch.
       // last partition gets any remainder row groups
       for (i <- 0 until partitions) {
-        partitionArray += new QflockCompactPartition(index = i,
+        partitionArray += new QflockRemotePartition(index = i,
                                                      offset = i,
                                                      length = 1,
                                                      name = tableName)
@@ -86,7 +86,7 @@ case class QflockCompactScan(schema: StructType,
           if (i == partitions - 1) rowGroups - (batchSize * i)
           else batchSize
         }
-        partitionArray += new QflockCompactPartition(index = i,
+        partitionArray += new QflockRemotePartition(index = i,
           offset = i * batchSize,
           length = currentRowGroups,
           name = tableName)
@@ -96,7 +96,7 @@ case class QflockCompactScan(schema: StructType,
       partitions = rowGroups
       // Generate one partition per row Group.
       for (i <- 0 until rowGroups) {
-        partitionArray += new QflockCompactPartition(index = i,
+        partitionArray += new QflockRemotePartition(index = i,
           offset = i,
           length = 1,
           name = tableName,
@@ -117,7 +117,7 @@ case class QflockCompactScan(schema: StructType,
     partitions
   }
   override def createReaderFactory(): PartitionReaderFactory = {
-      new QflockCompactPartitionReaderFactory(options)
+      new QflockRemotePartitionReaderFactory(options)
   }
 }
 

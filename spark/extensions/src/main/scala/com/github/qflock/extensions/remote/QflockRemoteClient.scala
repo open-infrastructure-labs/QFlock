@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.io.{BufferedInputStream, ByteArrayInputStream, DataInputStream, StringWriter}
 import java.net.{HttpURLConnection, URL}
@@ -27,12 +27,12 @@ import org.apache.spark.sql.types.StructType
 
 
 
-class QflockCompactClient(query: String,
-                          tableName: String,
-                          rgOffset: String,
-                          rgCount: String,
-                          schema: StructType,
-                          urlPath: String) extends QflockClient {
+class QflockRemoteClient(query: String,
+                         tableName: String,
+                         rgOffset: String,
+                         rgCount: String,
+                         schema: StructType,
+                         urlPath: String) extends QflockClient {
   private val logger = LoggerFactory.getLogger(getClass)
 
   override def toString: String = {
@@ -80,14 +80,14 @@ class QflockCompactClient(query: String,
     con.setReadTimeout(0)
     con.setConnectTimeout(0)
     con.connect()
-    val statusCode = 200 // con.getResponseCode
+    val jsonString = getJson(query)
+    val os = con.getOutputStream
+    try {
+      val input = jsonString.getBytes("utf-8")
+      os.write(input, 0, input.length)
+    } finally if (os != null) os.close()
+    val statusCode = con.getResponseCode
     if (statusCode == 200) {
-      val jsonString = getJson(query)
-      val os = con.getOutputStream
-      try {
-        val input = jsonString.getBytes("utf-8")
-        os.write(input, 0, input.length)
-      } finally if (os != null) os.close()
 //      logger.info(s"opening stream done $tableName $rgOffset $rgCount")
       new DataInputStream(new BufferedInputStream(con.getInputStream))
     } else {

@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import org.apache.spark.Partition
 import org.apache.spark.sql.connector.read.InputPartition
@@ -27,11 +27,11 @@ import org.apache.spark.sql.connector.read.InputPartition
  * @param name the full path of the file
  * @param rows the rows in the file.
  */
-class QflockCompactPartition(var index: Int,
-                             var offset: Long = 0,
-                             var length: Long = 0,
-                             var name: String = "",
-                             var rows: Long = 0)
+class QflockRemotePartition(var index: Int,
+                            var offset: Long = 0,
+                            var length: Long = 0,
+                            var name: String = "",
+                            var rows: Long = 0)
   extends Partition with InputPartition {
 
   override def toString: String = {

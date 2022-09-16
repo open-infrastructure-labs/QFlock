@@ -14,14 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
-import org.apache.spark.sql.connector.write.{BatchWrite, LogicalWriteInfo, SupportsTruncate, WriteBuilder}
+import java.io.DataInputStream
 
-class QflockCompactWriteBuilder(writeInfo: LogicalWriteInfo) extends WriteBuilder
-with SupportsTruncate {
-  override def truncate(): WriteBuilder = this
-  override def buildForBatch(): BatchWrite = {
-    new QflockCompactBatchWrite(writeInfo)
-  }
+/** Interface for defining a client for streaming data from a remote source.
+ *
+ */
+abstract class QflockClient {
+
+  def toString: String
+  def close(): Unit
+  def getStream: DataInputStream
 }

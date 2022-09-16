@@ -23,8 +23,8 @@ import scala.collection.mutable
 import scala.util.{Either, Left => EitherLeft, Right => EitherRight}
 
 import com.github.qflock.extensions.common.{PushdownSQL, PushdownSqlStatus, QflockQueryCache}
-import com.github.qflock.extensions.compact.QflockCompactScan
 import com.github.qflock.extensions.jdbc.{QflockDataSourceV2ScanRelation, QflockLog}
+import com.github.qflock.extensions.remote.QflockRemoteScan
 import org.slf4j.{Logger, LoggerFactory}
 
 import org.apache.spark.sql.SparkSession
@@ -44,17 +44,22 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 
-/** This rule injects our compact data source in cases where
- *  we can use the compact server to efficiently reduce the data
+/** This rule injects our Qflock Remote data source in cases where
+ *  we can use the Qflock Remote Server to efficiently reduce the data
  *  that needs to be transferred.
  * @param spark the current SparkSession
  */
-case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
+case class QflockRemoteRule(spark: SparkSession) extends Rule[LogicalPlan] {
   private val appId: String = spark.sparkContext.applicationId
 //  protected val resultApi: String = "default"
   private val resultApi: String = "parquet"
   private val resultsPath = spark.conf.get("qflockResultsPath", "data")
   QflockLog.setPath(resultsPath)
+  private def qflockLog(msg: String): Unit = {
+    if (true) {
+        QflockLog.log(msg)
+    }
+  }
   @tailrec
   private def getAttribute(origExpression: Any) : Either[String, Option[AttributeReference]] = {
     origExpression match {
@@ -156,13 +161,13 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     child match {
       case DataSourceV2ScanRelation(_, scan, output, _) =>
         val isJoin = scan match {
-          case QflockCompactScan(_, _, statsParam, _)
+          case QflockRemoteScan(_, _, statsParam, _)
             if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
               true
           case _ => false
         }
         // Only consider it a match if it is not a join.
-        if (scan.isInstanceOf[QflockCompactScan] &&
+        if (scan.isInstanceOf[QflockRemoteScan] &&
             (output.length != project.length) && !isJoin) {
           true
         } else {
@@ -183,13 +188,13 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     child match {
       case DataSourceV2ScanRelation(_, scan, output, _) =>
         val isJoin = scan match {
-          case QflockCompactScan(_, _, statsParam, _)
+          case QflockRemoteScan(_, _, statsParam, _)
             if statsParam.isDefined && statsParam.get.isInstanceOf[QflockJoinStatsParameters] =>
                 true
           case _ => false
         }
         // Only consider it a match if it is a join.
-        if (scan.isInstanceOf[QflockCompactScan] &&
+        if (scan.isInstanceOf[QflockRemoteScan] &&
           (output.length != project.length) && isJoin) {
           true
         } else {
@@ -201,7 +206,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   private def needsRule(child: Any): Boolean = {
     child match {
       case DataSourceV2ScanRelation(_, scan, _, _) =>
-        !scan.isInstanceOf[QflockCompactScan]
+        !scan.isInstanceOf[QflockRemoteScan]
       case qlr@QflockLogicalRelation(relation, _, _, _) =>
         relation match {
           // If we injected it just for size estimates, allow it to continue.
@@ -270,7 +275,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
                              Option[DataSourceV2Relation] = {
     val url = spark.conf.get("qflockServerUrl")
     val df = spark.read
-      .format("qflockCompact")
+      .format("qflockRemote")
       .option("format", "parquet")
       .option("url", url)
       .option("schema", schema)
@@ -323,7 +328,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                filters: Seq[Expression],
                                child: LogicalPlan)
   : LogicalPlan = {
-    val generationId = QflockCompactOptimizationRule.getGenerationId
+    val generationId = QflockRemoteOptimizationRule.getGenerationId
     val relationArgs = QflockRelationArgs(child).get
     val attrReferencesEither = getAttributeReferences(project)
 
@@ -384,6 +389,9 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("format", "parquet")
     val query = sqlQuery.replace("TABLE_TAG", relationArgs.catalogTable.get.identifier.table)
     opt.put("query", query)
+    qflockLog(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
+      s"ruleLog:${opt.getOrDefault("rulelog", "")} " +
+      s"query:$query ")
     val catalogTable = relationArgs.catalogTable.get
     val tableName = catalogTable.identifier.table
     val dbName = catalogTable.identifier.database.getOrElse("")
@@ -408,8 +416,6 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
 
     /* Prepare for later caching if needed. */
     QflockQueryCache.addKey(query)
-    QflockLog.log(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
-                  s"query:$query")
     val filterCondition = filters.reduceLeftOption(And)
     val statsParameters = QflockStatsParameters(project, filterCondition,
                                                 relationArgs, attrReferences,
@@ -420,7 +426,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
                                                        filterReferences, opt,
                                                        references, spark)
 //    opt.put("queryStats", relationForStats.toString)
-    val hdfsScanObject = QflockCompactScan(references.toStructType, opt,
+    val hdfsScanObject = QflockRemoteScan(references.toStructType, opt,
       Some(statsParameters),
       relationForStats.toPlanStats(relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(path, schemaStr)
@@ -465,6 +471,9 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val newQuery = s"SELECT $newSelect FROM $trimmedQuery"
     opt.put("query", newQuery)
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "updateproject,")
+    qflockLog(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
+              s"ruleLog:${opt.getOrDefault("rulelog", "")} " +
+              s"query:$newQuery ")
     val references = attrReferences.distinct
     val statsParam = relationArgs.statsParam.get.asInstanceOf[QflockStatsParameters]
     val statsParameters = QflockStatsParameters(
@@ -478,7 +487,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       statsParam.filterReferences, opt,
       references, spark)
     //    opt.put("queryStats", relationForStats.toString)
-    val hdfsScanObject = QflockCompactScan(references.toStructType, opt,
+    val hdfsScanObject = QflockRemoteScan(references.toStructType, opt,
       Some(statsParameters),
       relationForStats.toPlanStats(statsParam.relationArgs.catalogTable.get.stats.get))
     val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
@@ -558,6 +567,9 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("query", newQuery)
     val updateType = if (query.contains("JOIN")) "updatejoin," else "updateproject,"
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + updateType)
+    qflockLog(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
+      s"ruleLog:${opt.getOrDefault("rulelog", "")} " +
+      s"query:$newQuery ")
     val references = attrReferences.distinct
     val statsParamsOrig = relationArgsProject.statsParam.get.asInstanceOf[QflockJoinStatsParameters]
     val join = statsParamsOrig.join
@@ -573,7 +585,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     val relationForStats = QflockJoinRelation.apply(relationArgsJoin,
       statsParameters.join, opt, references, spark)
     //    opt.put("queryStats", relationForStats.toString)
-    val hdfsScanObject = QflockCompactScan(references.toStructType, opt,
+    val hdfsScanObject = QflockRemoteScan(references.toStructType, opt,
       Some(statsParameters),
       relationForStats.toPlanStats)
     val ndpRel = getNdpRelation(opt.get("path"), opt.get("schema"))
@@ -656,7 +668,10 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("query", newQuery)
     opt.put("aggregatequery", "true")
     opt.put("rulelog", opt.getOrDefault("rulelog", "") + "aggregate,")
-    val hdfsScanObject = QflockCompactScan(output.toStructType, opt,
+    qflockLog(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
+      s"ruleLog:${opt.getOrDefault("rulelog", "")} " +
+      s"query:$newQuery ")
+    val hdfsScanObject = QflockRemoteScan(output.toStructType, opt,
                                         relationArgs.statsParam)
     val scanRelation = DataSourceV2ScanRelation(
       relationArgs.relation.asInstanceOf[DataSourceV2Relation],
@@ -690,7 +705,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
         val scanOpts = relationScan match {
           case ParquetScan(_, _, _, _, _, _, _, opts, _, _, _) =>
             opts
-          case QflockCompactScan(_, opts, _, _) =>
+          case QflockRemoteScan(_, opts, _, _) =>
             opts
         }
         !scanOpts.containsKey("ndpjsonaggregate") &&
@@ -902,7 +917,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
   def transformJoin(join: LogicalPlan, left: LogicalPlan, right: LogicalPlan,
                     joinType: JoinType,
                     expression: Option[Expression]): LogicalPlan = {
-    val generationId = QflockCompactOptimizationRule.getGenerationId
+    val generationId = QflockRemoteOptimizationRule.getGenerationId
     val relationArgsLeft = QflockRelationArgs(left).get
     val relationArgsRight = QflockRelationArgs(right).get
     val attrReferencesEither = getAttributeReferences(join.output)
@@ -922,6 +937,9 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     opt.put("format", "parquet")
     val query = getJoinQuery(join, left, right, joinType, expression)
     opt.put("query", query)
+    qflockLog(s"QueryData test:${spark.conf.get("qflockQueryName")} " +
+      s"ruleLog:${opt.getOrDefault("rulelog", "")} " +
+      s"query:$query ")
     opt.remove("tablename")
     opt.remove("numrowgroups")
     opt.remove("numrows")
@@ -983,7 +1001,7 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       }
     }
     opt.put("rowgroupbatchsize", rowGroupBatchSize.toString)
-    val hdfsScanObject = QflockCompactScan(referencesStructType, opt,
+    val hdfsScanObject = QflockRemoteScan(referencesStructType, opt,
       Some(statsParameters),
       relationStats)
     val ndpRel = getNdpRelation(opt.get("path"), schemaStr)
@@ -998,9 +1016,9 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case ScanOperation(_, _, child: DataSourceV2ScanRelation) =>
         child match {
           case DataSourceV2ScanRelation(_, scan, _, _) =>
-            if (scan.isInstanceOf[QflockCompactScan]) {
+            if (scan.isInstanceOf[QflockRemoteScan]) {
               scan match {
-                case QflockCompactScan(_, _, params, _ ) =>
+                case QflockRemoteScan(_, _, params, _ ) =>
                   if (params.isDefined) {
                     params.get match {
                       case s: QflockStatsParameters =>
@@ -1042,17 +1060,17 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
       case j@Join(left, right, joinType, condition, joinHint) =>
         val (lValid, lTable) = checkJoinChild(left)
         val (rValid, rTable) = checkJoinChild(right)
-        if (rValid && lValid) {
-          QflockLog.log(s"queryName:$queryName joinStatus:valid " +
-                        s"tables:${rTable.get},${lTable.get} " +
-                        s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}")
-        } else if (lTable.isDefined && rTable.isDefined) {
-          QflockLog.log(s"queryName:$queryName joinStatus:invalid " +
-                        s"tables:${rTable.get},${lTable.get} " +
-                        s"type:$joinType " + s"hint:$joinHint " +
-                        s"condition:$condition " + s"plan:${j.toString}")
-        }
+//        if (rValid && lValid) {
+//          QflockLog.log(s"queryName:$queryName joinStatus:valid " +
+//                        s"tables:${rTable.get},${lTable.get} " +
+//                        s"type:$joinType " + s"hint:$joinHint " +
+//                        s"condition:$condition " + s"plan:${j.toString}")
+//        } else if (lTable.isDefined && rTable.isDefined) {
+//          QflockLog.log(s"queryName:$queryName joinStatus:invalid " +
+//                        s"tables:${rTable.get},${lTable.get} " +
+//                        s"type:$joinType " + s"hint:$joinHint " +
+//                        s"condition:$condition " + s"plan:${j.toString}")
+//        }
         j
     }
   }
@@ -1113,12 +1131,12 @@ case class QflockCompactRule(spark: SparkSession) extends Rule[LogicalPlan] {
     after
   }
 }
-object QflockCompactOptimizationRule extends Rule[LogicalPlan] {
+object QflockRemoteOptimizationRule extends Rule[LogicalPlan] {
   val spark: SparkSession =
     SparkSession.builder().appName("Extra optimization rules")
       .getOrCreate()
   def apply(logicalPlan: LogicalPlan): LogicalPlan = {
-    QflockCompactRule(spark).apply(logicalPlan)
+    QflockRemoteRule(spark).apply(logicalPlan)
   }
   private var generationId: Int = 0
 
@@ -1127,7 +1145,7 @@ object QflockCompactOptimizationRule extends Rule[LogicalPlan] {
     generationId
   }
 }
-object QflockCompactRuleBuilder {
+object QflockRemoteRuleBuilder {
   var injected: Boolean = false
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   def injectExtraOptimization(): Unit = {
@@ -1136,6 +1154,6 @@ object QflockCompactRuleBuilder {
         .getOrCreate()
     // import testSparkSession.implicits._
     logger.info(s"added QflockOptimizationRule to session $testSparkSession")
-    testSparkSession.experimental.extraOptimizations = Seq(QflockCompactOptimizationRule)
+    testSparkSession.experimental.extraOptimizations = Seq(QflockRemoteOptimizationRule)
   }
 }

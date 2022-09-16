@@ -14,11 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.io.{DataOutputStream, FileOutputStream}
 import java.nio.ByteBuffer
-import java.util
 import java.util.concurrent.ArrayBlockingQueue
 
 import com.github.luben.zstd.Zstd
@@ -27,30 +26,15 @@ import org.slf4j.LoggerFactory
 
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions.SpecializedGetters
-import org.apache.spark.sql.connector.write._
 import org.apache.spark.sql.types._
 
-
-class QflockCompactBatchWrite(writeInfo: LogicalWriteInfo) extends BatchWrite {
-  override def createBatchWriterFactory(physicalWriteInfo: PhysicalWriteInfo):
-               DataWriterFactory = {
-    val jdbcParams = new util.HashMap[String, String](writeInfo.options())
-    new QflockCompactDataWriterFactory(writeInfo.schema(), jdbcParams)
-  }
-
-  override def commit(writerCommitMessages: Array[WriterCommitMessage]): Unit = {
-    // nothing to do for single partition
-  }
-
-  override def abort(writerCommitMessages: Array[WriterCommitMessage]): Unit = {
-  }
-}
-class QflockCompactDataWriterFactory(schema: StructType, options: util.Map[String, String])
-extends DataWriterFactory {
-  override def createWriter(partitionId: Int, taskId: Long): DataWriter[InternalRow] = {
-    new QflockCompactDataWriter(partitionId, taskId, schema, options)
-  }
-}
+/** This is the object that contains data and streams it back to a client.
+ *
+ * @param schema the schema of write data
+ * @param batchSize size of batch in rows to stream data
+ * @param outputStream the stream to push data into.
+ * @param pool - Back pointer to the pool from which we were allocated.
+ */
 class QflockWriteBufferStream(schema: StructType,
                               batchSize: Int,
                               outputStream: DataOutputStream,
@@ -259,131 +243,4 @@ class QflockWriteBufferStream(schema: StructType,
     }
   }
 }
-case class QflockWriteBufferPool(count: Int,
-                                 schema: StructType,
-                                 stream: DataOutputStream,
-                                 batchSize: Int) {
-  val pool: ArrayBlockingQueue[QflockWriteBufferStream] = {
-    val pool = new ArrayBlockingQueue[QflockWriteBufferStream](count)
-    for (_ <- 0 until count) {
-      pool.add(new QflockWriteBufferStream(schema, batchSize, stream, this))
-    }
-    pool
-  }
-  def size: Int = pool.size()
-  def allocate: QflockWriteBufferStream = {
-    pool.take()
-  }
-  var totalCompressedBytes: Long = 0
-  var totalUncompressedBytes: Long = 0
-  def free(item: QflockWriteBufferStream): Unit = {
-//    totalCompressedBytes += item.totalCompressedBytes
-//    totalUncompressedBytes += item.totalUncompressedBytes
-    item.reset()
-    pool.add(item)
-  }
-}
-class QflockCompactDataWriter(partId: Int, taskId: Long,
-                              schema: StructType,
-                              options: util.Map[String, String])
-      extends DataWriter[InternalRow] {
 
-  private val logger = LoggerFactory.getLogger(getClass)
-  private var rowIndex: Int = 0
-  private val batchSize: Int = QflockServerHeader.batchSize
-
-  // Client sets outStreamRequestId after calling fillRequestInfo
-  private val requestId = options.get("outstreamrequestid").toInt
-  private val streamDescriptor = QflockOutputStreamDescriptor.get.getRequestInfo(requestId)
-  // The stream is used to write data back to the client.
-  private val outputStream: DataOutputStream =
-    streamDescriptor.stream.get.asInstanceOf[DataOutputStream]
-  private val bufferPoolCount = 2
-  private val bufferPool = QflockWriteBufferPool(bufferPoolCount, schema, outputStream, batchSize)
-  private var buffer = bufferPool.allocate
-  writeDataFormat()
-  private def writeDataFormat(): Unit = {
-    // The data format consists of an int for magic,
-    // an integer for number of columns,
-    // followed by an integer for the type of each column.
-    val buffer = ByteBuffer.allocate((schema.fields.length + 2) * 4)
-    buffer.putInt(QflockServerHeader.magic)
-    buffer.putInt(schema.fields.length)
-    schema.fields.foreach(s => buffer.putInt(
-      s.dataType match {
-        case LongType => QflockServerHeader.DataType.LongType.id
-        case DoubleType => QflockServerHeader.DataType.DoubleType.id
-        case StringType => QflockServerHeader.DataType.ByteArrayType.id
-      }
-    ))
-    streamDescriptor.writeHeader(buffer)
-  }
-  private def setBufferName(): Unit = {
-    buffer.setName(s"partId/taskId $partId/$taskId rows $rowIndex totalRows $totalRows " +
-      s"rg ${options.get("rgoffset")}/${options.get("rgcount")} ")
-      // s"query ${options.get("query")}")
-  }
-  var totalRows = 0
-  override def write(internalRow: InternalRow): Unit = {
-    buffer.writeFields(internalRow)
-    rowIndex += 1
-    if (rowIndex >= batchSize || buffer.isFull) {
-      totalRows += rowIndex
-      // setBufferName
-      buffer.setRows(rowIndex)
-      streamDescriptor.streamAsync(buffer)
-      buffer = bufferPool.allocate
-      rowIndex = 0
-    }
-  }
-  override def commit(): WriterCommitMessage = {
-    new QflockCompactWriterCommitMessage(partId, taskId)
-  }
-  override def abort(): Unit = {}
-  override def close(): Unit = {
-    if (rowIndex > 0) {
-      totalRows += rowIndex
-      setBufferName()
-      buffer.setRows(rowIndex)
-      streamDescriptor.streamAsync(buffer)
-      rowIndex = 0
-    } else {
-      buffer.free()
-    }
-    var loopCount = 0
-    while (bufferPool.size < bufferPoolCount) {
-      // logger.info(s"waiting for buffers to free $loopCount")
-      loopCount += 1
-      Thread.sleep(100)
-    }
-    if (loopCount > 100) {
-      logger.info(s"done waiting for buffers to free $loopCount")
-    }
-//    logger.info(s"rows $totalRows " +
-//                s"uncompressed ${bufferPool.totalUncompressedBytes} " +
-//                s"compressed ${bufferPool.totalCompressedBytes} ")
-  }
-}
-
-class QflockCompactWriterCommitMessage(partId: Int, taskId: Long) extends WriterCommitMessage {
-
-  def getPartitionId: Int = partId
-  override def equals(obj: Any): Boolean = {
-    if (this == obj) {
-      true
-    } else {
-      if (!obj.isInstanceOf[QflockCompactWriterCommitMessage]) {
-        false
-      } else {
-        val msg = obj.asInstanceOf[QflockCompactWriterCommitMessage]
-        partId == msg.getPartitionId
-      }
-    }
-  }
-  override def hashCode: Int = partId
-
-  override def toString: String =
-    "QflockCompactWriterCommitMessage(" + "partitionId=" + partId + " taskId=" + taskId + ')'
-
-  def getTaskId: Long = taskId
-}

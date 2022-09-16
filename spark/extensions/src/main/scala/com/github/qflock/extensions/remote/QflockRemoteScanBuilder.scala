@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.github.qflock.extensions.compact
+package com.github.qflock.extensions.remote
 
 import java.util
 
@@ -28,8 +28,8 @@ import org.apache.spark.sql.types.StructType
  * @param schema the format of the columns
  * @param options the options to the datasource
  */
-class QflockCompactScanBuilder(schema: StructType,
-                               options: util.Map[String, String])
+class QflockRemoteScanBuilder(schema: StructType,
+                              options: util.Map[String, String])
   extends ScanBuilder {
 
   /** Returns a scan object for this particular query.
@@ -45,7 +45,7 @@ class QflockCompactScanBuilder(schema: StructType,
     if (!options.get("path").contains("hdfs")) {
       throw new Exception(s"endpoint ${options.get("endpoint")} is unexpected")
     }
-    QflockCompactScan(schema, opt, None)
+    QflockRemoteScan(schema, opt, None)
   }
 }
 
