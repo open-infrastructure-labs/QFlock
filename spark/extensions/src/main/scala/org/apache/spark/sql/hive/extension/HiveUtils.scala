@@ -68,7 +68,13 @@ object ExtHiveUtils extends Logging {
     hiveConf
   }
   def getTable(dbName: String, tableName: String): Table = {
-      hiveClient.getTable(dbName, tableName)
+    hiveClient.getTable(dbName, tableName)
+  }
+  def getAllTables(dbName: String): Array[String] = {
+    hiveClient.getAllTables(dbName).asScala.toArray[String]
+  }
+  def getDatabases(): Array[String] = {
+    hiveClient.getAllDatabases.asScala.toArray[String]
   }
 }
 

@@ -29,9 +29,11 @@ class SparkHelper:
     drop_cmd_template = "DROP TABLE IF EXISTS {};"
 
     def __init__(self, app_name="test", use_catalog=False, verbose=False,
-                 jdbc=None, qflock_ds=False, output_path=None, results_path=None):
+                 jdbc=None, server_path=None,
+                 qflock_ds=False, output_path=None, results_path=None):
         self._verbose = verbose
         self._jdbc = jdbc
+        self._server_path = server_path
         self._app_name = app_name
         self._use_catalog = use_catalog
         self._qflock_ds = qflock_ds
@@ -40,7 +42,7 @@ class SparkHelper:
         self.create_spark()
 
     def create_spark(self, query_name="", test_num="0"):
-        if self._jdbc or self._qflock_ds:
+        if self._jdbc or self._qflock_ds or self._server_path:
             self._use_catalog = False
         if self._use_catalog:
             self._spark = pyspark.sql.SparkSession\
@@ -51,6 +53,15 @@ class SparkHelper:
                 .config("qflockJdbcUrl", self._jdbc)\
                 .config("qflockResultsPath", self._results_path)\
                 .enableHiveSupport()\
+                .getOrCreate()
+        elif self._server_path:
+            self._spark = pyspark.sql.SparkSession\
+                .builder\
+                .appName(self._app_name)\
+                .config("qflockQueryName", query_name)\
+                .config("qflockResultsPath", self._results_path)\
+                .config("qflockTestNum", test_num)\
+                .config("qflockServerUrl", self._server_path)\
                 .getOrCreate()
         else:
             self._spark = pyspark.sql.SparkSession\
@@ -86,6 +97,20 @@ class SparkHelper:
         gw.jvm.org.apache.spark.sql.jdbc.JdbcDialects.registerDialect(
             gw.jvm.com.github.qflock.extensions.QflockJdbcDialect())
 
+    def show_cache_stats(self, test):
+        from py4j.java_gateway import java_import
+        gw = self._spark.sparkContext._gateway
+        java_import(gw.jvm, "com.github.qflock.extensions.common.QflockQueryCache")
+        gw.jvm.com.github.qflock.extensions.common.QflockQueryCache.logPotentialHits(test)
+
+    def init_extensions(self, rule):
+        self.load_rule(rule)
+        print("init QflockFileCachedData")
+        from py4j.java_gateway import java_import
+        gw = self._spark.sparkContext._gateway
+        java_import(gw.jvm, "com.github.qflock.extensions.common.QflockFileCachedData")
+        gw.jvm.com.github.qflock.extensions.common.QflockFileCachedData.init()
+
     def load_rule(self, ext):
         from py4j.java_gateway import java_import
         gw = self._spark.sparkContext._gateway
@@ -95,8 +120,12 @@ class SparkHelper:
             gw.jvm.com.github.qflock.extensions.rules.QflockExplainRuleBuilder.injectExtraOptimization()
         elif ext == "jdbc":
             # print("Loading jdbc rule")
-            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockRuleBuilder")
-            gw.jvm.com.github.qflock.extensions.rules.QflockRuleBuilder.injectExtraOptimization()
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockJdbcRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockJdbcRuleBuilder.injectExtraOptimization()
+        elif ext == "remote":
+            print("Loading remote rule")
+            java_import(gw.jvm, "com.github.qflock.extensions.rules.QflockRemoteRuleBuilder")
+            gw.jvm.com.github.qflock.extensions.rules.QflockRemoteRuleBuilder.injectExtraOptimization()
 
     def create_table_view(self, table, db_path, db_name):
         if self._jdbc:
@@ -227,6 +256,7 @@ class SparkHelper:
                                      output_path=self._output_path, spark_helper=self, query=query,
                                      overall_start_time=overall_start_time)
             result.process_result(collect_only)
+            self.show_cache_stats(query_name)
         except (ValueError, Exception):
             print(f"caught error executing query for {query}")
             print(traceback.format_exc())

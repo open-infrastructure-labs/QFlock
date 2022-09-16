@@ -54,12 +54,17 @@ class Result:
         self.status = d['status']
         self.rows = int(d['rows'])
         self.seconds = float(d['seconds'])
-        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-jdbc-dc2:tx_bytes:eth1'])
+        self.jdbc_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-spark-dc2:tx_bytes:eth1'])
         self.spark_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0']) + int(d['qflock-storage-dc2:tx_bytes:eth1'])
+        self.jdbc_remote_bytes =  int(d['qflock-spark-dc2:tx_bytes:eth1'])
+        self.spark_remote_bytes = int(d['qflock-storage-dc2:tx_bytes:eth1'])
+        self.jdbc_local_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0'])
+        self.spark_local_bytes = int(d['qflock-storage-dc1:tx_bytes:eth0'])
 
 
 class AnalyzeData:
-    functions = ["best_fit", "remote_table_filter", "top_10g", "compare"]
+    functions = ["best_fit", "remote_table_filter", "top_10g", "compare",
+                 "join_stats", "jdbc_compare", "join_runtime_stats"]
 
     def __init__(self):
         self._data_dir = ""
@@ -77,6 +82,7 @@ class AnalyzeData:
         self._jdbc_path = os.path.join(self._data_dir, self._args.results_file)
         self._jdbc_path2 = os.path.join(self._data_dir, self._args.results_file2)
         self._baseline_path = os.path.join(self._data_dir, self._args.baseline_file)
+        self._qflock_path = os.path.join(self._data_dir, "qflock_log.txt")
         self.generate_results()
 
     def load_data(self):
@@ -90,9 +96,10 @@ class AnalyzeData:
             self._jdbc_results2 = self.load_results(self._jdbc_path2)
         if os.path.exists(self._baseline_path):
             self._baseline_results = self.load_results(self._baseline_path)
-        qflock_log = ParseQflockLog(os.path.join(self._data_dir, "qflock_log.txt"))
-        self._qflock_log = qflock_log.log
-        self._qflock_log_by_test = qflock_log.log_by_test
+        if os.path.exists(self._qflock_path):
+            qflock_log = ParseQflockLog(self._qflock_path)
+            self._qflock_log = qflock_log.log
+            self._qflock_log_by_test = qflock_log.log_by_test
 
     def curate_data(self):
         for k, q in self._queries.items():
@@ -138,8 +145,9 @@ class AnalyzeData:
         with open(file_name, newline='') as csv_file:
             reader = csv.DictReader(csv_file, delimiter=',')
             for row in reader:
-                r = Result(row)
-                results[r.name] = r
+                if row['status'] == 'PASSED':
+                    r = Result(row)
+                    results[r.name] = r
         return results
 
     def best_fit(self):
@@ -234,28 +242,40 @@ class AnalyzeData:
             index += 1
 
     def compare(self):
-        print("query,jdbc seconds,spark seconds,gain time,jdbc bytes,spark bytes,gain bytes")
+        print("query,qflock seconds,spark seconds,gain time,qflock total bytes,spark total bytes,gain bytes," +
+              "qflock remote bytes,spark remote bytes,gain bytes," +
+              "qflock remote bytes % of total,spark remote bytes % of total," +
+              "qflock local bytes,spark local bytes,gain bytes,")
         for query, jdbc_result in self._jdbc_results.items():
             spark_result = self._baseline_results[query]
 
             gain_time = (spark_result.seconds - jdbc_result.seconds) / spark_result.seconds
             gain_bytes = (spark_result.spark_bytes - jdbc_result.jdbc_bytes) / spark_result.spark_bytes
+            gain_local_bytes = \
+                (spark_result.spark_local_bytes - jdbc_result.jdbc_local_bytes) / spark_result.spark_local_bytes
+            gain_remote_bytes = \
+                (spark_result.spark_remote_bytes - jdbc_result.jdbc_remote_bytes) / spark_result.spark_remote_bytes
             self._jdbc_results[query].gain_time = gain_time
             self._jdbc_results[query].gain_bytes = gain_bytes
+            qflock_remote_bytes_pct_of_total = jdbc_result.jdbc_remote_bytes / jdbc_result.jdbc_bytes
+            spark_remote_bytes_pct_of_total = spark_result.spark_remote_bytes / spark_result.spark_bytes
             print(query.replace(".sql", ""),
                   jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
                   jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(gain_bytes * 100, 4),
+                  jdbc_result.jdbc_remote_bytes, spark_result.spark_remote_bytes, round(gain_remote_bytes * 100, 4),
+                  round(qflock_remote_bytes_pct_of_total * 100, 4), round(spark_remote_bytes_pct_of_total * 100, 4),
+                  jdbc_result.jdbc_local_bytes, spark_result.spark_local_bytes, round(gain_local_bytes * 100, 4),
                   sep=",")
 
         results_sorted = \
             [k for k in sorted(self._jdbc_results, key=lambda x: self._jdbc_results[x].gain_bytes, reverse=False)]
 
-        for query in results_sorted:
-            spark_result = self._baseline_results[query]
-            jdbc_result = self._jdbc_results[query]
-            print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
-                  jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
-                  sep=",")
+        # for query in results_sorted:
+        #     spark_result = self._baseline_results[query]
+        #     jdbc_result = self._jdbc_results[query]
+        #     print(query, jdbc_result.seconds, spark_result.seconds, round(jdbc_result.gain_time * 100, 4),
+        #           jdbc_result.jdbc_bytes, spark_result.spark_bytes, round(jdbc_result.gain_bytes * 100, 4),
+        #           sep=",")
 
     def join_stats(self):
         join_log = ParseQflockJoinLog(os.path.join(self._data_dir, "qflock_log.txt"))
@@ -268,11 +288,16 @@ class AnalyzeData:
                 results[name][tables] = []
                 result = {'local_count': 0,
                           'remote_count': 0,
-                          'small_local_count': 0}
+                          'small_local_count': 0,
+                          'small_remote_count': 0}
+                # if "Outer" in join_info['join_type']:
+                #     print(f"{name} found join_type {join_info['join_type']}")
+                #     continue
+                # print(join_info)
                 for t in join_info['tables']:
                     if self._tables[t].location == 'dc1':
                         result['local_count'] += 1
-                        if int(self._tables[t].bytes) < (1024 * 1024 * 10):
+                        if int(self._tables[t].bytes) < (1024 * 1024 * 50):
                             result['small_local_count'] += 1
                             # if join_info['join_type'] != "Inner":
                             #     print(f"{name} small_local join_type:{join_info['join_type']}")
@@ -280,8 +305,11 @@ class AnalyzeData:
                         # if join_info['join_type'] != "Inner":
                         #     print(f"{name} remote join_type:{join_info['join_type']}")
                         result['remote_count'] += 1
-
+                        if int(self._tables[t].bytes) < (1024 * 1024 * 10):
+                            result['small_remote_count'] += 1
+                # if result['remote_count'] == 2:
                 if result['remote_count'] == 2:
+                    print(f"{name} {join_info['tables']} {join_info['join_type']}")
                     all_remote.append(name)
                 results[name][tables].append(result)
         stats = {'small_local_count': 0,
@@ -307,7 +335,7 @@ class AnalyzeData:
         print(f"all_remote: {','.join(sorted(set(all_remote)))}")
 
     def jdbc_compare(self):
-        print("query,jdbc seconds,jdbc base seconds,spark seconds," +
+        print("query,qflock seconds,jdbc base seconds,spark seconds," +
               "jdbc spark gain time,jdbc base spark gain time,jdbc gain time," +
               "jdbc bytes,jdbc base bytes,spark bytes," +
               "jdbc spark gain bytes,jdbc base spark gain bytes,jdbc gain bytes")
@@ -345,6 +373,30 @@ class AnalyzeData:
                   jdbc_result.seconds, spark_result.seconds, round(gain_time * 100, 4),
                   jdbc_result.jdbc_bytes, spark_result.jdbc_bytes, round(gain_bytes * 100, 4),
                   sep=",")
+
+    def join_runtime_stats(self):
+        print("test,left table,left rows,right table,right rows," +
+              "result rows,result bytes,join_expression,filters,query")
+        for (test, log) in self._qflock_log_by_test.items():
+            # print(f"{test}:{log['app_id']}")
+            for query_info in log['queries'].values():
+                sql = query_info['query']
+                # Remove the IS NOT NULL checks.
+                # sql = re.sub("\w+ IS NOT NULL", "", sql)
+                if "ON" not in sql:
+                    continue
+                items = sql.split("ON")
+                expression = items[1].replace("WHERE", "").lstrip(" ").rstrip(" ")
+                from_items = sql.split("FROM ")
+                tables = [from_items[2].split(" ")[0]]
+                tables.append(from_items[3].split(" ")[0])
+                left = tables[0]
+                right = tables[1]
+                filter = "hasfilters" in query_info['rule_log']
+                print(f'{test},{left},{self._tables[left].rows},' +
+                      f'{right},{self._tables[right].rows},' +
+                      f'{query_info["rows"]},{query_info["bytes"]},' +
+                      f'"{expression}","{filter}","{sql}"')
 
     def parse_args(self):
         parser = argparse.ArgumentParser(formatter_class=RawTextHelpFormatter,
@@ -393,6 +445,8 @@ class AnalyzeData:
                 self.join_stats()
             elif self._args.func == "jdbc_compare":
                 self.jdbc_compare()
+            elif self._args.func == "join_runtime_stats":
+                self.join_runtime_stats()
             else:
                 print(f"Unknown function {self._args.func}")
 

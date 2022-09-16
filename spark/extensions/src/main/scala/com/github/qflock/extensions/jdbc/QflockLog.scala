@@ -19,7 +19,9 @@ package com.github.qflock.extensions.jdbc
 import java.io.FileWriter
 
 object QflockLog {
-  def log(message: String, path: String = "data"): Unit = {
+  private var defaultPath = "data"
+  def setPath(defPath: String): Unit = defaultPath = defPath
+  def log(message: String, path: String = defaultPath): Unit = {
     this.synchronized {
       val fw = new FileWriter(s"$path/qflock_log.txt", true)
       try {

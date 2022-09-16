@@ -45,6 +45,6 @@ class QflockExplainExtensions extends (SparkSessionExtensions => Unit) {
 
 class QflockExtensions extends (SparkSessionExtensions => Unit) {
   def apply(e: SparkSessionExtensions): Unit = {
-    e.injectOptimizerRule(QflockRule)
+    e.injectOptimizerRule(QflockRemoteRule)
   }
 }

@@ -22,6 +22,7 @@ scalaVersion := "2.12.10"
 publishTo := Some(Resolver.file("file",  new File( "/build/releases" )) )
 enablePlugins(JavaServerAppPackaging, UniversalDeployPlugin)
 enablePlugins(LinuxPlugin)
+javacOptions ++= Seq("-source", "1.8", "-target", "1.8")
 
 // We want to execute the tests serially.
 Global / concurrentRestrictions += Tags.limit(Tags.Test, 1)
@@ -29,7 +30,7 @@ Global / concurrentRestrictions += Tags.limit(Tags.Test, 1)
 libraryDependencies ++= Seq(
   "org.apache.commons" % "commons-csv" % "1.8",
   "org.apache.httpcomponents" % "httpcore" % "4.4.11",
-  "org.slf4j" % "slf4j-api" % "1.7.30" % "provided",
+  "org.slf4j" % "slf4j-api" % "1.7.32" % "provided",
   "org.mockito" % "mockito-core" % "2.0.31-beta",
  )
 libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "2.0.0-M3"
@@ -42,11 +43,12 @@ libraryDependencies ++= Seq(
 // Libraries for the ndp client.
 libraryDependencies ++= Seq(
   "org.apache.hadoop" % "hadoop-client" % "3.2.2",
-  "org.slf4j" % "slf4j-simple" % "1.7.21" % Test,
-  "org.apache.logging.log4j" % "log4j-api" % "2.14.0",
-  "org.apache.logging.log4j" % "log4j-core" % "2.14.0",
+  // "org.slf4j" % "slf4j-simple" % "1.7.21" % Test,
+  "org.apache.logging.log4j" % "log4j-api" % "2.17.2",
+  "org.apache.logging.log4j" % "log4j-core" % "2.17.2",
   "org.json" % "json" % "20210307",
   "javax.json" % "javax.json-api" % "1.1.4",
+  "org.glassfish" % "javax.json" % "1.1.4",
   "com.github.luben" % "zstd-jni" % "1.5.0-4",
 )
 lazy val compileScalastyle = taskKey[Unit]("compileScalastyle")

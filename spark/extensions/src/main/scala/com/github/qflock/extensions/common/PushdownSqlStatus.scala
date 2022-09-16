@@ -16,9 +16,11 @@
  */
 package com.github.qflock.extensions.common
 
+import com.github.qflock.extensions.common
+
 object PushdownSqlStatus extends Enumeration {
   type PushdownSqlStatus = Value
-  val FullyValid = Value(1)
-  val PartiallyValid = Value(2)
-  val Invalid = Value(3)
+  val FullyValid: common.PushdownSqlStatus.Value = Value(1)
+  val PartiallyValid: common.PushdownSqlStatus.Value = Value(2)
+  val Invalid: common.PushdownSqlStatus.Value = Value(3)
 }

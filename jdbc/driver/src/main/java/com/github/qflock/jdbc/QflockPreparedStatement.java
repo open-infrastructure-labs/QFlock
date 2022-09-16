@@ -59,7 +59,7 @@ public class QflockPreparedStatement implements PreparedStatement {
         try {
             client = this.connection.lockClient();
             QFResultSet resultset = client.preparedStatement_executeQuery(statement, sql);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset, this.connection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -223,7 +223,7 @@ public class QflockPreparedStatement implements PreparedStatement {
         try {
             client = this.connection.lockClient();
             QFResultSet resultset = client.preparedStatement_getResultSet(statement);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset, this.connection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {

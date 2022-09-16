@@ -90,6 +90,8 @@ struct QFResultSet
   6: list<i32> columnBytes,
   7: list<binary> compressedRows,
   8: list<i32> compressedColumnBytes,
+  9: list<list<i32>> strLenVector,
+  10: list<binary> parquet,
 }
 
 struct QFStaticMetaData

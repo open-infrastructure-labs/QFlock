@@ -1,3 +1,4 @@
 com.github.qflock.extensions.jdbc.QflockJdbcDatasource
 com.github.qflock.extensions.rules.QflockRelationProvider
 com.github.qflock.datasource.QflockDatasource
+com.github.qflock.extensions.remote.QflockRemoteDatasource

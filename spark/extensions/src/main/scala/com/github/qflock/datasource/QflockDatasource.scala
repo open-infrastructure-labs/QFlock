@@ -27,9 +27,16 @@ import org.apache.spark.sql.sources.DataSourceRegister
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
-/** Creates a data source object for Spark that
- *  supports pushdown of predicates such as Filter, Project .
- *
+/** Creates a data source object use for handling
+ *  queries on the remote spark server.
+ *  The main purpose of this data source is to be able to handle
+ *  a subset of row groups for a parquet file.
+ *  The QflockTableDescriptor gives the client an api to specify
+ *  the range of row groups.
+ *  The tableName datasource option specifies the table to partition on row groups.
+ *  The requestId specifies the table descriptor's requestId which contains the
+ *  range of row groups to operate on.
+ *  See the QflockScan for the code where we actually create the partitions.
  */
 class QflockDatasource extends TableProvider
   with SessionConfigSupport with DataSourceRegister {

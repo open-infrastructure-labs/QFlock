@@ -52,7 +52,7 @@ public class QflockStatement implements Statement {
         try {
             client = this.connection.lockClient();
             QFResultSet resultset = client.statement_executeQuery(statement, sql);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset, this.connection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {
@@ -214,7 +214,7 @@ public class QflockStatement implements Statement {
         try {
             client = this.connection.lockClient();
             QFResultSet resultset = client.statement_getResultSet(statement);
-            return new QflockResultSet(resultset);
+            return new QflockResultSet(resultset, this.connection.getClientInfo("tempDir"));
         } catch (QFSQLException e) {
             throw new SQLException(e.reason, e.sqlState, e.vendorCode, e);
         } catch (Exception e) {

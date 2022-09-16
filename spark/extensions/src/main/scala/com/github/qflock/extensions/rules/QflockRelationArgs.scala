@@ -19,6 +19,7 @@ package com.github.qflock.extensions.rules
 import scala.collection.JavaConverters._
 
 import com.github.qflock.extensions.jdbc.QflockJdbcScan
+import com.github.qflock.extensions.remote.QflockRemoteScan
 import org.apache.hadoop.hive.metastore.api.Table
 
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
@@ -46,7 +47,6 @@ case class QflockRelationArgs(relation: Any, scan: Any, output: Seq[AttributeRef
                               options: CaseInsensitiveStringMap,
                               statsParam: Option[Any],
                               catalogTable: Option[CatalogTable]) {
-
   def getTable: Table = {
     val catTable = catalogTable.get
     val tableName = catTable.identifier.table
@@ -64,9 +64,20 @@ object QflockRelationArgs {
    */
   def apply(child: Any): Option[QflockRelationArgs] = {
     val (relation, scan, output, catalogTable) = child match {
-      case DataSourceV2ScanRelation(relation, scan, output) =>
+      case DataSourceV2ScanRelation(relation, scan, output, _) =>
         val catalogTable = scan match {
           case QflockJdbcScan(_, _, statsParam, _) =>
+            if (statsParam.isDefined) {
+              statsParam.get match {
+                case s: QflockStatsParameters =>
+                  s.relationArgs.catalogTable
+                case s: QflockJoinStatsParameters =>
+                  s.relationArgs.catalogTable
+              }
+            } else {
+              None
+            }
+          case QflockRemoteScan(_, _, statsParam, _) =>
             if (statsParam.isDefined) {
               statsParam.get match {
                 case s: QflockStatsParameters =>
@@ -83,13 +94,15 @@ object QflockRelationArgs {
         (relation, relation, output, table)
     }
     val (dataSchema, readSchema, options, statsParam) = scan match {
-      case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _) =>
+      case ParquetScan(_, _, _, dataSchema, readSchema, _, _, opts, _, _, _) =>
         (dataSchema, readSchema, opts, None)
       case HadoopFsRelation(_, _, dataSchema, _, _, opts) =>
         (dataSchema, dataSchema, new CaseInsensitiveStringMap(opts.asJava), None)
       case QflockRelation(schema, _, opts) =>
         (schema, schema, new CaseInsensitiveStringMap(opts.asJava), None)
       case QflockJdbcScan(schema, opts, statsParam, _) =>
+        (schema, schema, new CaseInsensitiveStringMap(opts), statsParam)
+      case QflockRemoteScan(schema, opts, statsParam, _) =>
         (schema, schema, new CaseInsensitiveStringMap(opts), statsParam)
     }
     Some(new QflockRelationArgs(relation, scan, output, dataSchema,

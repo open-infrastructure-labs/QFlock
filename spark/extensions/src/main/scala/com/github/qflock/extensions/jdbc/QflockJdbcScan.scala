@@ -25,6 +25,7 @@ import scala.collection.mutable.ArrayBuffer
 import com.github.qflock.extensions.rules.QflockStatsParameters
 import org.slf4j.LoggerFactory
 
+import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.catalyst.plans.logical.Statistics
 import org.apache.spark.sql.connector.read.{Batch, InputPartition, PartitionReaderFactory, Scan, Statistics => ReadStats, SupportsReportStatistics}
 import org.apache.spark.sql.types._
@@ -108,8 +109,18 @@ case class QflockJdbcScan(schema: StructType,
     }
     partitions
   }
+
+  private val sparkSession: SparkSession = SparkSession
+    .builder()
+    .getOrCreate()
+  private val broadcastedHadoopConf =
+    HdfsColumnarReaderFactory.getHadoopConf(sparkSession, schema)
+  private val sqlConf = sparkSession.sessionState.conf
+  private val readerFactory = new HdfsColumnarPartitionReaderFactory(
+    options, broadcastedHadoopConf, sqlConf)
   override def createReaderFactory(): PartitionReaderFactory = {
-      new QflockPartitionReaderFactory(options)
+      new QflockPartitionReaderFactory(options, broadcastedHadoopConf,
+        sqlConf)
   }
 }
 
