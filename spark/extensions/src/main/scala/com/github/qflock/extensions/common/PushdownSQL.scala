@@ -1,27 +1,28 @@
-// scalastyle:off
 /*
- * Copyright 2018 MinIO, Inc.
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * Note that portions of this code came from spark-select code:
- *  https://github.com/minio/spark-select/blob/master/src/main/scala/io/minio/spark/select/FilterPushdown.scala
+ */
+/*
+ * Note that this code was inspired by the spark-select code:
+ *  https://github.com/minio/spark-select/blob/master/src/main/scala
+ *         /io/minio/spark/select/FilterPushdown.scala
  *
  * Other portions of this code, most notably compileAggregates, and getColumnSchema,
- * came from this patch by Huaxin Gao:
+ * were inspired by this patch by Huaxin Gao:
  *   https://github.com/apache/spark/pull/29695
  */
-// scalastyle:on
 package com.github.qflock.extensions.common
 
 import java.io.StringWriter
